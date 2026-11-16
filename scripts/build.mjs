@@ -23,7 +23,8 @@ function listFiles(dir) {
 function finish(result) {
   const js = readFileSync(join(dist, 'app.js'));
   const css = readFileSync(join(dist, 'app.css'));
-  const hash = createHash('sha256').update(js).update(css).digest('hex').slice(0, 10);
+  const worker = readFileSync(join(dist, 'events-worker.js'));
+  const hash = createHash('sha256').update(js).update(css).update(worker).digest('hex').slice(0, 10);
   let html = readFileSync(join(root, 'public', 'index.html'), 'utf8');
   html = html.replaceAll('__BUILD__', hash);
   writeFileSync(join(dist, 'index.html'), html);
@@ -47,7 +48,11 @@ mkdirSync(dist, { recursive: true });
 cpSync(join(root, 'public'), dist, { recursive: true });
 
 const options = {
-  entryPoints: { app: join(root, 'src', 'main.ts') },
+  entryPoints: {
+    app: join(root, 'src', 'main.ts'),
+    // The calendar-event search runs in a Web Worker (see src/sim/events.ts).
+    'events-worker': join(root, 'src', 'sim', 'events.worker.ts'),
+  },
   bundle: true,
   format: 'esm',
   target: 'es2022',

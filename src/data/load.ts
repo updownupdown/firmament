@@ -16,6 +16,7 @@ async function get(name: string): Promise<Response> {
 }
 
 export const fetchJSON = async <T>(name: string): Promise<T> => (await get(name)).json() as Promise<T>;
+export const fetchText = async (name: string): Promise<string> => (await get(name)).text();
 export const fetchBinary = async (name: string): Promise<ArrayBuffer> => (await get(name)).arrayBuffer();
 
 export async function loadEphemeris(): Promise<Ephemeris> {

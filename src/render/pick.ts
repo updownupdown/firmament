@@ -1,0 +1,60 @@
+// Finding what is under a tap: the nearest drawn object, with brighter and
+// more important things winning ties.
+
+import { DEG, type Vec3, apply, clamp } from '../astro/math.ts';
+import type { LayerFlags } from '../sim/scene.ts';
+import { dsoId, starRef } from '../sim/universe.ts';
+import { type SkyRenderer, dsoLimit } from './sky.ts';
+
+const STRIDE = 11;
+
+/** Reference of the object nearest to a screen point, or null if nothing is close. */
+export function pick(r: SkyRenderer, layers: LayerFlags, x: number, y: number, radius = 30): string | null {
+  const u = r.universe, p = r.projection, c = r.conditions;
+  const floor = layers.ground ? -0.5 * DEG : -90 * DEG;
+  let best: string | null = null;
+  let bestScore = radius;
+  const consider = (ref: string, sx: number, sy: number, bonus: number, reach = 0) => {
+    const d = Math.max(0, Math.hypot(sx - x, sy - y) - reach);
+    if (d > radius) return;
+    const score = d - bonus;
+    if (score < bestScore) { bestScore = score; best = ref; }
+  };
+
+  for (const d of r.drawn) {
+    if (!d.screen || d.alt < floor) continue;
+    const major = d.id === 'sun' || d.id === 'moon';
+    if (!major && d.body.mag > c.limitMag + 1) continue;
+    consider(d.id, d.screen.x, d.screen.y, major ? 14 : 10, d.radiusPx);
+  }
+
+  // Stars: test in J2000 against the direction under the pointer, then project the near ones.
+  const centre = r.unproject(x, y);
+  const cosLimit = Math.cos(Math.min(Math.PI / 2, radius * p.pixelAngle * 2.5));
+  const data = r.starData, years = u.years, m = u.frame.j2000ToHorizon;
+  const n = data.length / STRIDE;
+  for (let i = 0; i < n; i++) {
+    const o = i * STRIDE;
+    if (data[o + 7] > c.limitMag) {
+      if (Math.abs(years) < 2000) break; // sorted by magnitude
+      continue;
+    }
+    const px = data[o] + data[o + 4] * years, py = data[o + 1] + data[o + 5] * years, pz = data[o + 2] + data[o + 6] * years;
+    const len = Math.hypot(px, py, pz);
+    if ((px * centre[0] + py * centre[1] + pz * centre[2]) / len < cosLimit) continue;
+    const dir: Vec3 = u.starDirection(i);
+    const h = apply(m, dir);
+    if (Math.asin(clamp(h[2], -1, 1)) < floor) continue;
+    const s = p.project(h);
+    if (s) consider(starRef(u.stars, i), s.x, s.y, clamp((c.limitMag - data[o + 7]) * 1.5, 0, 9));
+  }
+
+  if (layers.dsos) {
+    for (const d of u.dsos) {
+      if (d.m > dsoLimit(c, p.fov)) continue;
+      const s = r.project([Math.cos(d.de * DEG) * Math.cos(d.ra * DEG), Math.cos(d.de * DEG) * Math.sin(d.ra * DEG), Math.sin(d.de * DEG)]);
+      if (s) consider(`dso:${dsoId(d)}`, s.x, s.y, 3);
+    }
+  }
+  return best;
+}

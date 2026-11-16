@@ -1,0 +1,66 @@
+/* Design tokens: "Quiet glass". Components use these; nothing else hard-codes
+   colour, type or spacing. */
+:root {
+  --color-night: #060a13;
+  --color-surface: rgba(26, 33, 50, 0.62);
+  --color-surface-solid: #151c2c;
+  --color-surface-raised: rgba(255, 255, 255, 0.07);
+  --color-surface-hover: rgba(255, 255, 255, 0.12);
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.18);
+  --color-text: #f2f4f8;
+  --color-text-muted: #b4bbcb;
+  --color-text-faint: #8f98ab;
+  --color-accent: #9db4ff;
+  --color-accent-strong: #c0cfff;
+  --color-on-accent: #0a1020;
+  --color-good: #8fd6b0;
+  --color-warn: #f0c27a;
+  --color-night-vision: #cc1a0a;
+  --color-scrim: rgba(3, 5, 10, 0.55);
+
+  /* Sky annotations (also read by the renderer for line and marker colours). */
+  --sky-line: #9db4ff;
+  --sky-label: #aeb8d0;
+  --sky-label-strong: #f2f4f8;
+
+  --font: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 1.875rem;
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-bold: 600;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 24px;
+  --radius-pill: 999px;
+  --tap: 44px;
+  --blur: blur(20px) saturate(1.2);
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --duration: 240ms;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --duration: 0ms; }
+}
+:root[data-reduced-motion='true'] { --duration: 0ms; }

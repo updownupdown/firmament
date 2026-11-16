@@ -87,6 +87,7 @@ const GALAXY_SUFFIX = new Set(['Andromeda', 'Triangulum', 'Whirlpool', 'Pinwheel
 
 /** Common name of a deep-sky object, tidied from the source catalog. */
 export function dsoName(d: Dso): string | undefined {
+  if (d.d === 'GalCtr') return 'Galactic Centre';
   if (!d.n) return undefined;
   const n = d.n.replace(/´/g, '’');
   return GALAXY_SUFFIX.has(n) ? `${n} Galaxy` : n;

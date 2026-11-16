@@ -9,8 +9,7 @@ the build stands against that plan and what to do next, in order.
 - esbuild build (`scripts/build.mjs`), `tsc --noEmit` typecheck, `node --test`.
 - GitHub Actions (`.github/workflows/deploy.yml`) tests, builds and deploys
   `main` to https://updownupdown.github.io/firmament/. This is confirmed working.
-- The live site is still the placeholder page: `src/main.ts` only prints
-  "Firmament is being built."
+- The live site runs the app: Sky view, Tonight and Log.
 
 **Data** (`scripts/build_data.py` → `public/data/`, committed)
 - `stars-bright.bin` (8,920 stars ≤ mag 6.5) and `stars-faint.bin` (101k stars to
@@ -86,71 +85,73 @@ the build stands against that plan and what to do next, in order.
   are not loaded yet and call `universe.catalogChanged()` after loading.
 - `places.ts`: about 120 places with IANA time zones, including journey sites.
 
+**Sky renderer** (`src/render`; tests in `projection.test.ts`)
+- `projection.ts`: `SkyProjection`, the stereographic camera (fov spans the
+  shorter canvas side), mirrored exactly in GLSL. Refraction (Sæmundsson, faded
+  out below the horizon) is applied in both, so labels and picking line up.
+- `gl.ts` (program, mesh and texture helpers), `shaders.ts`, `sky.ts`:
+  `SkyRenderer.render(options)` draws, in order, the analytic sky (day,
+  twilight, light pollution by Bortle class, moonlight) with the Milky Way
+  texture, stars as additive points (space motion, aberration, extinction,
+  limiting magnitude from sky brightness and fov), lines as instanced quads
+  (figures, boundaries, grids, ecliptic), deep-sky markers, sphere-impostor
+  bodies (Sun with corona in totality, Moon with phase, maria and earthshine,
+  banded Jupiter with its moons, ringed Saturn, Mars, comets) and the ground.
+  `renderer.drawn` lists what was drawn, for labels and picking.
+- `camera.ts`: `SkyCamera` (drag with inertia, pinch, wheel, keyboard, `flyTo`,
+  `track`) and `attachControls`. `labels.ts`: pooled DOM labels with overlap
+  culling. `pick.ts`: nearest object under a tap.
+- Not built yet: Space view (see next steps).
+
+**App and UI** (`src/app.ts`, `src/ui`; design direction **"Quiet glass"**,
+chosen by the owner on 2026-11-16)
+- `app.ts`: `App` owns the store, clock, universe, renderer, camera and events
+  service, runs the frame loop (redraws only when the sky has moved a third of a
+  pixel) and emits `frame`, `second`, `select`, `settings`, `site`, `section`,
+  `time` and `data`. `app.apply(scene)` is what every "Show me" calls;
+  `currentScene()` / `shareUrl()` go the other way.
+- `ui/tokens.css` holds every colour, size and radius; `base.css` and
+  `shell.css` use only those. `dom.ts` is the tiny element helper (`h`, `icon`,
+  `toggle`). No framework.
+- `shell.ts`: top chip (place, date, time, accuracy note), search and view
+  buttons, time bar (pause, slower/faster along `RATE_STEPS` in both directions,
+  a spring-back jog slider, Now), object card (quick facts, "I saw it", centre,
+  zoom, details with rise/transit/set), selection reticle, dock (Sky, Tonight,
+  Log) and one sheet at a time: full screen above the dock on phones, a left
+  column from 900 px. `Esc` closes, `/` searches, space pauses.
+- `panels.ts`: search; view settings (layer toggles, sky culture, Bortle slider,
+  night vision, 12-hour clock, reduced motion, share link, Still mode, credits
+  rendered from `ATTRIBUTION.md`); place and time (city search, geolocation,
+  coordinates, date fields with AD/BC down to the clock's limits).
+- `tonight.ts`: daily prompt with "Show me" (big events first, otherwise one of
+  the bright planets, the Moon or the best-placed constellation, chosen by day
+  number), dark-sky and Moon tiles, planets, constellations overhead and the
+  next seven weeks of events from the worker.
+- `log.ts`: `logSighting` checks altitude and sky brightness and marks entries
+  unconfirmed when the object could not have been seen; checklists for planets,
+  Moon phases, the 88 constellations and the Messier objects.
+- `facts.ts`: the words and numbers on the object card.
+- Visual checks: build, serve `dist/` and screenshot with Playwright (Chromium
+  needs `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`);
+  `document.documentElement.dataset.ready` is set after the first frame.
+
 ## Next steps, in order
 
-### 1. `src/render` — WebGL2
-Planned design (not yet written):
-- **Sky view uses a stereographic projection** in the vertex shader. The camera
-  points along −z; for a unit direction `d` in camera space,
-  `ndc = d.xy * 2 / (1 - d.z) * s`, where `s = 1 / (2 tan(fov/4))`, with aspect
-  correction. Discard when `d.z > 0.98`. Subdivide long line segments to about
-  2° so great circles curve correctly. Mirror the same projection in JS for
-  labels and picking.
-- Uniforms: `j2000ToHorizon` (from `Frame`), the view rotation (az/alt/roll),
-  `years` since J2000 for star space motion, limiting magnitude and refraction
-  parameters.
-- Passes:
-  1. A full-screen sky pass: analytic atmosphere (day, twilight band toward
-     the Sun, Mie glow, light-pollution dome) plus the Milky Way texture,
-     sampled by mapping each pixel's direction back to RA/Dec and faded by sky
-     brightness.
-  2. Stars as `gl.POINTS`, with attributes pos (pc) and vel (pc/yr) so the
-     shader does `p + v·years`, plus magnitude and colour. Size and alpha come
-     from flux relative to the limiting magnitude, which depends on sky
-     brightness, the Bortle setting and FOV.
-  3. Lines as screen-space quads (two endpoints per vertex, both with pos/vel
-     so constellations deform over deep time): constellation figures,
-     boundaries, grids, horizon and orbit lines.
-  4. Solar system bodies as sphere impostors on billboards: the per-pixel
-     normal is lit by the Sun direction, with procedural surfaces in body-fixed
-     coordinates (Moon maria as hand-placed ellipses, Jupiter bands, Saturn with
-     rings, Mars colour), a magnitude-based glow, and Sun glare.
-  5. A ground pass: a procedural horizon silhouette from a few azimuth
-     sines. The star and line shaders discard below the same profile.
-  - Apply refraction in shaders near the horizon.
-- **Space view**: a perspective camera with a floating origin (subtract the
-  camera position in doubles before uploading float32). Bodies are the same
-  impostors, sorted back to front with no depth buffer. Orbits are sampled
-  from VSOP or Kepler over one period. Stars are a background at infinity.
-- Apply annual aberration to stars in the shader (`normalize(dir + earthVel / c)`)
-  so they match `Universe.starDirection`, which labels and picking use.
-  Toggle between true and compressed scale. Enter Space with a "lift off"
-  animation from the observer's location, and "land" to go back.
-- Labels are pooled DOM elements positioned with transforms each frame.
-  Picking finds the nearest projected object in screen space.
+### 1. Space view (`src/render`)
+A perspective camera with a floating origin (subtract the camera position in
+doubles before uploading float32). Bodies are the same impostors, sorted back
+to front with no depth buffer. Orbits are sampled from VSOP or Kepler over one
+period; stars are a background at infinity. Toggle between true and compressed
+scale. Enter with a "lift off" animation from the observer's location, and
+"land" to go back. `SceneCamera.mode` and the `orbits` layer already exist.
 
-### 2. `src/ui` — shell and sections
-- Create `tokens.css` first (colours, type, spacing, radii and motion as CSS
-  custom properties), with a plain provisional theme. The owner wants **UI
-  design-language mockup options** (a Design artifact with three directions)
-  before polishing. Directions to offer: "Observatory" (brass and ink,
-  instrument-like), "Star atlas" (engraved, paper-on-night, serif), and "Quiet
-  glass" (minimal, soft).
-- Layout: the sky canvas is always behind. A bottom dock (Sky, Tonight,
-  Journeys, Log); panels are bottom sheets on phones and side panels on desktop.
-  Sky has a top chip for place and time, a time scrubber with rate buttons,
-  search, a layers sheet (lines, culture, boundaries, grids, Milky Way, DSOs,
-  atmosphere, ground, Bortle), an object card with an "I saw it" log button,
-  phone pointing (DeviceOrientation; iOS needs a permission tap), Still mode
-  and a night-vision red overlay.
-- Tonight: twilight times, Moon, planets visible tonight with best time and
-  direction, well-placed constellations, upcoming events (from the worker),
-  and a daily guide prompt chosen deterministically per date. Each item has a
-  Scene behind "Show me". The guide character is still unnamed; ask the owner.
-- Log: checklists (naked-eye planets, Moon phases, 110 Messier objects, 88
-  constellations, events). Entries are verified by recomputing altitude and
-  Sun altitude at the logged time and place.
-- Credits screen showing `ATTRIBUTION.md`.
+### 2. Remaining shell work
+- Phone pointing (DeviceOrientation; iOS needs a permission tap).
+- Service worker: `public/sw.js` only precaches on install. Add the fetch
+  handler and register it so the app works offline.
+- Add Journeys to the dock when section 3 exists.
+- The Tonight guide character is still unnamed; ask the owner.
+- Log checklist for events (eclipses, showers) is not built.
 
 ### 3. Journeys (`src/journeys`)
 Engine: a journey has steps; a step has text, an optional Scene and an
@@ -172,8 +173,8 @@ or a `custom` mount for canvas interactives with a checker). Planned content:
   other cultures.
 
 ### 4. Launch
-Merge to `main`, check the live site, then send the owner next steps and the
-design mockups.
+Offline check, a pass over accessibility and performance on a real phone, and a
+short tour for first-time visitors.
 
 ## Environment notes
 - The owner doesn't run the app locally. Work on a branch, merge into `main`

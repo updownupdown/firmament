@@ -90,6 +90,25 @@ export class SkyCamera {
   }
 
   /** Advance animations. Returns true if the view changed. */
+  key(key: string): boolean {
+    const p = this.projection;
+    const step = p.fov * 0.12;
+    const moves: Record<string, CameraTarget> = {
+      ArrowLeft: { az: p.az - step / Math.max(Math.cos(p.alt), 0.2) },
+      ArrowRight: { az: p.az + step / Math.max(Math.cos(p.alt), 0.2) },
+      ArrowUp: { alt: clamp(p.alt + step, -90 * DEG, 90 * DEG) },
+      ArrowDown: { alt: clamp(p.alt - step, -90 * DEG, 90 * DEG) },
+      '+': { fov: clamp(p.fov / 1.4, MIN_FOV, MAX_FOV) },
+      '=': { fov: clamp(p.fov / 1.4, MIN_FOV, MAX_FOV) },
+      '-': { fov: clamp(p.fov * 1.4, MIN_FOV, MAX_FOV) },
+    };
+    const m = moves[key];
+    if (!m) return false;
+    this.track = null;
+    this.flyTo(m, 0.25);
+    return true;
+  }
+
   tick(dt: number): boolean {
     const p = this.projection;
     let changed = false;
@@ -134,8 +153,18 @@ export interface ControlEvents {
   onChange(): void;
 }
 
-/** Wires pointer, wheel and keyboard input on an element to a camera. Returns a cleanup function. */
-export function attachControls(el: HTMLElement, camera: SkyCamera, events: ControlEvents): () => void {
+/** What the input handlers need from a camera, so Sky and Space can share them. */
+export interface Controllable {
+  held: boolean;
+  drag(dx: number, dy: number, dt: number): void;
+  release(): void;
+  zoom(factor: number, x?: number, y?: number): void;
+  /** Handle a key; true if it did something. */
+  key(key: string): boolean;
+}
+
+/** Wires pointer, wheel and keyboard input on an element to whichever camera is current. Returns a cleanup function. */
+export function attachControls(el: HTMLElement, current: () => Controllable, events: ControlEvents): () => void {
   const pointers = new Map<number, { x: number; y: number }>();
   let moved = 0, downAt = 0, lastT = 0, pinch = 0;
   const local = (e: PointerEvent | WheelEvent) => {
@@ -149,7 +178,7 @@ export function attachControls(el: HTMLElement, camera: SkyCamera, events: Contr
   const down = (e: PointerEvent) => {
     el.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, local(e));
-    camera.held = true;
+    current().held = true;
     if (pointers.size === 1) { moved = 0; downAt = e.timeStamp; }
     if (pointers.size === 2) pinch = spread();
     lastT = e.timeStamp;
@@ -164,12 +193,12 @@ export function attachControls(el: HTMLElement, camera: SkyCamera, events: Contr
     if (pointers.size === 1) {
       const dx = now.x - prev.x, dy = now.y - prev.y;
       moved += Math.abs(dx) + Math.abs(dy);
-      if (moved > 6) camera.drag(dx, dy, dt);
+      if (moved > 6) current().drag(dx, dy, dt);
     } else if (pointers.size === 2) {
       moved += 10;
       const s = spread();
       const [a, b] = [...pointers.values()];
-      if (pinch > 0 && s > 0) camera.zoom(s / pinch, (a.x + b.x) / 2, (a.y + b.y) / 2);
+      if (pinch > 0 && s > 0) current().zoom(s / pinch, (a.x + b.x) / 2, (a.y + b.y) / 2);
       pinch = s;
     }
     events.onChange();
@@ -177,7 +206,7 @@ export function attachControls(el: HTMLElement, camera: SkyCamera, events: Contr
   const up = (e: PointerEvent) => {
     if (!pointers.delete(e.pointerId)) return;
     if (pointers.size === 0) {
-      camera.release();
+      current().release();
       if (moved <= 6 && e.timeStamp - downAt < 500 && e.type === 'pointerup') {
         const p = local(e);
         events.onTap(p.x, p.y);
@@ -190,26 +219,13 @@ export function attachControls(el: HTMLElement, camera: SkyCamera, events: Contr
     e.preventDefault();
     const p = local(e);
     const delta = e.deltaMode === 1 ? e.deltaY * 30 : e.deltaY;
-    camera.zoom(Math.exp(-delta * (e.ctrlKey ? 0.01 : 0.0015)), p.x, p.y);
+    current().zoom(Math.exp(-delta * (e.ctrlKey ? 0.01 : 0.0015)), p.x, p.y);
     events.onChange();
   };
   const key = (e: KeyboardEvent) => {
-    const p = camera.projection;
-    const step = p.fov * 0.12;
-    const moves: Record<string, () => void> = {
-      ArrowLeft: () => camera.flyTo({ az: p.az - step / Math.max(Math.cos(p.alt), 0.2) }, 0.25),
-      ArrowRight: () => camera.flyTo({ az: p.az + step / Math.max(Math.cos(p.alt), 0.2) }, 0.25),
-      ArrowUp: () => camera.flyTo({ alt: clamp(p.alt + step, -90 * DEG, 90 * DEG) }, 0.25),
-      ArrowDown: () => camera.flyTo({ alt: clamp(p.alt - step, -90 * DEG, 90 * DEG) }, 0.25),
-      '+': () => camera.flyTo({ fov: clamp(p.fov / 1.4, MIN_FOV, MAX_FOV) }, 0.25),
-      '=': () => camera.flyTo({ fov: clamp(p.fov / 1.4, MIN_FOV, MAX_FOV) }, 0.25),
-      '-': () => camera.flyTo({ fov: clamp(p.fov * 1.4, MIN_FOV, MAX_FOV) }, 0.25),
-    };
-    const m = moves[e.key];
-    if (!m || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!current().key(e.key)) return;
     e.preventDefault();
-    camera.track = null;
-    m();
     events.onChange();
   };
   el.addEventListener('pointerdown', down);

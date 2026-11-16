@@ -101,7 +101,18 @@ the build stands against that plan and what to do next, in order.
 - `camera.ts`: `SkyCamera` (drag with inertia, pinch, wheel, keyboard, `flyTo`,
   `track`) and `attachControls`. `labels.ts`: pooled DOM labels with overlap
   culling. `pick.ts`: nearest object under a tap.
-- Not built yet: Space view (see next steps).
+- `space.ts`: Space view. `SpaceCamera` orbits a focus body (yaw and pitch
+  about the ecliptic pole, distance in AU, perspective); `SpaceRenderer` draws
+  the same star buffer at infinity, orbit trails (one revolution, ending on the
+  body; comets sampled densely near perihelion), and lit discs at true scale
+  with a minimum pixel size (Sun glow, Saturn's rings). Positions are taken
+  relative to the focus in doubles and uploaded in camera space, so close-ups
+  do not jitter. `App.setMode('space')` lifts off from above the Earth;
+  tapping a body circles it; any "Show me" lands again. `attachControls` takes
+  a `Controllable`, so both cameras share the input code.
+- Space view does not yet have: Jupiter's moons, surface detail on planets,
+  the Milky Way, a compressed-scale toggle, or the camera distance in shared
+  links.
 
 **App and UI** (`src/app.ts`, `src/ui`; design direction **"Quiet glass"**,
 chosen by the owner on 2026-11-16)
@@ -116,7 +127,8 @@ chosen by the owner on 2026-11-16)
 - `shell.ts`: top chip (place, date, time, accuracy note), search and view
   buttons, time bar (pause, slower/faster along `RATE_STEPS` in both directions,
   a spring-back jog slider, Now), object card (quick facts, "I saw it", centre,
-  zoom, details with rise/transit/set), selection reticle, dock (Sky, Tonight,
+  zoom, details with rise/transit/set), selection reticle, the lift-off / land
+  button, dock (Sky, Tonight,
   Log) and one sheet at a time: full screen above the dock on phones, a left
   column from 900 px. `Esc` closes, `/` searches, space pauses.
 - `panels.ts`: search; view settings (layer toggles, sky culture, Bortle slider,
@@ -137,23 +149,15 @@ chosen by the owner on 2026-11-16)
 
 ## Next steps, in order
 
-### 1. Space view (`src/render`)
-A perspective camera with a floating origin (subtract the camera position in
-doubles before uploading float32). Bodies are the same impostors, sorted back
-to front with no depth buffer. Orbits are sampled from VSOP or Kepler over one
-period; stars are a background at infinity. Toggle between true and compressed
-scale. Enter with a "lift off" animation from the observer's location, and
-"land" to go back. `SceneCamera.mode` and the `orbits` layer already exist.
-
-### 2. Remaining shell work
+### 1. Remaining shell work
 - Phone pointing (DeviceOrientation; iOS needs a permission tap).
 - Service worker: `public/sw.js` only precaches on install. Add the fetch
   handler and register it so the app works offline.
-- Add Journeys to the dock when section 3 exists.
+- Add Journeys to the dock when section 2 exists.
 - The Tonight guide character is still unnamed; ask the owner.
 - Log checklist for events (eclipses, showers) is not built.
 
-### 3. Journeys (`src/journeys`)
+### 2. Journeys (`src/journeys`)
 Engine: a journey has steps; a step has text, an optional Scene and an
 optional task (`find` a body by tapping it, `choice`, `number` with tolerance,
 or a `custom` mount for canvas interactives with a checker). Planned content:
@@ -172,7 +176,7 @@ or a `custom` mount for canvas interactives with a checker). Planned content:
 - **Sky cultures**: find Maui's fishhook (Hawaiian) and the same stars in
   other cultures.
 
-### 4. Launch
+### 3. Launch
 Offline check, a pass over accessibility and performance on a real phone, and a
 short tour for first-time visitors.
 

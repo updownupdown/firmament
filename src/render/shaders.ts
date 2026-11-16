@@ -558,3 +558,109 @@ void main() {
   }
   outColor = vec4(color * alpha + add * uDim, alpha);
 }`;
+
+// ---------------------------------------------------------------- space view
+//
+// Space view projects on the CPU side of things: positions arrive already in
+// camera space (x right, y up, looking along −z), relative to the camera, so
+// float32 is precise near whatever the camera is looking at.
+
+export const SPACE_STAR_VERT = HEADER + `
+layout(location = 0) in vec4 aPos;
+layout(location = 1) in vec3 aVel;
+layout(location = 2) in vec4 aMagColor;
+uniform mat3 uView;      // J2000 → camera
+uniform vec2 uF;         // focal length over half-width and half-height
+uniform float uYears;
+uniform float uLimitMag;
+uniform float uPixelRatio;
+out vec3 vColor;
+out float vCore;
+out float vBright;
+out float vSize;
+void main() {
+  vec3 p = aPos.xyz + aVel * uYears;
+  float r = length(p);
+  float mag = aMagColor.x;
+  if (aPos.w > 0.5) mag += 5.0 * log(r / length(aPos.xyz)) / log(10.0);
+  vec3 c = uView * (p / r);
+  float x = uLimitMag - mag;
+  if (x <= 0.0 || c.z > -0.01) { gl_Position = vec4(3.0, 3.0, 3.0, 1.0); gl_PointSize = 1.0; return; }
+  gl_Position = vec4(uF * c.xy, 0.0, -c.z);
+  float core = min(0.5 + 0.22 * x + 0.012 * x * x, 4.0);
+  vCore = core * uPixelRatio;
+  vBright = clamp(0.1 + x / 2.6, 0.0, 1.0) * smoothstep(0.0, 0.25, x);
+  vColor = aMagColor.yzw;
+  vSize = max(2.0, vCore * 6.0 + 2.0);
+  gl_PointSize = vSize;
+}`;
+
+export const ORBIT_VERT = HEADER + `
+layout(location = 0) in vec4 aPos;   // camera space, w = position along the orbit 0..1 (1 = the body)
+uniform vec2 uF;
+uniform float uNear;
+out float vAlong;
+void main() {
+  vAlong = aPos.w;
+  gl_Position = vec4(uF * aPos.xy, -aPos.z - 2.0 * uNear, -aPos.z);
+}`;
+
+export const ORBIT_FRAG = HEADER + `
+in float vAlong;
+uniform vec4 uColor;
+out vec4 outColor;
+void main() {
+  // Brightest just behind the body, fading around the orbit: a trail that shows direction.
+  float a = uColor.a * (0.25 + 0.75 * vAlong * vAlong);
+  outColor = vec4(uColor.rgb * a, a);
+}`;
+
+export const SPACE_BODY_VERT = HEADER + `
+layout(location = 0) in vec2 aCorner;
+uniform vec2 uCentre;   // NDC
+uniform vec2 uHalf;     // NDC half-size of the quad
+out vec2 vUv;
+void main() {
+  vUv = aCorner;
+  gl_Position = vec4(uCentre + aCorner * uHalf, 0.0, 1.0);
+}`;
+
+export const SPACE_BODY_FRAG = HEADER + `
+in vec2 vUv;
+uniform vec3 uColor;
+uniform vec3 uLight;    // camera-space direction to the Sun
+uniform vec3 uPole;     // camera-space north pole (for rings)
+uniform int uKind;      // 0 lit sphere, 1 Sun, 4 ringed
+uniform float uExtent;  // quad half-size in body radii
+uniform float uPixels;  // body radius in device pixels
+out vec4 outColor;
+void main() {
+  vec2 p = vUv * uExtent;
+  float r = length(p);
+  float aa = 1.2 / max(uPixels, 1.0);
+  float disc = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, r);
+  if (uKind == 1) {
+    float glow = exp(-max(r - 1.0, 0.0) * 1.3) * 0.55 * (1.0 - smoothstep(uExtent * 0.7, uExtent, r));
+    vec3 c = uColor * disc + vec3(1.0, 0.82, 0.55) * glow * (1.0 - disc);
+    outColor = vec4(c, max(disc, glow));
+    return;
+  }
+  vec3 n = vec3(p, sqrt(max(0.0, 1.0 - r * r)));
+  float lit = clamp(dot(n, uLight), 0.0, 1.0);
+  vec3 c = uColor * (0.035 + 0.965 * pow(lit, 0.75)) * disc;
+  float a = disc;
+  if (uKind == 4 && abs(uPole.z) > 0.002) {
+    // Where the line of sight through this pixel crosses the ring plane.
+    float pz = -(p.x * uPole.x + p.y * uPole.y) / uPole.z;
+    float rr = length(vec3(p, pz));
+    float w = aa * 2.0;
+    float ring = smoothstep(1.24 - w, 1.24 + w, rr) * (1.0 - smoothstep(2.27 - w, 2.27 + w, rr));
+    ring *= 1.0 - 0.75 * smoothstep(1.95 - w, 1.95, rr) * (1.0 - smoothstep(2.03, 2.03 + w, rr));
+    ring *= 0.55 + 0.45 * smoothstep(1.5, 1.6, rr);
+    float front = max(step(0.0, pz), 1.0 - disc);
+    float ra = ring * front * 0.9;
+    c = c * (1.0 - ra) + vec3(0.86, 0.78, 0.62) * 0.9 * ra;
+    a = a + ra * (1.0 - a);
+  }
+  outColor = vec4(c, a);
+}`;

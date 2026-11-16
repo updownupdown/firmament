@@ -1,0 +1,22 @@
+{
+  "name": "firmament",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A planetarium and solar system simulator you can play: the real sky, any time, any place.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs --serve",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "data": "python3 scripts/build_data.py"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.3",
+    "esbuild": "0.28.2",
+    "typescript": "6.0.3"
+  }
+}

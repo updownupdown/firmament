@@ -54,37 +54,41 @@ the build stands against that plan and what to do next, in order.
   including the 2023 hybrid; 2024-04-08 being total in Dallas and partial in
   Toronto; Toronto sunrise and sunset; Thuban as the pole star in 2800 BC.
 
-**Started**
-- `src/sim/places.ts`: about 120 places with IANA time zones, including
-  journey sites (Padua, Hven, Alexandria, Aswan/Syene, Stonehenge, Giza).
+**Simulation service** (`src/sim`, `src/data`; 15 tests in `sim.test.ts`)
+- `clock.ts`: `Clock` (`jdUT`, `rate` in simulated seconds per real second,
+  `paused`, `tick`, `setJd`, `now`), clamped to J2000 ± 100,000 years, and
+  `accuracyAt(jd)` → level, short label and a plain-language sentence.
+- `universe.ts`: `Universe` owns the ephemeris, star catalog, cultures and DSOs.
+  `update(jdUT)` builds the `Frame` and observes every body in `TRACKED_BODIES`
+  plus the Galilean moons (0.9 ms per call; a repeat call with the same instant
+  is free). `resolve(ref)` → `SkyObject` for any reference, `horizontal(dir)`,
+  `equatorial(dir)`, `riseSet(ref, jd0)`, `search(text)`.
+- References: `sun`, `moon`, `mars`…, `io`…, `halley`; `star:<hip>` or
+  `star#<index>`; `dso:M31`; `con:<culture>:<id>`.
+- `tonight.ts`: `tonight(universe, jdUT)` → twilight, darkness, Moon phase, each
+  planet's visibility window and best moment, and well-placed constellations.
+  Takes about 110 ms, so call it when the Tonight panel opens and cache per night.
+- `scene.ts`: `Scene`, `LayerFlags`, `encodeScene`/`decodeScene` for the URL hash
+  (format documented in the file; layer order is append-only).
+- `store.ts`: versioned localStorage document (settings, site, log, journey
+  progress, seen hints) with `migrate` for repair; works in memory if storage
+  is blocked.
+- `format.ts`: local time through the site's IANA zone for 1900–2500 and local
+  mean time outside that; "3000 BC" years; Julian calendar note; RA/Dec, compass
+  words, distances, durations.
+- `events.ts` + `events.worker.ts`: `EventService.month()` / `.range()` ask a
+  Web Worker (second esbuild entry, `dist/events-worker.js`) for one month at a
+  time, cached in memory and localStorage. Create it with
+  `new EventService(workerCompute(() => new Worker('events-worker.js', { type: 'module' })), browserStorage())`.
+- `src/data/load.ts`: `loadCore()` (ephemerides, bright stars, names, Western
+  culture, DSOs), then `loadFaintStars`, `loadCulture`, `loadBoundaries`.
+  Culture lines can reference faint-star indices, so skip segments whose stars
+  are not loaded yet and call `universe.catalogChanged()` after loading.
+- `places.ts`: about 120 places with IANA time zones, including journey sites.
 
 ## Next steps, in order
 
-### 1. `src/sim` — the Universe service
-- `clock.ts`: `jdUT`, `rate` (multiplier of real time), `paused`, `tick(dtReal)`,
-  `setJd`. Clamp to J2000 ± 100,000 years. Expose an accuracy label from
-  `deltaTUncertainty` and `precessionAccuracyDeg`.
-- `universe.ts`: owns `Ephemeris`, `StarCatalog`, cultures, DSOs and boundaries.
-  It holds the current site, and on each `update()` builds a `Frame` and observes
-  every body in `SOLAR_BODIES` plus the Galilean moons (via `galileanMoons`).
-  Cache the Earth position per frame. `observeBody` costs about 30k `cos` calls
-  per frame for all bodies, which is fine.
-- Body references: `sun`, `moon`, `mars`…, `io`…, `halley`; `star:<hip>` (or
-  `star#<index>` when there is no HIP), `dso:M31`, `con:<culture>:<id>`.
-- `scene.ts`: the `Scene` interface from the architecture doc, plus
-  `encodeScene`/`decodeScene` for the URL hash.
-- `store.ts`: versioned localStorage for settings, site, log and journey progress.
-- `format.ts`: dates with `calendarFromJd`. For modern dates, use the site's
-  time zone through `Intl.DateTimeFormat(..., { timeZone })` to get the offset;
-  before 1900, use local mean time (lon/15 h). Show "3000 BC" style years and
-  label the Julian calendar.
-- `src/data/load.ts`: fetch the bright stars, meta, VSOP, ELP, western culture
-  and DSOs first. Lazy-load the faint stars and other cultures.
-- **Events are slow on the main thread** (a year takes about 10 s in Node). Run
-  `allEvents` in a Web Worker (a second esbuild entry point) and cache results
-  per month in localStorage.
-
-### 2. `src/render` — WebGL2
+### 1. `src/render` — WebGL2
 Planned design (not yet written):
 - **Sky view uses a stereographic projection** in the vertex shader. The camera
   points along −z; for a unit direction `d` in camera space,
@@ -118,12 +122,14 @@ Planned design (not yet written):
   camera position in doubles before uploading float32). Bodies are the same
   impostors, sorted back to front with no depth buffer. Orbits are sampled
   from VSOP or Kepler over one period. Stars are a background at infinity.
+- Apply annual aberration to stars in the shader (`normalize(dir + earthVel / c)`)
+  so they match `Universe.starDirection`, which labels and picking use.
   Toggle between true and compressed scale. Enter Space with a "lift off"
   animation from the observer's location, and "land" to go back.
 - Labels are pooled DOM elements positioned with transforms each frame.
   Picking finds the nearest projected object in screen space.
 
-### 3. `src/ui` — shell and sections
+### 2. `src/ui` — shell and sections
 - Create `tokens.css` first (colours, type, spacing, radii and motion as CSS
   custom properties), with a plain provisional theme. The owner wants **UI
   design-language mockup options** (a Design artifact with three directions)
@@ -146,7 +152,7 @@ Planned design (not yet written):
   Sun altitude at the logged time and place.
 - Credits screen showing `ATTRIBUTION.md`.
 
-### 4. Journeys (`src/journeys`)
+### 3. Journeys (`src/journeys`)
 Engine: a journey has steps; a step has text, an optional Scene and an
 optional task (`find` a body by tapping it, `choice`, `number` with tolerance,
 or a `custom` mount for canvas interactives with a checker). Planned content:
@@ -165,14 +171,14 @@ or a `custom` mount for canvas interactives with a checker). Planned content:
 - **Sky cultures**: find Maui's fishhook (Hawaiian) and the same stars in
   other cultures.
 
-### 5. Launch
+### 4. Launch
 Merge to `main`, check the live site, then send the owner next steps and the
 design mockups.
 
 ## Environment notes
 - The owner doesn't run the app locally. Work on a branch, merge into `main`
   with `--no-ff`, and push. Pushing `main` deploys.
-- In the original session `gh` had no valid token, so PRs couldn't be opened;
-  merges were done locally. If a session has GitHub PR tools, prefer real PRs.
+- Sessions in the Firmament project can open pull requests; use one per step
+  and merge it once CI is green.
 - Use Playwright (if available) to screenshot the built site for visual
   checks before merging.

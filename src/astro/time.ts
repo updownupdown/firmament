@@ -67,6 +67,12 @@ export function jdFromCalendar(
 /** Inverse of jdFromCalendar (Meeus ch. 7), valid for any jd ≥ 0. */
 export function calendarFromJd(jd: number, calendar?: CalendarKind): CalendarDate {
   const kind = calendar ?? (jd >= GREGORIAN_START_JD ? 'gregorian' : 'julian');
+  if (jd < 0 && kind === 'julian') {
+    // The algorithm needs jd ≥ 0; the Julian calendar repeats every 4 years (1461 days).
+    const k = Math.ceil(-jd / 1461) + 1;
+    const c = calendarFromJd(jd + k * 1461, 'julian');
+    return { ...c, year: c.year - 4 * k };
+  }
   const j = jd + 0.5;
   const z = Math.floor(j);
   const f = j - z;

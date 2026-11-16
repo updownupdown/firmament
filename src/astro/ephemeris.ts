@@ -142,10 +142,11 @@ export function observeBody(eph: Ephemeris, f: Frame, id: SolarBodyId | string):
   let g: Vec3 = [0, 0, 0];
   for (let k = 0; k < 3; k++) {
     if (id === 'moon') {
-      // Geocentric theory: subtract the observer, and use the Earth at the same instant.
+      // Geocentric theory: subtract the observer. Light-time is ~1.3 s, so the
+      // Earth's position at the frame instant is close enough for the heliocentric part.
       const mg = eph.moonGeo(f.jdTT - tau);
       g = sub(mg, f.observerGeo);
-      helio = add(eph.earth(f.jdTT - tau), mg);
+      helio = add(f.earth, mg);
     } else {
       helio = eph.helio(id, f.jdTT - tau);
       g = sub(helio, obsHelio);

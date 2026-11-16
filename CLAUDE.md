@@ -1,6 +1,8 @@
 # Firmament — notes for agents
 
-Read `docs/ARCHITECTURE.md` first. It is the plan of record.
+Read `docs/ARCHITECTURE.md` first. It is the plan of record. Then read
+`docs/STATUS.md`: what is built, what's next in order, and design decisions
+already made for the parts not yet written.
 
 ## Conventions
 

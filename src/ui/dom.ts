@@ -49,6 +49,8 @@ const ICONS: Record<string, string> = {
   eye: '<path d="M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10z"/><circle cx="10" cy="10" r="2.2"/>',
   info: '<circle cx="10" cy="10" r="7"/><path d="M10 9v5M10 6.2v.3"/>',
   trash: '<path d="M4 6h12M8 6V4h4v2M6 6l.7 10h6.6L14 6"/>',
+  orbit: '<circle cx="10" cy="10" r="2.6"/><ellipse cx="10" cy="10" rx="8" ry="3.4" transform="rotate(-24 10 10)"/>',
+  horizon: '<path d="M2 14h16"/><path d="M5.5 14a4.5 4.5 0 0 1 9 0"/><path d="M10 5v1.5M4.3 7.8l1 1M15.7 7.8l-1 1"/>',
   phone: '<rect x="6" y="2.5" width="8" height="15" rx="2"/><path d="M9 15h2"/>',
 };
 

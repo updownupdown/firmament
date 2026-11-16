@@ -120,6 +120,12 @@ export class Mesh {
     this.gl.drawArrays(this.gl.POINTS, 0, count);
   }
 
+  drawLineStrip(count = this.count): void {
+    if (count <= 1) return;
+    this.gl.bindVertexArray(this.vao);
+    this.gl.drawArrays(this.gl.LINE_STRIP, 0, count);
+  }
+
   drawQuads(count = this.count, first = 0): void {
     if (count <= 0) return;
     const gl = this.gl;

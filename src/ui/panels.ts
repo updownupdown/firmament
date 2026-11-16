@@ -66,6 +66,7 @@ const LAYER_GROUPS: { title: string; items: [keyof LayerFlags, string, string?][
   { title: 'Labels', items: [['starLabels', 'Stars'], ['planetLabels', 'Planets and Moon'], ['dsos', 'Deep sky objects', 'Galaxies, clusters and nebulae']] },
   { title: 'Sky', items: [['milkyWay', 'Milky Way'], ['atmosphere', 'Atmosphere', 'Daylight, twilight and haze near the horizon'], ['ground', 'Ground'], ['cardinals', 'Compass points']] },
   { title: 'Guides', items: [['gridAltAz', 'Altitude grid'], ['gridEquatorial', 'Equatorial grid'], ['ecliptic', 'Ecliptic', 'The path the Sun follows through the year']] },
+  { title: 'Space view', items: [['orbits', 'Orbits']] },
 ];
 
 const BORTLE = ['', 'Pristine dark site', 'Truly dark site', 'Rural sky', 'Rural edge', 'Suburban sky', 'Bright suburb', 'Suburb to city', 'City sky', 'Inner city'];

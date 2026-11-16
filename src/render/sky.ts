@@ -155,7 +155,8 @@ export class SkyRenderer {
   private readonly markerProgram: Program;
   private readonly bodyProgram: Program;
   private readonly quad: Mesh;
-  private readonly stars: Mesh;
+  /** The star catalog on the GPU; Space view draws the same buffer. */
+  readonly stars: Mesh;
   private readonly bodyPoints: Mesh;
   private readonly figures: Mesh;
   private readonly highlight: Mesh;

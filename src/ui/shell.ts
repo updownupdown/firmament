@@ -4,7 +4,7 @@
 import type { App, Section } from '../app.ts';
 import { RATE_STEPS, describeRate } from '../sim/clock.ts';
 import { jdNow } from '../astro/time.ts';
-import { calendarNote, formatDate, formatTime, localTime } from '../sim/format.ts';
+import { calendarNote, formatDate, formatDistanceAU, formatTime, localTime } from '../sim/format.ts';
 import { h, fill, icon, iconButton } from './dom.ts';
 import { blurb, detailFacts, quickFacts, riseSetFacts, whereNow } from './facts.ts';
 import { logPanel, logSighting } from './log.ts';
@@ -155,7 +155,18 @@ export class Shell {
       if (now - lastText > 120) { lastText = now; update(); }
     });
     update();
-    return h('div', { class: 'top-bar chrome' }, chip,
+    const mode = iconButton('orbit', '', () => app.setMode(app.mode === 'space' ? 'sky' : 'space'), 'glass');
+    const syncMode = () => {
+      const space = app.mode === 'space';
+      const label = space ? 'Land: back to the sky from the ground' : 'Lift off: see the solar system from space';
+      fill(mode, icon(space ? 'horizon' : 'orbit'));
+      mode.setAttribute('aria-label', label);
+      mode.title = label;
+      document.documentElement.dataset.mode = app.mode;
+    };
+    app.on('mode', syncMode);
+    syncMode();
+    return h('div', { class: 'top-bar chrome' }, chip, mode,
       iconButton('search', 'Search the sky', () => this.openSheet('search'), 'glass'),
       iconButton('sliders', 'View and settings', () => this.openSheet('settings'), 'glass'));
   }
@@ -224,11 +235,10 @@ export class Shell {
     const app = this.app;
     const el = h('div', { class: 'reticle', hidden: true, 'aria-hidden': 'true' });
     app.on('frame', () => {
-      const obj = app.selectedObject;
-      const s = obj && !app.still ? app.renderer.project(obj.dir) : null;
-      if (!s || obj!.kind === 'constellation') { el.hidden = true; return; }
-      const drawn = app.renderer.drawn.find((d) => d.id === obj!.ref);
-      const r = Math.max(14, (drawn?.radiusPx ?? 0) + 8);
+      const s = app.selected && !app.still ? app.locate(app.selected) : null;
+      // Big discs speak for themselves.
+      if (!s || s.radiusPx > 40) { el.hidden = true; return; }
+      const r = Math.max(14, s.radiusPx + 8);
       el.hidden = false;
       el.style.width = el.style.height = `${r * 2}px`;
       el.style.transform = `translate(${(s.x - r).toFixed(1)}px, ${(s.y - r).toFixed(1)}px)`;
@@ -287,12 +297,15 @@ export class Shell {
       document.documentElement.dataset.selected = String(!!obj);
       if (!obj) return;
       title.textContent = obj.name;
-      subtitle.textContent = `${obj.subtitle} · ${whereNow(app.universe, obj, app.layers.atmosphere)}`;
-      fill(quick, factList(quickFacts(app.universe, obj)));
+      subtitle.textContent = app.mode === 'space' && obj.body
+        ? (obj.kind === 'sun' ? obj.subtitle : `${obj.subtitle} · ${formatDistanceAU(obj.body.r)} from the Sun`)
+        : `${obj.subtitle} · ${whereNow(app.universe, obj, app.layers.atmosphere)}`;
+      const space = app.mode === 'space';
+      fill(quick, factList(quickFacts(app.universe, obj).filter((f) => !space || f.label !== 'Altitude')));
       const logged = app.store.hasLogged(obj.ref);
       fill(saw, icon('check', 18), logged ? 'Seen' : 'I saw it');
       saw.classList.toggle('done', logged);
-      saw.hidden = obj.kind === 'sun';
+      saw.hidden = obj.kind === 'sun' || space;
       renderMore();
     };
     detailsButton.addEventListener('click', () => {
@@ -312,6 +325,7 @@ export class Shell {
     app.on('second', update);
     app.on('time', update);
     app.on('site', update);
+    app.on('mode', update);
     return el;
   }
 

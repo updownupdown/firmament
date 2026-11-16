@@ -9,6 +9,7 @@ import { SkyCamera, attachControls } from './render/camera.ts';
 import { LabelLayer, collectLabels, layoutLabels } from './render/labels.ts';
 import { pick } from './render/pick.ts';
 import { SkyRenderer } from './render/sky.ts';
+import { SpaceRenderer } from './render/space.ts';
 import { Clock } from './sim/clock.ts';
 import { EventService, workerCompute } from './sim/events.ts';
 import { PLACES } from './sim/places.ts';
@@ -17,13 +18,14 @@ import { type Store, browserStorage } from './sim/store.ts';
 import { type Site, type SkyObject, Universe } from './sim/universe.ts';
 
 export type Section = 'sky' | 'tonight' | 'journeys' | 'log';
+export type ViewMode = 'sky' | 'space';
 
 export type AppEvent =
   /** A frame was drawn (the sky or the view changed). */
   | 'frame'
   /** About once a second of real time, for clocks and live readouts. */
   | 'second'
-  | 'select' | 'settings' | 'site' | 'section' | 'time' | 'data';
+  | 'select' | 'settings' | 'site' | 'section' | 'time' | 'data' | 'mode';
 
 const DEFAULT_SITE: Site = (() => {
   const p = PLACES[0];
@@ -44,6 +46,9 @@ export class App {
   readonly universe: Universe;
   readonly renderer: SkyRenderer;
   readonly camera: SkyCamera;
+  readonly space: SpaceRenderer;
+  /** Standing on the Earth looking up, or out in space looking back. */
+  mode: ViewMode = 'sky';
   readonly events: EventService;
   readonly canvas: HTMLCanvasElement;
   selected: string | null = null;
@@ -72,17 +77,25 @@ export class App {
     });
     this.renderer = new SkyRenderer(canvas, this.universe, 'data/milkyway.png');
     this.camera = new SkyCamera(this.renderer.projection);
+    this.space = new SpaceRenderer(this.renderer.gl, this.universe, this.renderer.stars);
     this.labels = new LabelLayer(labelRoot);
     this.events = new EventService(
       workerCompute(() => new Worker('events-worker.js', { type: 'module' })), browserStorage(),
     );
     this.lineColor = cssColor('--sky-line', [0.62, 0.71, 1]);
     this.accentColor = cssColor('--color-accent', [0.62, 0.71, 1]);
-    this.camera.reducedMotion = this.reducedMotion;
+    this.camera.reducedMotion = this.space.camera.reducedMotion = this.reducedMotion;
 
-    attachControls(canvas, this.camera, {
+    attachControls(canvas, () => (this.mode === 'space' ? this.space.camera : this.camera), {
       onTap: (x, y) => {
         if (this.still) { this.setStill(false); return; }
+        if (this.mode === 'space') {
+          // In space a tap both picks a body and swings the camera round to circle it.
+          const id = this.space.pick(x, y);
+          if (id) this.space.setFocus(id);
+          this.select(id && this.universe.resolve(id) ? id : null);
+          return;
+        }
         this.select(pick(this.renderer, this.layers, x, y));
       },
       onChange: () => this.invalidate(),
@@ -145,7 +158,7 @@ export class App {
 
   updateSettings(change: (s: Store['data']['settings']) => void): void {
     this.store.update((d) => change(d.settings));
-    this.camera.reducedMotion = this.reducedMotion;
+    this.camera.reducedMotion = this.space.camera.reducedMotion = this.reducedMotion;
     this.invalidate();
     this.emit('settings');
   }
@@ -248,6 +261,12 @@ export class App {
 
   /** Turn to an object and keep it centred as the sky moves. */
   centre(ref: string, fov?: number): void {
+    if (this.mode === 'space') {
+      this.space.setFocus(ref);
+      if (fov !== undefined) this.space.camera.flyTo(this.space.framingDistance(ref));
+      this.invalidate();
+      return;
+    }
     const target = this.aim(ref);
     if (!target) return;
     this.camera.track = () => this.aim(ref);
@@ -263,6 +282,33 @@ export class App {
     if (o.kind === 'constellation') return 55 * DEG;
     if (o.kind === 'dso') return 6 * DEG;
     return 25 * DEG;
+  }
+
+  /** Switch between the sky from the ground and the solar system from outside. */
+  setMode(mode: ViewMode): void {
+    if (mode === this.mode) return;
+    this.mode = mode;
+    if (mode === 'space') {
+      // Lift off: start just above the Earth and pull back until the inner planets are in view.
+      this.universe.update(this.clock.jdUT);
+      this.space.liftOff(this.selected ?? 'sun');
+    }
+    this.invalidate();
+    this.emit('mode');
+    this.emit('select');
+  }
+
+  /** Where a selected object is on screen, for the reticle. */
+  locate(ref: string): { x: number; y: number; radiusPx: number } | null {
+    if (this.mode === 'space') {
+      const d = this.space.drawn.find((b) => b.id === ref);
+      return d && d.onScreen ? { x: d.x, y: d.y, radiusPx: d.radiusPx } : null;
+    }
+    const obj = this.universe.resolve(ref);
+    if (!obj || obj.kind === 'constellation') return null;
+    const s = this.renderer.project(obj.dir);
+    if (!s) return null;
+    return { x: s.x, y: s.y, radiusPx: this.renderer.drawn.find((d) => d.id === ref)?.radiusPx ?? 0 };
   }
 
   // ---------------------------------------------------------------- scenes
@@ -287,7 +333,11 @@ export class App {
     this.highlight = scene.highlight ?? [];
     if (scene.select !== undefined) this.select(scene.select);
     const cam = scene.camera;
-    if (cam) {
+    if (cam?.mode) this.setMode(cam.mode);
+    else if (cam && this.mode === 'space') this.setMode('sky');
+    if (cam && this.mode === 'space') {
+      if (typeof cam.look === 'string') this.centre(cam.look, cam.fov);
+    } else if (cam) {
       const fov = cam.fov !== undefined ? cam.fov * DEG : undefined;
       if (typeof cam.look === 'string') {
         if (cam.track === false) {
@@ -310,7 +360,7 @@ export class App {
     const p = this.renderer.projection;
     return {
       time: { jd: this.clock.jdUT }, rate: this.clock.paused ? 0 : this.clock.rate, site: this.site,
-      camera: this.selected && this.camera.track
+      camera: this.mode === 'space' ? { look: this.space.camera.focus, mode: 'space' } : this.selected && this.camera.track
         ? { look: this.selected, fov: p.fov / DEG, track: true }
         : { look: { az: p.az / DEG, alt: p.alt / DEG }, fov: p.fov / DEG },
       culture: this.universe.cultureId, bortle: this.store.data.settings.bortle,
@@ -329,11 +379,13 @@ export class App {
       const dt = Math.min(0.1, (now - (this.lastFrame || now)) / 1000);
       this.lastFrame = now;
       this.clock.tick(dt);
-      const moved = this.camera.tick(dt);
+      const space = this.mode === 'space';
+      const moved = space ? this.space.camera.tick(dt) : this.camera.tick(dt);
       this.sinceDraw += dt;
       // The sky turns 15 arcseconds a second: redraw once it has moved a third of a pixel.
       const drift = (0.3 * this.renderer.projection.pixelAngle) / (7.3e-5 * Math.max(1, Math.abs(this.clock.rate)));
-      const due = !this.clock.paused && this.sinceDraw >= Math.min(drift, 1);
+      // In space, planets only visibly move when time is running fast.
+      const due = !this.clock.paused && this.sinceDraw >= (space ? (Math.abs(this.clock.rate) > 300 ? 0 : 1) : Math.min(drift, 1));
       if (moved || due || this.renderer.dirty || this.renderer.resize()) this.draw();
       if (now - this.lastSecond >= 1000) {
         this.lastSecond = now;
@@ -347,6 +399,16 @@ export class App {
   private draw(): void {
     this.sinceDraw = 0;
     this.universe.update(this.clock.jdUT);
+    if (this.mode === 'space') {
+      const cam = this.space.camera, p = this.renderer.projection;
+      cam.width = p.width; cam.height = p.height;
+      cam.update();
+      this.space.render({ layers: this.layers, lineColor: this.lineColor, accentColor: this.accentColor, selected: this.selected }, this.renderer.pixelRatio);
+      this.labels.update(layoutLabels(this.still ? [] : this.space.labels(this.selected), p.width, p.height));
+      this.renderer.dirty = false;
+      this.emit('frame');
+      return;
+    }
     // Re-aim after the sky moved, so a tracked object stays exactly centred.
     if (this.camera.track && !this.camera.held) this.camera.tick(0);
     const con = [this.selected, ...this.highlight].find((r) => r?.startsWith('con:'));

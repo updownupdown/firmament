@@ -177,6 +177,13 @@ cache-first and everything else network-first, and is registered from
 - The Log shows a "Happening now" card when an event is within reach of the
   clock, with its own "I saw it".
 
+**Lunar eclipses in the sky**: `earthShadowAt` (`astro/events.ts`, tested
+against the published contact times of 14 March 2025) gives the umbra and
+penumbra where the Moon is. The body shader dims the Moon through the
+penumbra and turns it copper in the umbra, the Moon's glare and its share of
+sky brightness fall with it, so faint stars come out in totality. Solar
+eclipses were already drawn (the Moon covers the Sun; corona in totality).
+
 **Phone pointing** (`src/render/pointing.ts`; tests in `pointing.test.ts`)
 - `pointingDirection(alpha, beta, gamma)` is where the back of the phone
   faces. `Pointing` listens to `deviceorientationabsolute` (Chrome) or
@@ -190,8 +197,6 @@ cache-first and everything else network-first, and is registered from
 
 ### 1. Remaining work
 - Try phone pointing on a real iPhone and Android phone.
-- The Moon does not darken during a lunar eclipse, and the Sun is not
-  bitten during a solar one.
 - Journeys with custom interactives: Kepler's Mars and mission planning.
 - Space view: Jupiter's moons, surface detail, Milky Way, distance in links.
 - The Tonight guide character is still unnamed; ask the owner.

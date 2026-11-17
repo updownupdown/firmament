@@ -3,6 +3,7 @@
 // solar system bodies, ground. Labels are DOM (see labels.ts).
 
 import { BODIES } from '../astro/bodies.ts';
+import { type EarthShadow, earthShadowAt } from '../astro/events.ts';
 import type { ApparentBody } from '../astro/ephemeris.ts';
 import { GALILEAN } from '../astro/galilean.ts';
 import { SMALL_BODIES } from '../astro/kepler.ts';
@@ -45,6 +46,8 @@ export interface SkyConditions {
   /** Fraction of the Sun's disk not covered by the Moon. */
   sunVisible: number;
   moonLight: number;
+  /** The Earth's shadow, when the Moon is in or near it. */
+  shadow: EarthShadow | null;
   /** Faintest magnitude drawn, and the same before the zoom gain. */
   limitMag: number;
   nakedEyeLimit: number;
@@ -95,7 +98,10 @@ export function skyConditions(u: Universe, opts: { bortle: number; atmosphere: b
   const sunAltEffective = sunAlt > deep ? deep + (sunAlt - deep) * t * t * (3 - 2 * t) : sunAlt;
 
   const moonUp = clamp(moonTrue[2] * 3, 0, 1);
-  const moonLight = Math.pow(moon.illum, 1.6) * moonUp;
+  // Near the point opposite the Sun, the Moon may be in the Earth's shadow.
+  const shadow = angleBetween(moon.dir, scale(sun.dir, -1)) < 3 * DEG ? earthShadowAt(u.eph, u.frame.jdUT) : null;
+  const eclipsed = shadow && shadow.separation < shadow.penumbra + shadow.moonRadius ? shadow : null;
+  const moonLight = Math.pow(moon.illum, 1.6) * moonUp * (eclipsed ? 0.03 + 0.97 * eclipsed.uncovered : 1);
   const zoomGain = clamp(1.7 * Math.log2((70 * DEG) / opts.fov), -0.6, 6.5);
   let nakedEyeLimit: number;
   if (opts.atmosphere) {
@@ -105,7 +111,7 @@ export function skyConditions(u: Universe, opts: { bortle: number; atmosphere: b
     nakedEyeLimit = 6.8;
   }
   return {
-    sunDir, moonDir, sunAlt, sunAltEffective, sunVisible, moonLight,
+    sunDir, moonDir, sunAlt, sunAltEffective, sunVisible, moonLight, shadow: eclipsed,
     nakedEyeLimit, limitMag: nakedEyeLimit + zoomGain,
     extinction: opts.atmosphere ? 0.16 + 0.012 * (opts.bortle - 1) : 0,
   };
@@ -541,7 +547,7 @@ export class SkyRenderer {
         glare = c.sunVisible * (opts.layers.atmosphere ? 0.55 + 0.45 * low : 1);
         extent = Math.max(1.15, 150 / Math.max(d.radiusPx, 0.01));
       } else if (id === 'moon') {
-        glare = opts.layers.atmosphere ? 0.22 * body.illum * (1 - clamp((rDev - 6) / 30, 0, 1)) : 0;
+        glare = opts.layers.atmosphere ? 0.22 * body.illum * (1 - clamp((rDev - 6) / 30, 0, 1)) * (c.shadow ? c.shadow.uncovered : 1) : 0;
         extent = Math.max(1.15, glare > 0 ? 60 / Math.max(d.radiusPx, 0.01) : 0);
         color = [0.93, 0.91, 0.86];
       } else if (small) {
@@ -576,7 +582,18 @@ export class SkyRenderer {
       } else {
         prime = normalize(sub(ez, scale(pole, dot(ez, pole))));
       }
+      // The Earth's shadow on the Moon, in the disc's own frame and in Moon radii.
+      let shadow: Vec3 = [0, 0, 0], penumbra = 0, adapted = 0;
+      if (id === 'moon' && c.shadow) {
+        const s = c.shadow;
+        const offset = local(sub(s.shadowDir, s.moonDir));
+        shadow = [offset[0] / s.moonRadius, offset[1] / s.moonRadius, s.umbra / s.moonRadius];
+        penumbra = s.penumbra / s.moonRadius;
+        // While any of the Moon is in sunlight the umbra looks nearly black beside it.
+        adapted = 1 - clamp(s.uncovered / 0.12, 0, 1);
+      }
       const half = radius * extent;
+      p.v3('uShadow', shadow).v2('uShadowEdge', penumbra, adapted);
       p.i('uKind', kind).f('uExtent', extent).f('uRadiusPx', radius * dpr)
         .v2('uCentre', (d.screen.x / pr.width) * 2 - 1, 1 - (d.screen.y / pr.height) * 2)
         .v2('uHalf', (half * 2) / pr.width, (half * 2) / pr.height)

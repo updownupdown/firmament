@@ -6,7 +6,7 @@ import { eclipticOfDate, gast, gmst, precessionMatrix } from './frames.ts';
 import { makeFrame, observeBody, raDecOfDate } from './ephemeris.ts';
 import { galileanMoons } from './galilean.ts';
 import {
-  allEvents, bodyRiseSet, conjunctions, eclipses, localSolarEclipse, moonPhases,
+  allEvents, bodyRiseSet, conjunctions, earthShadowAt, eclipses, localSolarEclipse, moonPhases,
   oppositionsAndElongations, seasons, twilight,
 } from './events.ts';
 import { GM_SUN, elementsFromState, lambert, propagate, stateFromElements, SMALL_BODIES } from './kepler.ts';
@@ -210,3 +210,22 @@ test('a year of events is computed quickly', () => {
   assert.ok(ev.some((e) => e.kind === 'meteor-shower' && e.title.startsWith('Perseids')));
 });
 
+
+test('earth shadow: contacts of the total lunar eclipse of 14 March 2025', () => {
+  // Published (NASA): partial begins 05:09.7 UT, totality 06:26.1 to 07:31.4, partial ends 08:47.9.
+  const eph = testEphemeris();
+  const at = (h: number, m: number) => earthShadowAt(eph, jdFromCalendar(2025, 3, 14, h, m));
+  const arcsec = Math.PI / 648000;
+  // At a contact the Moon's limb touches the umbra's edge. The Moon crosses 30" a minute.
+  const u1 = at(5, 9.7), u2 = at(6, 26.1), u3 = at(7, 31.4), u4 = at(8, 47.9);
+  for (const [name, s, touching] of [
+    ['U1', u1, u1.umbra + u1.moonRadius], ['U2', u2, u2.umbra - u2.moonRadius],
+    ['U3', u3, u3.umbra - u3.moonRadius], ['U4', u4, u4.umbra + u4.moonRadius],
+  ] as const) {
+    assert.ok(Math.abs(s.separation - touching) < 60 * arcsec, `${name}: off by ${((s.separation - touching) / arcsec).toFixed(0)}"`);
+  }
+  assert.equal(at(6, 59).uncovered, 0);
+  assert.equal(at(4, 30).uncovered, 1);
+  const half = at(5, 48).uncovered;
+  assert.ok(half > 0.35 && half < 0.65, `about half covered midway through the partial phase, got ${half}`);
+});

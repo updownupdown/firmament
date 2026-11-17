@@ -7,6 +7,7 @@ import { addMonths, monthOf } from '../sim/events.ts';
 import { formatDate, formatTime } from '../sim/format.ts';
 import type { Scene } from '../sim/scene.ts';
 import { EVENT_GOALS, type EventCheck, type EventGoal, checkEvent, checkSighting, countsFromHere, eventWindow } from '../sim/sightings.ts';
+import { lightNote } from '../sim/lore.ts';
 import type { LogEntry } from '../sim/store.ts';
 import { MOON_PHASE_NAMES, moonElongation, moonPhaseName } from '../sim/tonight.ts';
 import type { SkyObject } from '../sim/universe.ts';
@@ -26,7 +27,8 @@ export function logSighting(app: App, obj: SkyObject): string {
     return `${name} is already in your log for this night.`;
   }
   app.store.addLog({ ref, name, jdUT: app.clock.jdUT, site: app.site, verified: check.ok, alt: check.alt / DEG });
-  return check.ok ? `Logged: ${name}.` : `Logged, but unconfirmed. ${check.reason}`;
+  const lumen = check.ok && app.store.data.settings.guide === 'on' ? lightNote(app.universe, obj) : null;
+  return check.ok ? `Logged: ${name}.${lumen ? ` Lumen: ${lumen}` : ''}` : `Logged, but unconfirmed. ${check.reason}`;
 }
 
 /** Record an event as seen now. Returns a message for the player. */

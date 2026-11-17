@@ -362,3 +362,30 @@ test('a loaded Tycho-2 star can be named and found; an unloaded one cannot', asy
   for (let b = 0; b < TYCHO_KEEP; b++) u.addFaintBand(b, band);
   assert.equal(u.resolve('tyc:35:0'), null);
 });
+
+test('Lumen is off until the player opts in, and its notes point at real stars and constellations', async () => {
+  const { BODY_STORIES, CONSTELLATION_LORE, STAR_LORE, lightNote, loreFor } = await import('./lore.ts');
+  assert.equal(migrate({ version: 1, settings: {} }).settings.guide, 'unset');
+  assert.equal(migrate({ version: 1, settings: { guide: 'on' } }).settings.guide, 'on');
+  assert.equal(migrate({ version: 1, settings: { guide: 'yes please' } }).settings.guide, 'unset');
+
+  const western = readJSON<Culture>('cultures/western.json');
+  const u = new Universe({ eph: testEphemeris(), stars: testStars(), dsos: [], cultures: [western], site: TORONTO, jdUT: jdFromCalendar(2026, 11, 17, 0, 0) });
+  for (const hip of Object.keys(STAR_LORE)) assert.ok(u.resolve(`star:${hip}`), `HIP ${hip}`);
+  const iau = new Set(western.constellations.map((c) => c.iau));
+  for (const id of Object.keys(CONSTELLATION_LORE)) assert.ok(iau.has(id), id);
+  for (const id of Object.keys(BODY_STORIES)) assert.ok(u.resolve(id), id);
+
+  // Each note pairs a fact with a story.
+  const vega = u.resolve('star:91262')!;
+  const lore = loreFor(u, vega, () => null);
+  assert.ok(lore.science && lore.story);
+  const orion = u.resolve(`con:western:${western.constellations.find((c) => c.iau === 'Ori')!.id}`)!;
+  assert.ok(loreFor(u, orion, () => null).story?.includes('hunter'));
+  assert.equal(loreFor(u, u.resolve('saturn')!, () => 'rings').science, 'rings');
+
+  // Vega is 25 light-years away: its light left around 2001. Saturn's light takes over an hour in late 2026.
+  assert.match(lightNote(u, vega)!, /about 25 years ago, around 200[01]/);
+  assert.match(lightNote(u, u.resolve('saturn')!)!, /left Saturn (7\d|8\d) minutes ago/);
+  assert.match(lightNote(u, u.resolve('moon')!)!, /1\.\d seconds/);
+});

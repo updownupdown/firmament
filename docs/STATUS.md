@@ -207,6 +207,16 @@ way, Through time, Great discoveries, Into space). Diagrams: `ui/plot.ts`
 only dispatches; each kind is its own module (`plot-orbits`, `plot-fix`,
 `plot-flyby`, `plot-sandbox`).
 
+**Lumen, the optional guide** (owner's decision, 2026-11-17): off until the
+player opts in. `Settings.guide` is `'unset' | 'on' | 'off'`; while unset,
+Tonight shows a "Meet Lumen" offer, and the View panel's Guide section
+toggles it. Off, the Tonight prompt is a plain almanac line. On, the prompt
+card adds "What it is" (the object card blurb, or `sim/lore.ts`) and "The
+story" (myth, history, other cultures) for planets, the Moon, about 25 bright
+stars and 45 Western constellations, and logging a sighting adds when its
+light left (`lightNote`). Look: a soft breathing point of light in the accent
+colour (`.lumen-glyph`), still under reduced motion.
+
 **Faint stars can be tapped**: `Universe.faint` keeps the same Tycho-2 bands
 as the renderer (`TYCHO_KEEP`, oldest dropped first); refs are `tyc:<band>:<i>`
 and resolve to a "Faint star" with magnitude and position (no colour or
@@ -316,7 +326,6 @@ eclipses were already drawn (the Moon covers the Sun; corona in totality).
 
 ### 1. Remaining work
 - Phone pointing was confirmed working by the owner on 2026-11-17.
-- The Tonight guide character is still unnamed; ask the owner.
 
 ### 2. Launch
 A pass over accessibility and performance on a real phone, and a short tour

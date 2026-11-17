@@ -17,6 +17,32 @@ interface Flight {
   duration: number;
 }
 
+/**
+ * Zooming on past a limit, deliberately: a few wheel notches or a firm pinch
+ * beyond it. Used to lift off into space from the widest sky, and to land
+ * from closest to the Earth.
+ */
+export class ZoomPast {
+  /** Called once the push is firm enough. */
+  onPast: (() => void) | null = null;
+  private push = 0;
+  private last = 0;
+
+  /** Feed a zoom that hit the limit (`log` is how far past it, positive), or a zoom that did not (reset). */
+  feed(pastLimit: boolean, log = 0): boolean {
+    const now = performance.now();
+    if (!pastLimit || !this.onPast) { this.push = 0; return false; }
+    // A pause between pushes starts again, so resting on the limit never switches views.
+    if (now - this.last > 700) this.push = 0;
+    this.last = now;
+    this.push += log;
+    if (this.push < 0.45) return false;
+    this.push = 0;
+    this.onPast();
+    return true;
+  }
+}
+
 export class SkyCamera {
   readonly projection: SkyProjection;
   /** When set, called every frame for the direction to keep centred (radians), or null to stop. */
@@ -24,6 +50,8 @@ export class SkyCamera {
   reducedMotion = false;
   /** True while a finger or the mouse is holding the sky. */
   held = false;
+  /** Zooming out past the widest view. */
+  readonly zoomPast = new ZoomPast();
   private flight: Flight | null = null;
   private velAz = 0;
   private velAlt = 0;
@@ -75,6 +103,7 @@ export class SkyCamera {
   zoom(factor: number, x?: number, y?: number): void {
     const p = this.projection;
     this.flight = null;
+    if (this.zoomPast.feed(factor < 1 && p.fov >= MAX_FOV * 0.999, -Math.log(factor))) return;
     const before = x !== undefined && y !== undefined ? p.unproject(x, y) : null;
     p.fov = clamp(p.fov / factor, MIN_FOV, MAX_FOV);
     p.update();
@@ -102,6 +131,8 @@ export class SkyCamera {
       '=': { fov: clamp(p.fov / 1.4, MIN_FOV, MAX_FOV) },
       '-': { fov: clamp(p.fov * 1.4, MIN_FOV, MAX_FOV) },
     };
+    // One more "zoom out" at the widest view lifts off.
+    if (key === '-' && p.fov >= MAX_FOV * 0.999 && this.zoomPast.feed(true, 1)) return true;
     const m = moves[key];
     if (!m) return false;
     this.track = null;

@@ -4,6 +4,7 @@
 
 import { BODIES } from '../astro/bodies.ts';
 import { type EarthShadow, earthShadowAt } from '../astro/events.ts';
+import { EQ_TO_GAL } from '../astro/frames.ts';
 import type { ApparentBody } from '../astro/ephemeris.ts';
 import { GALILEAN } from '../astro/galilean.ts';
 import { SMALL_BODIES } from '../astro/kepler.ts';
@@ -58,6 +59,8 @@ export interface SkyConditions {
 const STAR_STRIDE = 11;
 const LINE_STRIDE = 12;
 const SEGMENT_STEP = 3 * DEG;
+/** Galactic → J2000 equatorial. */
+const GAL_TO_EQ = transpose(EQ_TO_GAL);
 
 /** Fraction of a disk of radius r1 left uncovered by a disk of radius r2 whose centre is d away. */
 export function uncoveredFraction(r1: number, r2: number, d: number): number {
@@ -445,6 +448,11 @@ export class SkyRenderer {
     if (opts.layers.gridEquatorial) {
       drawLines(this.graticule, f.dateToHorizon, 0.17, 1, false, true, [lr * 0.7, lg * 0.85, lb]);
       drawLines(this.circle, f.dateToHorizon, 0.34, 1.2, false, true, [lr * 0.7, lg * 0.85, lb]);
+    }
+    if (opts.layers.gridGalactic) {
+      const gal = mulAll(f.j2000ToHorizon, GAL_TO_EQ);
+      drawLines(this.graticule, gal, 0.15, 1, false, true, [0.85, 0.7, 1]);
+      drawLines(this.circle, gal, 0.4, 1.2, false, true, [0.85, 0.7, 1]);
     }
     if (opts.layers.ecliptic) {
       drawLines(this.circle, mulAll(f.dateToHorizon, rotX(-f.nut.epsTrue)), 0.5, 1.2, false, true, [1, 0.8, 0.45]);

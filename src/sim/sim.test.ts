@@ -153,7 +153,7 @@ test('scene: survives a round trip through the URL hash', () => {
   // Junk never throws and never produces half-valid values.
   assert.deepEqual(decodeScene('s=abc,def&r=fast&b=99&zzz&c=,&%E0%A4%A=1'), { bortle: 9, camera: {} });
   near(sceneJd({ utc: '2000-01-01T12:00:00Z' }, 0)!, J2000, 1e-9);
-  assert.equal(Object.keys(DEFAULT_LAYERS).length, 14);
+  assert.equal(Object.keys(DEFAULT_LAYERS).length, 16);
 });
 
 test('store: saves, reloads and repairs damaged data', () => {
@@ -328,4 +328,17 @@ test('events: a month of calendar events, computed once and then cached', async 
   const slice = await second.range(jdFromCalendar(2024, 3, 19), jdFromCalendar(2024, 3, 21));
   assert.ok(slice.some((e) => e.kind === 'season'));
   assert.equal(calls, 1);
+});
+
+test('format: angles in hands at arm\'s length', async () => {
+  const { handMeasure } = await import('./format.ts');
+  const deg = Math.PI / 180;
+  // The Big Dipper's pointers are about 5.4° apart, three fingers; the Dipper's bowl to Polaris about 28°.
+  assert.equal(handMeasure(0.5 * deg), 'less than a finger');
+  assert.equal(handMeasure(1 * deg), 'about 1 finger');
+  assert.equal(handMeasure(5.4 * deg), 'about three fingers');
+  assert.equal(handMeasure(10 * deg), 'about a fist');
+  assert.equal(handMeasure(20 * deg), 'about a spread hand');
+  assert.equal(handMeasure(28 * deg), 'about 3 fists');
+  assert.equal(handMeasure(90 * deg), 'about 9 fists');
 });

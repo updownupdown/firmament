@@ -199,6 +199,21 @@ export function formatAngularSize(angle: number): string {
   return `${arcsec.toFixed(arcsec < 10 ? 1 : 0)}″`;
 }
 
+/**
+ * An angle in hands held out at arm's length, the observer's ruler: a little
+ * finger is about 1°, three fingers 5°, a fist 10° and a spread hand 20°.
+ */
+export function handMeasure(angle: number): string {
+  const deg = Math.abs(angle) / DEG;
+  if (deg < 0.75) return 'less than a finger';
+  if (deg < 3) return `about ${Math.round(deg)} finger${Math.round(deg) === 1 ? '' : 's'}`;
+  if (deg < 7.5) return 'about three fingers';
+  if (deg < 15) return 'about a fist';
+  const fists = Math.round(deg / 10 * 2) / 2;
+  if (deg < 25 && Math.abs(deg - 20) < 3) return 'about a spread hand';
+  return `about ${fists % 1 ? fists.toFixed(1) : fists} fists`;
+}
+
 const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 const COMPASS_WORDS: Record<string, string> = {
   N: 'north', NE: 'northeast', E: 'east', SE: 'southeast', S: 'south', SW: 'southwest', W: 'west', NW: 'northwest',

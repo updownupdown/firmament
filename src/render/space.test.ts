@@ -89,3 +89,25 @@ test('lifting off toward a far body keeps the start centred, then closes in on t
   assert.ok(Math.abs(cam.dist - 0.03) < 1e-9, `${cam.dist}`);
   assert.deepEqual(cam.offset, [0, 0, 0]);
 });
+
+test('space: compressed scale keeps the order of distances and sizes', async () => {
+  const { COMPRESS } = await import('./space.ts');
+  const { BODIES } = await import('../astro/bodies.ts');
+  const AU_KM = 149597870.7;
+  // The Earth stays at 1 AU; Neptune comes in to about 5.5.
+  assert.ok(Math.abs(Math.hypot(...COMPRESS.helio([1, 0, 0])) - 1) < 1e-12);
+  assert.ok(Math.abs(Math.hypot(...COMPRESS.helio([30.07, 0, 0])) - 5.48) < 0.01);
+  const order = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'] as const;
+  const a = [0.387, 0.723, 1, 1.524, 5.2, 9.58, 19.2, 30.07].map((r) => Math.hypot(...COMPRESS.helio([r, 0, 0])));
+  for (let k = 1; k < a.length; k++) {
+    assert.ok(a[k] > a[k - 1]);
+    // No planet's compressed disc reaches its neighbour's.
+    const r0 = COMPRESS.size(BODIES[order[k - 1]].radiusEq / AU_KM), r1 = COMPRESS.size(BODIES[order[k]].radiusEq / AU_KM);
+    assert.ok(a[k] - a[k - 1] > (r0 + r1) * 1.5, `${order[k - 1]}–${order[k]}`);
+  }
+  // The Sun stays clear of Mercury, and the Moon of the Earth.
+  assert.ok(COMPRESS.size(BODIES.sun.radiusEq / AU_KM) * 1.3 < a[0]);
+  const earthR = BODIES.earth.radiusEq / AU_KM;
+  const moon = Math.hypot(...COMPRESS.moon([384400 / AU_KM, 0, 0], earthR));
+  assert.ok(moon > COMPRESS.size(earthR) * 3 && moon < 0.23 / 1.2);
+});

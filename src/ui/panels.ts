@@ -65,7 +65,7 @@ const LAYER_GROUPS: { title: string; items: [keyof LayerFlags, string, string?][
   { title: 'Constellations', items: [['lines', 'Figures'], ['constellationLabels', 'Names'], ['boundaries', 'Boundaries', 'The official borders between constellations']] },
   { title: 'Labels', items: [['starLabels', 'Stars'], ['planetLabels', 'Planets and Moon'], ['dsos', 'Deep sky objects', 'Galaxies, clusters and nebulae']] },
   { title: 'Sky', items: [['milkyWay', 'Milky Way'], ['atmosphere', 'Atmosphere', 'Daylight, twilight and haze near the horizon'], ['ground', 'Ground'], ['cardinals', 'Compass points']] },
-  { title: 'Guides', items: [['gridAltAz', 'Altitude grid'], ['gridEquatorial', 'Equatorial grid'], ['ecliptic', 'Ecliptic', 'The path the Sun follows through the year']] },
+  { title: 'Guides', items: [['gridAltAz', 'Altitude grid'], ['gridEquatorial', 'Equatorial grid'], ['ecliptic', 'Ecliptic', 'The path the Sun follows through the year'], ['gridGalactic', 'Galactic grid', 'Latitude and longitude on the Milky Way, centred on its core']] },
   { title: 'Space view', items: [['orbits', 'Orbits']] },
 ];
 

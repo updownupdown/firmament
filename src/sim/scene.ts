@@ -22,18 +22,22 @@ export interface LayerFlags {
   ecliptic: boolean;
   /** Orbit lines in Space view. */
   orbits: boolean;
+  /** Galactic latitude and longitude, with the galactic equator. */
+  gridGalactic: boolean;
+  /** Space view: distances and sizes compressed so the whole system fits and planets show as discs. */
+  compressed: boolean;
 }
 
 export const DEFAULT_LAYERS: LayerFlags = {
   lines: true, constellationLabels: true, boundaries: false, starLabels: true, planetLabels: true,
   dsos: true, milkyWay: true, atmosphere: true, ground: true, cardinals: true,
-  gridAltAz: false, gridEquatorial: false, ecliptic: false, orbits: true,
+  gridAltAz: false, gridEquatorial: false, ecliptic: false, orbits: true, gridGalactic: false, compressed: false,
 };
 
 // Order is part of the URL format: append new layers at the end, never reorder.
 const LAYER_ORDER: (keyof LayerFlags)[] = [
   'lines', 'constellationLabels', 'boundaries', 'starLabels', 'planetLabels', 'dsos', 'milkyWay',
-  'atmosphere', 'ground', 'cardinals', 'gridAltAz', 'gridEquatorial', 'ecliptic', 'orbits',
+  'atmosphere', 'ground', 'cardinals', 'gridAltAz', 'gridEquatorial', 'ecliptic', 'orbits', 'gridGalactic', 'compressed',
 ];
 
 /** A direction on the local sky, degrees (azimuth from north through east). */

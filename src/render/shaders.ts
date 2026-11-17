@@ -367,6 +367,8 @@ uniform float uDim;         // extinction near the horizon, 0..1
 uniform float uEarthshine;
 uniform float uGlare;       // strength of the glare sprite
 uniform float uFlatten;     // polar flattening
+uniform vec3 uShadow;       // Earth's shadow on the Moon: centre (xy, body radii) and umbra radius (0 = none)
+uniform vec2 uShadowEdge;   // penumbra radius (body radii), and how much the eye has adapted to the umbra (0..1)
 in vec2 vLocal;
 in vec2 vNdc;
 out vec4 outColor;
@@ -539,6 +541,16 @@ void main() {
       }
       vec3 litColor = surface * shade * 1.25;
       if (uKind == 2) litColor += surface * uEarthshine * (1.0 - smoothstep(-0.05, 0.15, lit));
+      if (uKind == 2 && uShadow.z > 0.0) {
+        // A lunar eclipse: the penumbra dims gently toward the umbra, whose edge is soft
+        // and whose inside glows copper with sunlight bent through the Earth's air.
+        float d = length(p - uShadow.xy);
+        float penumbra = smoothstep(uShadow.z, uShadowEdge.x, d);
+        float outside = smoothstep(uShadow.z - 0.10, uShadow.z + 0.04, d);
+        vec3 copper = mix(vec3(0.20, 0.035, 0.012), vec3(0.50, 0.17, 0.06), smoothstep(0.0, uShadow.z, d));
+        vec3 inUmbra = surface * copper * mix(0.12, 1.0, uShadowEdge.y);
+        litColor = mix(inUmbra, litColor * (0.35 + 0.65 * penumbra), outside);
+      }
       // Over a bright sky the lit face is washed out, and the dark side is just sky.
       color = sky + litColor * uDim * (1.0 - 0.55 * clamp(skyLuma * 1.6, 0.0, 1.0));
       alpha = disc;

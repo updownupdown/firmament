@@ -291,6 +291,44 @@ function shadowGeometry(eph: Ephemeris, jdTT: number) {
   return { sun, moon, piM, piS };
 }
 
+export interface EarthShadow {
+  /** Geocentric directions (J2000) of the Moon and of the centre of the Earth's shadow. */
+  moonDir: Vec3;
+  shadowDir: Vec3;
+  /** Angular radii at the Moon's distance, radians. */
+  umbra: number;
+  penumbra: number;
+  moonRadius: number;
+  /** Angle between the Moon's centre and the shadow's, radians. */
+  separation: number;
+  /** Fraction of the Moon's disc outside the umbra, 0..1. */
+  uncovered: number;
+}
+
+/** The Earth's shadow where the Moon is, at an instant (UT). */
+export function earthShadowAt(eph: Ephemeris, jdUT: number): EarthShadow {
+  const g = shadowGeometry(eph, ttFromUt(jdUT));
+  const shadowDir = scale(g.sun.dir, -1);
+  // The atmosphere enlarges the shadow by about 2% (the traditional rule).
+  const umbra = 1.02 * (0.99834 * g.piM - g.sun.radius + g.piS);
+  const penumbra = 1.02 * (0.99834 * g.piM + g.sun.radius + g.piS);
+  const separation = angleBetween(g.moon.dir, shadowDir);
+  const r = g.moon.radius;
+  let uncovered = 1;
+  if (separation < umbra + r) {
+    if (separation <= umbra - r) uncovered = 0;
+    else {
+      // Area of the lens where two circles overlap.
+      const d = separation;
+      const a1 = r * r * Math.acos((d * d + r * r - umbra * umbra) / (2 * d * r));
+      const a2 = umbra * umbra * Math.acos((d * d + umbra * umbra - r * r) / (2 * d * umbra));
+      const a3 = 0.5 * Math.sqrt((-d + r + umbra) * (d + r - umbra) * (d - r + umbra) * (d + r + umbra));
+      uncovered = 1 - (a1 + a2 - a3) / (Math.PI * r * r);
+    }
+  }
+  return { moonDir: g.moon.dir, shadowDir, umbra, penumbra, moonRadius: r, separation, uncovered };
+}
+
 export function lunarEclipseAt(eph: Ephemeris, fullMoonUT: number): LunarEclipse | null {
   const tt = ttFromUt(fullMoonUT);
   const sepAt = (t: number) => {

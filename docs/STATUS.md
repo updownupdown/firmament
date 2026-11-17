@@ -147,38 +147,37 @@ chosen by the owner on 2026-11-16)
   needs `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`);
   `document.documentElement.dataset.ready` is set after the first frame.
 
+**Journeys** (`src/journeys`, `src/ui/journeys.ts`; tests in `journeys.test.ts`)
+- `engine.ts`: a `Journey` is steps; a `Step` has text, an optional `Scene` and
+  an optional task: `find` (tap an object), `choice`, or `number` (the answer
+  may be read off the simulation when checked). `JourneyRun` tracks position.
+- `content.ts`: five journeys: the wandering pole (Polaris, Thuban in 2800 BC,
+  Vega in AD 14,000), find your latitude (Polaris, then the Southern Cross),
+  measure the Earth (Eratosthenes, solstice noon 240 BC), Galileo's moons
+  (Padua, January 1610) and one sky, many stories (Scorpius and Manaiakalani).
+  Every scene and answer is asserted against the simulation in the tests.
+- The player is a card over the sky. It saves progress in the store, and puts
+  the player's own place, layers and culture back when a journey ends.
+- Planned but not written: Kepler's Mars (triangulating the orbit) and mission
+  planning (a Hohmann transfer checked with `lambert`). Both need a custom
+  canvas task, which the engine does not have yet.
+
+**Offline**: `public/sw.js` precaches every file of a build, serves `data/`
+cache-first and everything else network-first, and is registered from
+`main.ts`. Checked by reloading with the network off.
+
 ## Next steps, in order
 
-### 1. Remaining shell work
+### 1. Remaining work
 - Phone pointing (DeviceOrientation; iOS needs a permission tap).
-- Service worker: `public/sw.js` only precaches on install. Add the fetch
-  handler and register it so the app works offline.
-- Add Journeys to the dock when section 2 exists.
+- Journeys with custom interactives: Kepler's Mars and mission planning.
+- Space view: Jupiter's moons, surface detail, Milky Way, distance in links.
+- Log checklist for events (eclipses, showers).
 - The Tonight guide character is still unnamed; ask the owner.
-- Log checklist for events (eclipses, showers) is not built.
 
-### 2. Journeys (`src/journeys`)
-Engine: a journey has steps; a step has text, an optional Scene and an
-optional task (`find` a body by tapping it, `choice`, `number` with tolerance,
-or a `custom` mount for canvas interactives with a checker). Planned content:
-- **Wandering pole**: Thuban in 2800 BC, Polaris now, Vega in AD 14,000, and a
-  slider deforming the Big Dipper over ±100k years.
-- **Celestial navigation**: latitude from Polaris's altitude at a hidden
-  location, then the south pole from Crux.
-- **Eratosthenes**: noon Sun at Alexandria vs Syene on the June solstice
-  (around 240 BC), measure the 7.2° difference, compute the circumference.
-- **Galileo's moons**: Padua in January 1610, night by night, then estimate
-  Io's period.
-- **Kepler's Mars**: triangulate Mars from pairs of Earth positions 687 days
-  apart (Kepler's actual method), then fit an ellipse on a 2D canvas.
-- **Mission planning**: Hohmann transfer to Mars, choosing the launch date
-  (phase angle about 44°), checked with `lambert`.
-- **Sky cultures**: find Maui's fishhook (Hawaiian) and the same stars in
-  other cultures.
-
-### 3. Launch
-Offline check, a pass over accessibility and performance on a real phone, and a
-short tour for first-time visitors.
+### 2. Launch
+A pass over accessibility and performance on a real phone, and a short tour
+for first-time visitors.
 
 ## Environment notes
 - The owner doesn't run the app locally. Work on a branch, merge into `main`

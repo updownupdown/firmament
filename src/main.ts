@@ -58,6 +58,11 @@ async function boot(): Promise<void> {
     }
   });
   app.start();
+
+  // Offline support: only where service workers are allowed (https, or localhost while testing).
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* the app works without it */ });
+  }
 }
 
 boot().catch((e) => {

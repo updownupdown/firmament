@@ -7,11 +7,12 @@ import { jdNow } from '../astro/time.ts';
 import { calendarNote, formatDate, formatDistanceAU, formatTime, localTime } from '../sim/format.ts';
 import { h, fill, icon, iconButton } from './dom.ts';
 import { blurb, detailFacts, quickFacts, riseSetFacts, whereNow } from './facts.ts';
+import { type JourneyPlayer, journeyPlayer, journeysPanel } from './journeys.ts';
 import { logPanel, logSighting } from './log.ts';
 import { placeTimePanel, searchPanel, settingsPanel } from './panels.ts';
 import { tonightPanel } from './tonight.ts';
 
-export type SheetId = 'search' | 'settings' | 'place' | 'tonight' | 'log' | null;
+export type SheetId = 'search' | 'settings' | 'place' | 'tonight' | 'journeys' | 'log' | null;
 
 export interface Panel {
   title: string;
@@ -33,6 +34,7 @@ export class Shell {
   private readonly toastEl: HTMLElement;
   private toastTimer = 0;
   private lastFocus: HTMLElement | null = null;
+  private readonly journey: JourneyPlayer;
 
   constructor(app: App, root: HTMLElement) {
     this.app = app;
@@ -42,6 +44,7 @@ export class Shell {
       settings: settingsPanel(this),
       place: placeTimePanel(this),
       tonight: tonightPanel(this),
+      journeys: journeysPanel(this),
       log: logPanel(this),
     };
     this.sheetTitle = h('h2', { class: 'sheet-title', tabindex: '-1' });
@@ -51,8 +54,9 @@ export class Shell {
       this.sheetBody);
     this.sheetTitle.id = 'sheet-title';
     this.toastEl = h('div', { class: 'toast glass', role: 'status', 'aria-live': 'polite', hidden: true });
+    this.journey = journeyPlayer(this);
     const nightVision = h('div', { class: 'night-vision', 'aria-hidden': 'true' });
-    root.append(this.topBar(), this.reticle(), this.objectCard(), this.timeBar(), this.dock(), this.sheetEl, this.toastEl, this.stillHint(), nightVision);
+    root.append(this.topBar(), this.reticle(), this.objectCard(), this.journey.el, this.timeBar(), this.dock(), this.sheetEl, this.toastEl, this.stillHint(), nightVision);
 
     const syncSettings = () => {
       const s = app.store.data.settings;
@@ -101,7 +105,7 @@ export class Shell {
     panel.refresh();
     this.sheetBody.scrollTop = 0;
     (panel.focus ?? this.sheetTitle).focus({ preventScroll: true });
-    this.app.setSection(id === 'tonight' || id === 'log' ? id : 'sky');
+    this.app.setSection(id === 'tonight' || id === 'log' || id === 'journeys' ? id : 'sky');
     this.syncDock();
   }
 
@@ -113,6 +117,12 @@ export class Shell {
     this.app.setSection('sky');
     this.syncDock();
     (this.lastFocus?.isConnected ? this.lastFocus : this.app.canvas).focus({ preventScroll: true });
+  }
+
+  /** Begin or resume a journey, with the sky in view. */
+  startJourney(id: string): void {
+    this.closeSheet();
+    this.journey.start(id);
   }
 
   /** Apply a scene; on a phone, step back to the sky so it can be seen. */
@@ -342,13 +352,14 @@ export class Shell {
     const el = h('nav', { class: 'dock glass chrome', 'aria-label': 'Sections' },
       make('sky', 'Sky', () => this.closeSheet()),
       make('tonight', 'Tonight', () => this.openSheet('tonight')),
+      make('journeys', 'Journeys', () => this.openSheet('journeys')),
       make('log', 'Log', () => this.openSheet('log')));
     this.syncDock();
     return el;
   }
 
   private syncDock(): void {
-    const current: Section = this.sheet === 'tonight' || this.sheet === 'log' ? this.sheet : 'sky';
+    const current: Section = this.sheet === 'tonight' || this.sheet === 'log' || this.sheet === 'journeys' ? this.sheet : 'sky';
     for (const [section, button] of Object.entries(this.dockButtons)) {
       if (section === current) button.setAttribute('aria-current', 'page');
       else button.removeAttribute('aria-current');

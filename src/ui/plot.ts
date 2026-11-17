@@ -9,6 +9,7 @@ import type { App } from '../app.ts';
 import { h } from './dom.ts';
 import { flybyPlot } from './plot-flyby.ts';
 import { starFixPlot } from './plot-fix.ts';
+import { sandboxPlot } from './plot-sandbox.ts';
 import { type PlotView, palette, prepare } from './plot-kit.ts';
 
 export type { PlotView };
@@ -18,6 +19,7 @@ const AU_SPAN = 1.85;
 export function plotView(app: App, plot: Plot): PlotView {
   if (plot.kind === 'star-fix') return starFixPlot(app, plot.stars);
   if (plot.kind === 'flyby') return flybyPlot();
+  if (plot.kind === 'sandbox') return sandboxPlot(app, plot.controls);
   return orbitPlot(app, plot);
 }
 

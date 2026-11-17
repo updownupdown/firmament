@@ -27,6 +27,8 @@ export type Plot =
   /** A Hohmann transfer to Mars with a launch-date slider (`from`…`to`, starting at `start`). */
   | { kind: 'transfer'; from: number; to: number; start: number }
   /** A chart of the ocean with the circles of position of two stars, measured at the scene's moment. */
+  /** The planets from above under gravity alone, with a choice of Jupiter's mass or a passing star. */
+  | { kind: 'sandbox'; controls: 'none' | 'jupiter' | 'star' }
   | { kind: 'star-fix'; stars: [string, string] }
   /** A spacecraft swinging past Jupiter, with a side and a closest approach to choose. */
   | { kind: 'flyby' };

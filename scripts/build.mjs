@@ -31,7 +31,7 @@ function finish(result) {
   // The service worker precaches every file in the build, keyed by this hash.
   const files = listFiles(dist)
     .map((p) => relative(dist, p))
-    .filter((p) => !p.endsWith('.map') && p !== 'sw.js')
+    .filter((p) => !p.endsWith('.map') && p !== 'sw.js' && !p.startsWith('data/tycho/'))
     .map((p) => (p === 'index.html' ? './' : './' + p.split('\\').join('/')));
   let sw = readFileSync(join(root, 'public', 'sw.js'), 'utf8');
   sw = sw.replace('__BUILD__', hash).replace('__FILES__', JSON.stringify(files));

@@ -5,6 +5,7 @@ import { Ephemeris } from '../astro/ephemeris.ts';
 import { Elp, type ElpData } from '../astro/moon.ts';
 import { StarCatalog, type StarMeta } from '../astro/stars.ts';
 import { Vsop87, type VsopData } from '../astro/vsop87.ts';
+import { type TychoIndex, decodeTychoBand } from '../astro/tycho.ts';
 import type { Boundaries, Culture, CultureInfo, Dso } from './types.ts';
 
 export const DATA_URL = 'data/';
@@ -58,3 +59,7 @@ export async function loadFaintStars(stars: StarCatalog): Promise<[number, numbe
 
 export const loadCulture = (id: string): Promise<Culture> => fetchJSON<Culture>(`cultures/${id}.json`);
 export const loadBoundaries = (): Promise<Boundaries> => fetchJSON<Boundaries>('boundaries.json');
+
+export const loadTychoIndex = () => fetchJSON<TychoIndex>('tycho/index.json');
+export const loadTychoBand = async (index: TychoIndex, band: number) =>
+  decodeTychoBand(await fetchBinary(`tycho/${String(band).padStart(2, '0')}.bin`), band, index.band);

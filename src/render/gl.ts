@@ -114,6 +114,13 @@ export class Mesh {
     this.count = data.length / this.stride;
   }
 
+  /** Free the GPU memory. The mesh cannot be drawn afterwards. */
+  dispose(): void {
+    this.gl.deleteBuffer(this.buffer);
+    this.gl.deleteVertexArray(this.vao);
+    this.count = 0;
+  }
+
   drawPoints(count = this.count): void {
     if (count <= 0) return;
     this.gl.bindVertexArray(this.vao);

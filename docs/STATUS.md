@@ -218,6 +218,31 @@ unresolved stars, not catalog stars, so they cannot be picked.
   and moons' distances in planet radii to the square root; tested to keep
   every planet clear of its neighbours.
 
+**Tycho-2** (`src/astro/tycho.ts`; tests in `tycho.test.ts`): 1.9 million
+stars to magnitude 12 that HYG lacks, in 45 declination bands
+(`public/data/tycho/NN.bin`, 6 bytes a star, 11 MB in all). `SkyRenderer`
+lists the bands the view needs once the limiting magnitude passes 8
+(`tychoWanted`); `App.loadTycho` fetches them two at a time after the view
+has settled for 350 ms, and the renderer keeps the twelve most recently used.
+They are drawn with the star shader, brightest first, with a sun-like tint
+(this copy of Tycho-2 has no colours). Not pickable. The service worker does
+not precache them; it keeps each band once seen, in a cache that outlives
+builds (`firmament-tycho-1`).
+
+**Milky Way map**: `build_milkyway` blends d3-celestial's contours (blurred
+by a degree, for the broad glow and the Sagittarius clouds) with Tycho-2 star
+counts at magnitude 9.5–12.5 (for dark lanes and fine structure), worked in
+galactic coordinates and resampled to RA/Dec. The sky shader tints the dense
+star clouds warm and the thin band cool.
+
+**Orbits on the sky**: layer `skyOrbits` draws each planet's orbit (and the
+Moon's) as seen from the observer, coloured by planet; the selected body's
+orbit is drawn in the accent colour.
+
+**View panel**: layers are icon tiles in groups (On the sky, Guides, Air and
+ground, Space view), then cards for light pollution, sky culture, comfort and
+more.
+
 **Offline**: `public/sw.js` precaches every file of a build, serves `data/`
 cache-first and everything else network-first, and is registered from
 `main.ts`. Checked by reloading with the network off.
@@ -253,8 +278,6 @@ eclipses were already drawn (the Moon covers the Sun; corona in totality).
 
 ### 1. Remaining work
 - Phone pointing was confirmed working by the owner on 2026-11-17.
-- More real stars: Tycho-2 (2.5M stars to about mag 12) loaded in sky tiles
-  only when zoomed in. Needs the catalog added to `scripts/build_data.py`.
 - The Tonight guide character is still unnamed; ask the owner.
 
 ### 2. Launch

@@ -26,6 +26,8 @@
   --color-text-faint: #8f98ab;
   --color-accent: #9db4ff;
   --color-accent-strong: #c0cfff;
+  --color-accent-wash: rgba(157, 180, 255, 0.14);
+  --color-accent-edge: rgba(157, 180, 255, 0.45);
   --color-on-accent: #0a1020;
   --color-good: #8fd6b0;
   --color-warn: #f0c27a;

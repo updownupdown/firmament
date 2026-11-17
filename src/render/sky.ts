@@ -18,6 +18,7 @@ import type { Boundaries, Constellation, Dso } from '../data/types.ts';
 import type { LayerFlags } from '../sim/scene.ts';
 import type { Universe } from '../sim/universe.ts';
 import { Mesh, Program, loadTexture } from './gl.ts';
+import { type TychoBand, type TychoIndex, bandsNear, countBrighter as countTycho } from '../astro/tycho.ts';
 import { type Projected, SkyProjection, refractVector } from './projection.ts';
 import {
   BODY_FRAG, BODY_VERT, GROUND_FRAG, LINE_ATTRIBUTES, LINE_FRAG, LINE_VERT, MARKER_ATTRIBUTES, MARKER_FRAG,
@@ -33,7 +34,12 @@ export interface SkyOptions {
   /** Colour of lines and markers, linear 0..1 (set from the design tokens). */
   lineColor: [number, number, number];
   accentColor: [number, number, number];
+  /** The selected object, whose orbit is drawn brighter. */
+  selected?: string | null;
 }
+
+/** Bodies whose orbits can be drawn on the sky. */
+const SKY_ORBITS = ['moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'] as const;
 
 /** What the sky is like right now; labels and the UI read this too. */
 export interface SkyConditions {
@@ -176,6 +182,13 @@ export class SkyRenderer {
   readonly milkyWay: WebGLTexture;
   private readonly milkyStars: Mesh;
   private readonly milkyStarProgram: Program;
+  /** Orbits on the sky: true orbit samples (heliocentric, geocentric for the Moon) and their meshes. */
+  private readonly skyOrbits = new Map<string, { jd: number; points: Float64Array; mesh: Mesh; drawnAt: number }>();
+  /** Tycho-2 bands on the GPU, by band number, most recently used last. */
+  private readonly tycho = new Map<number, { mesh: Mesh; mag: Float32Array }>();
+  tychoIndex: TychoIndex | null = null;
+  /** Bands the last frame would have drawn but are not loaded yet. */
+  tychoWanted: number[] = [];
   private highlighted: string | null = null;
   private figureCulture = '';
   private figureStars = 0;
@@ -250,6 +263,29 @@ export class SkyRenderer {
     this.dirty = true;
   }
 
+  /** Upload a decoded Tycho-2 band. Keeps the dozen most recently used. */
+  addTychoBand(band: number, data: TychoBand): void {
+    const n = data.mag.length, out = new Float32Array(n * STAR_STRIDE);
+    // Tycho-2 as kept here has no colours: give the faint field a typical sun-like tint.
+    const [r, g, b] = blackbodyRGB(temperatureFromBV(0.65));
+    for (let i = 0; i < n; i++) {
+      const o = i * STAR_STRIDE, cd = Math.cos(data.dec[i]);
+      out[o] = cd * Math.cos(data.ra[i]); out[o + 1] = cd * Math.sin(data.ra[i]); out[o + 2] = Math.sin(data.dec[i]);
+      out[o + 7] = data.mag[i];
+      out[o + 8] = 0.45 + 0.55 * r; out[o + 9] = 0.45 + 0.55 * g; out[o + 10] = 0.45 + 0.55 * b;
+    }
+    const starLayout = [{ index: 0, size: 4, offset: 0 }, { index: 1, size: 3, offset: 4 }, { index: 2, size: 4, offset: 7 }];
+    const mesh = new Mesh(this.gl, STAR_STRIDE, starLayout);
+    mesh.set(out);
+    this.tycho.set(band, { mesh, mag: data.mag });
+    while (this.tycho.size > 12) {
+      const [oldest, entry] = this.tycho.entries().next().value!;
+      entry.mesh.dispose();
+      this.tycho.delete(oldest);
+    }
+    this.dirty = true;
+  }
+
   private segments(out: number[], a: Vec3, va: Vec3, b: Vec3, vb: Vec3): void {
     const n = Math.max(1, Math.ceil(angleBetween(a, b) / SEGMENT_STEP));
     for (let k = 0; k < n; k++) {
@@ -314,6 +350,49 @@ export class SkyRenderer {
     }
     this.boundaries.set(new Float32Array(out));
     this.dirty = true;
+  }
+
+  /**
+   * Each orbit as seen from here: its points, taken from the observer, become
+   * directions on the sky. Outer planets' orbits ring the sky near the
+   * ecliptic; Mercury's and Venus's are loops around the Sun.
+   */
+  private updateSkyOrbits(): void {
+    const u = this.universe, f = u.frame, eph = u.eph;
+    const here = add(f.earth, f.observerGeo);
+    for (const id of SKY_ORBITS) {
+      const period = BODIES[id].period ?? 365;
+      let entry = this.skyOrbits.get(id);
+      // The shape of an orbit barely changes: resample after a tenth of a revolution.
+      if (!entry || Math.abs(entry.jd - f.jdTT) > Math.max(period * 0.1, 0.5)) {
+        const n = id === 'moon' ? 96 : 180;
+        const points = new Float64Array((n + 1) * 3);
+        for (let k = 0; k <= n; k++) {
+          const t = f.jdTT + period * (k / n - 0.5);
+          points.set(id === 'moon' ? eph.moonGeo(t) : eph.helio(id, t), k * 3);
+        }
+        const mesh = entry?.mesh ?? new Mesh(this.gl, LINE_STRIDE, [
+          { index: 1, size: 3, offset: 0 }, { index: 2, size: 3, offset: 3 },
+          { index: 3, size: 3, offset: 6 }, { index: 4, size: 3, offset: 9 },
+        ], { quadSlot: 0 });
+        entry = { jd: f.jdTT, points, mesh, drawnAt: NaN };
+        this.skyOrbits.set(id, entry);
+      }
+      // Directions move with the Earth: rebuild once it has gone far enough to show.
+      if (Math.abs(entry.drawnAt - f.jdTT) < (id === 'moon' ? 0.01 : 0.05)) continue;
+      entry.drawnAt = f.jdTT;
+      const out: number[] = [];
+      const zero: Vec3 = [0, 0, 0];
+      const p = entry.points, n = p.length / 3;
+      let prev: Vec3 | null = null;
+      for (let k = 0; k < n; k++) {
+        const pt: Vec3 = [p[k * 3], p[k * 3 + 1], p[k * 3 + 2]];
+        const d = normalize(id === 'moon' ? sub(pt, f.observerGeo) : sub(pt, here));
+        if (prev) this.segments(out, prev, zero, d, zero);
+        prev = d;
+      }
+      entry.mesh.set(new Float32Array(out));
+    }
   }
 
   private buildGraticule(): void {
@@ -457,6 +536,15 @@ export class SkyRenderer {
     if (opts.layers.ecliptic) {
       drawLines(this.circle, mulAll(f.dateToHorizon, rotX(-f.nut.epsTrue)), 0.5, 1.2, false, true, [1, 0.8, 0.45]);
     }
+    if (opts.layers.skyOrbits) {
+      this.updateSkyOrbits();
+      for (const id of SKY_ORBITS) {
+        const e = this.skyOrbits.get(id)!;
+        const on = opts.selected === id;
+        const [r, g, b] = on ? opts.accentColor : BODIES[id].color;
+        drawLines(e.mesh, f.j2000ToHorizon, on ? 0.85 : 0.38, on ? 1.6 : 1.1, false, true, [0.5 + 0.5 * r, 0.5 + 0.5 * g, 0.5 + 0.5 * b]);
+      }
+    }
     if (opts.layers.boundaries && this.boundaries.count) {
       drawLines(this.boundaries, f.j2000ToHorizon, 0.2, 1, false, true, [lr * 0.9, lg * 0.75, lb * 0.75]);
     }
@@ -474,6 +562,7 @@ export class SkyRenderer {
       .f('uLimitMag', c.limitMag).f('uExtinction', c.extinction).f('uPixelRatio', dpr).f('uSizeBoost', 1);
     // The catalog is sorted by magnitude, so only the stars that can show are sent.
     this.stars.drawPoints(this.countBrighter(c.limitMag + 0.5));
+    this.drawTycho(c.limitMag);
 
     this.drawn = this.placeBodies(c);
     const points: number[] = [];
@@ -508,6 +597,27 @@ export class SkyRenderer {
       this.quad.drawQuads(1);
     }
     this.dirty = false;
+  }
+
+  /** Faint Tycho-2 stars, only once the view goes deeper than the main catalog. */
+  private drawTycho(limitMag: number): void {
+    this.tychoWanted = [];
+    if (limitMag < 8) return;
+    // Without the index yet, ask for it (band −1) and draw nothing more this frame.
+    if (!this.tychoIndex) { this.tychoWanted = [-1]; return; }
+    const pr = this.projection;
+    const centre = apply(transpose(this.universe.frame.j2000ToHorizon), pr.unproject(pr.width / 2, pr.height / 2));
+    const dec = Math.asin(clamp(centre[2], -1, 1));
+    // Half the diagonal of the view, with a margin so panning does not reveal empty sky.
+    const radius = (pr.fov / 2) * (Math.hypot(pr.width, pr.height) / Math.min(pr.width, pr.height)) * 1.3;
+    for (const b of bandsNear(this.tychoIndex, dec, radius)) {
+      const entry = this.tycho.get(b);
+      if (!entry) { this.tychoWanted.push(b); continue; }
+      // Mark as recently used.
+      this.tycho.delete(b); this.tycho.set(b, entry);
+      const n = countTycho(entry.mag, limitMag + 0.5);
+      if (n) entry.mesh.drawPoints(n);
+    }
   }
 
   private countBrighter(limit: number): number {

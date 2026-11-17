@@ -154,7 +154,9 @@ void main() {
     if (abs(uvAlt.x) > 0.25) { dx = dFdx(vec2(fract(uv.x), uv.y)); dy = dFdy(vec2(fract(uv.x), uv.y)); }
     float mw = textureGrad(uMilkyWay, uv, dx, dy).r;
     float thin = uAtmosphere > 0.5 ? smoothstep(-0.02, 0.30, h.z) : 1.0;
-    c += vec3(0.62, 0.70, 0.90) * pow(mw, 1.3) * 0.42 * uMilkyWayGain * thin;
+    // As in long exposures: the dense star clouds warm, the thin outer band cooler.
+    vec3 tint = mix(vec3(0.58, 0.68, 0.92), vec3(0.95, 0.86, 0.72), smoothstep(0.35, 0.9, mw));
+    c += tint * pow(mw, 1.25) * 0.55 * uMilkyWayGain * thin;
   }
   c += (hash12(gl_FragCoord.xy) - 0.5) / 255.0;
   outColor = vec4(c, 1.0);

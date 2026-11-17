@@ -4,7 +4,7 @@
 
 import { DEG, clamp } from './astro/math.ts';
 import { jdNow } from './astro/time.ts';
-import { type CoreData, loadBoundaries, loadCulture, loadFaintStars } from './data/load.ts';
+import { type CoreData, loadBoundaries, loadCulture, loadFaintStars, loadTychoBand, loadTychoIndex } from './data/load.ts';
 import { SkyCamera, attachControls } from './render/camera.ts';
 import { LabelLayer, collectLabels, layoutLabels } from './render/labels.ts';
 import { pick } from './render/pick.ts';
@@ -140,6 +140,43 @@ export class App {
     }).catch(() => { /* the bright stars are enough to carry on */ });
     if (this.layers.boundaries) this.ensureBoundaries();
     this.setCulture(store.data.settings.culture);
+  }
+
+  // ---------------------------------------------------------------- faint stars on demand
+
+  private tychoLoading = new Set<number>();
+  private tychoAsk = '';
+  private tychoAskSince = 0;
+  private tychoTimer = 0;
+  private tychoIndexRequested = false;
+
+  /** Fetch the Tycho-2 bands the last frame asked for, a couple at a time. */
+  private loadTycho(): void {
+    const r = this.renderer;
+    if (!r.tychoWanted.length) { this.tychoAsk = ''; return; }
+    // Wait until the view settles, so a flight across the sky does not fetch every band it passes.
+    const key = r.tychoWanted.join(',');
+    const now = performance.now();
+    if (key !== this.tychoAsk) { this.tychoAsk = key; this.tychoAskSince = now; }
+    if (now - this.tychoAskSince < 350) {
+      if (!this.tychoTimer) this.tychoTimer = window.setTimeout(() => { this.tychoTimer = 0; r.dirty = true; }, 400);
+      return;
+    }
+    if (!r.tychoIndex) {
+      if (!this.tychoIndexRequested) {
+        this.tychoIndexRequested = true;
+        loadTychoIndex().then((i) => { r.tychoIndex = i; r.dirty = true; }).catch(() => { this.tychoIndexRequested = false; });
+      }
+      return;
+    }
+    for (const b of r.tychoWanted) {
+      if (this.tychoLoading.has(b) || this.tychoLoading.size >= 2) continue;
+      this.tychoLoading.add(b);
+      loadTychoBand(r.tychoIndex, b)
+        .then((band) => r.addTychoBand(b, band))
+        .catch(() => { /* try again on a later frame */ })
+        .finally(() => { this.tychoLoading.delete(b); r.dirty = true; });
+    }
   }
 
   // ---------------------------------------------------------------- events
@@ -507,8 +544,9 @@ export class App {
     this.renderer.render({
       layers: this.layers, bortle: this.store.data.settings.bortle,
       highlightConstellation: con ? con.split(':')[2] : null,
-      lineColor: this.lineColor, accentColor: this.accentColor,
+      lineColor: this.lineColor, accentColor: this.accentColor, selected: this.selected,
     });
+    this.loadTycho();
     const p = this.renderer.projection;
     const items = this.still ? [] : collectLabels(this.renderer, this.layers, this.selected, this.highlight);
     this.labels.update(layoutLabels(items, p.width, p.height));

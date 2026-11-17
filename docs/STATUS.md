@@ -207,6 +207,12 @@ way, Through time, Great discoveries, Into space). Diagrams: `ui/plot.ts`
 only dispatches; each kind is its own module (`plot-orbits`, `plot-fix`,
 `plot-flyby`, `plot-sandbox`).
 
+**Faint stars can be tapped**: `Universe.faint` keeps the same Tycho-2 bands
+as the renderer (`TYCHO_KEEP`, oldest dropped first); refs are `tyc:<band>:<i>`
+and resolve to a "Faint star" with magnitude and position (no colour or
+catalogue number in our files). `pick` searches loaded bands near the tap,
+only stars a magnitude above the limit, so what is picked is visible.
+
 **Sky conditions** (`render/conditions.ts`): sky brightness, limiting
 magnitude, eclipse dimming and the deep-sky limit, split out of `sky.ts` so
 labels, picking and tests use it without the renderer.

@@ -342,3 +342,23 @@ test('format: angles in hands at arm\'s length', async () => {
   assert.equal(handMeasure(28 * deg), 'about 3 fists');
   assert.equal(handMeasure(90 * deg), 'about 9 fists');
 });
+
+test('a loaded Tycho-2 star can be named and found; an unloaded one cannot', async () => {
+  const { testEphemeris, testStars } = await import('../astro/testdata.ts');
+  const { Universe } = await import('./universe.ts');
+  const { TYCHO_KEEP } = await import('../astro/tycho.ts');
+  const u = new Universe({ eph: testEphemeris(), stars: testStars(), dsos: [], cultures: [], site: { name: 'X', lat: 0, lon: 0, height: 0, tz: '' }, jdUT: 2451545 });
+  const band = { ra: Float64Array.of(1), dec: Float64Array.of(0.5), mag: Float32Array.of(10.2) };
+  u.addFaintBand(35, band);
+  const o = u.resolve('tyc:35:0')!;
+  assert.equal(o.kind, 'star');
+  assert.equal(o.mag, Float32Array.of(10.2)[0]);
+  // Aberration moves it by at most about 20″.
+  const want = [Math.cos(0.5) * Math.cos(1), Math.cos(0.5) * Math.sin(1), Math.sin(0.5)];
+  assert.ok(Math.acos(o.dir[0] * want[0] + o.dir[1] * want[1] + o.dir[2] * want[2]) < 25 / 206265);
+  assert.equal(u.resolve('tyc:35:1'), null);
+  assert.equal(u.resolve('tyc:3:0'), null);
+  // Only the most recent bands are kept.
+  for (let b = 0; b < TYCHO_KEEP; b++) u.addFaintBand(b, band);
+  assert.equal(u.resolve('tyc:35:0'), null);
+});

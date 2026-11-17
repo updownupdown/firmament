@@ -173,7 +173,7 @@ export class App {
       if (this.tychoLoading.has(b) || this.tychoLoading.size >= 2) continue;
       this.tychoLoading.add(b);
       loadTychoBand(r.tychoIndex, b)
-        .then((band) => r.addTychoBand(b, band))
+        .then((band) => { r.addTychoBand(b, band); this.universe.addFaintBand(b, band); })
         .catch(() => { /* try again on a later frame */ })
         .finally(() => { this.tychoLoading.delete(b); r.dirty = true; });
     }

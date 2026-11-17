@@ -134,15 +134,14 @@ chosen by the owner on 2026-11-16)
 - `ui/tokens.css` holds every colour, size and radius; `base.css` and
   `shell.css` use only those. `dom.ts` is the tiny element helper (`h`, `icon`,
   `toggle`). No framework.
-- `shell.ts`: top chip (place, date, time, accuracy note), search and view
-  buttons, time bar (pause, slower/faster along `RATE_STEPS` in both directions,
-  a spring-back jog slider, Now), object card (quick facts, centre,
+- `shell.ts`: top chip (place, date, time, pace and accuracy note, play/pause;
+  tapping it opens the time panel), search and view buttons, object card (quick facts, centre,
   zoom, details with rise/transit/set), selection reticle, the dock of four
   places (Sky and Space switch the view mode; Tonight and Learn open sheets) and
   one sheet at a time: full screen above the dock on phones, a left column from
-  900 px. During a journey on a phone the journey card sits at the bottom in
-  place of the dock and time bar (diagram steps keep the time bar), and the
-  object card moves under the top bar. `Esc` closes, `/` searches, space pauses.
+  900 px. On a phone the bottom holds one bar: the dock, or the object card in
+  its place while something is selected, or the journey card during a journey
+  (then the object card moves under the top bar). `Esc` closes, `/` searches, space pauses.
 - `panels.ts`: search; view settings (layer toggles, sky culture, Bortle slider,
   night vision, 12-hour clock, reduced motion, share link, Still mode, credits
   rendered from `ATTRIBUTION.md`); place and time (city search, geolocation,
@@ -222,7 +221,7 @@ colour (`.lumen-glyph`), still under reduced motion.
 **New version prompt** (`ui/update.ts`): the page carries its build hash in a
 `firmament-build` meta tag; 20 s after start, every 15 minutes and when the
 tab comes back, it fetches `version.json` (no-store) and, if the build
-differs, shows a "Reload" banner (top on wide screens, above the time bar on
+differs, shows a "Reload" banner (top on wide screens, above the dock on
 phones).
 
 **Faint stars can be tapped**: `Universe.faint` keeps the same Tycho-2 bands
@@ -235,10 +234,11 @@ only stars a magnitude above the limit, so what is picked is visible.
 magnitude, eclipse dimming and the deep-sky limit, split out of `sky.ts` so
 labels, picking and tests use it without the renderer.
 
-**Time bar** (`src/ui/timebar.ts`): play/pause, a speed menu that opens
-upward (direction plus the `RATE_STEPS`), and a "go to" menu with date and time
-fields in the place's local time plus quick jumps. The old spring-back jog
-slider is gone. Years outside 1 to 9999 go through Place and time.
+**Time chip** (`src/ui/timebar.ts`): the top chip shows place and time with
+play/pause beside them. Tapping it drops the time panel: Now, direction, the
+`RATE_STEPS` as a grid, date and time fields in the place's local time, quick
+jumps, and a link to Place and time. The panel sits outside the glass chip
+because `backdrop-filter` would trap a fixed element inside it. Years outside 1 to 9999 go through Place and time.
 
 **Picking**: tapping a label picks what it names (`LabelLayer.hit`). The
 nearest-object pick leans toward bright and named stars, and toward
@@ -393,8 +393,9 @@ for first-time visitors.
 
 James picked option C from the layout study
 (https://claude.ai/artifact/MkgFRjfXzB3usHW9VqBw3D), built in two steps.
-Step 1 (done): the four-place dock (Sky, Space, Tonight, Learn), the Learn
-sheet (Continue, Labs, Journeys by theme) and the journey card at the bottom on
-phones. Step 2: fold the time bar into the top chip (play/pause inside it, tap
-the time for speed and date), so the bottom holds one bar that is the dock, the
-object card when something is selected, or the journey step.
+Step 1 (done, PR 22): the four-place dock (Sky, Space, Tonight, Learn), the
+Learn sheet (Continue, Labs, Journeys by theme) and the journey card at the
+bottom on phones. Step 2 (done): the time bar folded into the top chip, so on a
+phone the bottom holds one bar: the dock, the object card, or the journey step.
+Still open from the study: Android back closing sheets, swipe-down on sheets, a
+ring around a journey's target.

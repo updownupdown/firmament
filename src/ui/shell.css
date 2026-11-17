@@ -88,13 +88,19 @@ input[type='range']::-moz-range-thumb { width: 20px; height: 20px; border-radius
   display: flex; gap: var(--space-2); align-items: flex-start;
 }
 .chip {
-  flex: 1; min-width: 0; min-height: 48px; padding: var(--space-2) var(--space-5);
-  display: flex; flex-direction: column; justify-content: center; gap: 0;
-  border-radius: var(--radius-lg); text-align: left; color: var(--color-text);
+  flex: 1; min-width: 0; min-height: 48px; padding: var(--space-1) var(--space-1) var(--space-1) var(--space-5);
+  display: flex; align-items: center; gap: var(--space-2);
+  border-radius: var(--radius-lg); color: var(--color-text);
 }
+.chip-open {
+  flex: 1; min-width: 0; min-height: 38px; padding: 0; background: none; border: none; color: inherit;
+  display: flex; flex-direction: column; justify-content: center; text-align: left;
+}
+.chip-play { width: 40px; height: 40px; background: var(--color-surface-raised); border-color: var(--color-border); }
 .chip-main { display: flex; flex-wrap: wrap; gap: 0 var(--space-2); align-items: baseline; min-width: 0; }
 .chip-place { font-weight: var(--weight-medium); letter-spacing: var(--tracking-tight); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 3ch; }
 .chip-when { flex: none; color: var(--color-text-muted); font-size: var(--text-sm); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.chip-note.only-pace { color: var(--color-accent); }
 .chip-note { color: var(--color-warn); font-size: var(--text-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------------------------------------------------------------- time bar and dock */
@@ -115,45 +121,24 @@ input[type='range']::-moz-range-thumb { width: 20px; height: 20px; border-radius
 .dock-item:hover { color: var(--color-text); }
 .dock-item[aria-current='page'] { background: var(--color-text); color: var(--color-on-accent); font-weight: var(--weight-bold); }
 
-.time-bar {
-  position: fixed; z-index: 2;
+.time-panel {
+  position: fixed; z-index: 5;
+  top: calc(var(--safe-top) + var(--space-4) + 48px + var(--space-2));
   left: calc(var(--safe-left) + var(--space-4)); right: calc(var(--safe-right) + var(--space-4));
-  bottom: calc(var(--safe-bottom) + 60px + var(--space-4) + var(--space-3));
-  display: flex; gap: var(--space-2); align-items: center; justify-content: center;
+  max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 48px - var(--space-4) * 2 - var(--space-2));
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--space-4); border-radius: var(--radius-lg); background: var(--color-surface-solid);
+  display: flex; flex-direction: column; gap: var(--space-3);
+  animation: drop-in var(--duration) var(--ease);
 }
-.menu-anchor { position: relative; display: flex; }
-.time-button {
-  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
-  height: 48px; padding: 0 var(--space-4) 0 var(--space-5); border-radius: var(--radius-pill);
-  color: var(--color-text); font-size: var(--text-md); font-weight: var(--weight-medium);
-  font-variant-numeric: tabular-nums; white-space: nowrap;
-}
-.time-button.icon-only { width: 48px; padding: 0; }
-.time-button svg { color: var(--color-text-muted); }
-.time-button.reverse .speed-text::before { content: '◂ '; color: var(--color-accent); }
-.time-button:hover { background: var(--color-surface-hover); }
-.time-button[aria-expanded='true'] { border-color: var(--color-border-strong); }
-.speed-text { min-width: 8ch; text-align: center; }
-.now-button { height: 48px; }
-
-.popover {
-  position: absolute; z-index: 5; bottom: calc(100% + var(--space-2)); left: 50%; transform: translateX(-50%);
-  width: max-content; max-width: calc(100vw - var(--space-8));
-  padding: var(--space-2); border-radius: var(--radius-lg);
-  background: var(--color-surface-solid);
-  display: flex; flex-direction: column; gap: var(--space-2);
-  animation: pop-in var(--duration) var(--ease);
-}
-@keyframes pop-in { from { opacity: 0; transform: translate(-50%, 6px); } }
-@keyframes pop-in-left { from { opacity: 0; transform: translateY(6px); } }
-.menu-list { display: flex; flex-direction: column; }
-.menu-item {
-  min-height: var(--tap); padding: 0 var(--space-3); min-width: 220px;
-  display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
-  background: transparent; border: none; border-radius: var(--radius-sm); color: var(--color-text); text-align: left;
-}
-.menu-item:hover { background: var(--color-surface-hover); }
-.menu-item[aria-pressed='true'] { color: var(--color-accent-strong); font-weight: var(--weight-medium); }
+.time-panel[hidden] { display: none; }
+@keyframes drop-in { from { opacity: 0; transform: translateY(-6px); } }
+.time-panel-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 40px; }
+.time-panel-title { font-size: var(--text-lg); font-weight: var(--weight-medium); letter-spacing: var(--tracking-tight); }
+.speed-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+.speed-grid .chip-button { padding: 0 var(--space-1); font-variant-numeric: tabular-nums; }
+.chip-button[aria-pressed='true'] { background: var(--color-accent-wash); border-color: var(--color-accent-edge); color: var(--color-accent-strong); }
+.time-go { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); align-items: center; }
 .segmented {
   display: grid; grid-template-columns: 1fr 1fr; padding: 3px; gap: 3px;
   border-radius: var(--radius-pill); background: var(--color-surface-raised);
@@ -163,7 +148,6 @@ input[type='range']::-moz-range-thumb { width: 20px; height: 20px; border-radius
   background: transparent; border: none; border-radius: var(--radius-pill); color: var(--color-text-muted); font-size: var(--text-sm);
 }
 .segmented button[aria-pressed='true'] { background: var(--color-text); color: var(--color-on-accent); font-weight: var(--weight-medium); }
-.jump-menu { padding: var(--space-3); width: 320px; gap: var(--space-3); }
 .jump-fields { display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--space-2); }
 .jump-fields .field { padding: 0 var(--space-3); color-scheme: dark; }
 .link-button {
@@ -180,7 +164,7 @@ input[type='range']::-moz-range-thumb { width: 20px; height: 20px; border-radius
 .object-card {
   position: fixed; z-index: 3;
   left: calc(var(--safe-left) + var(--space-4)); right: calc(var(--safe-right) + var(--space-4));
-  bottom: calc(var(--safe-bottom) + 60px + 48px + var(--space-4) + var(--space-3) * 2);
+  bottom: calc(var(--safe-bottom) + 60px + var(--space-4) + var(--space-3));
   max-height: 52vh; overflow-y: auto; overscroll-behavior: contain;
   padding: var(--space-4) var(--space-4) var(--space-4) var(--space-5); border-radius: var(--radius-lg);
   display: flex; flex-direction: column; gap: var(--space-3);
@@ -343,11 +327,11 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
 
 /* While a journey runs on a phone, the object card shrinks to its essentials. */
 @media (max-width: 899px) {
-  /* The journey sits at the bottom, over the ground, in place of the dock and time bar,
-     so the sky it points at stays clear. Diagram steps keep the time bar. */
+  /* One bar at the bottom: the dock, or in its place the object card or the
+     journey step, which sits over the ground so the sky it points at stays clear. */
   .journey-card { top: auto; bottom: calc(var(--safe-bottom) + var(--space-3)); left: calc(var(--safe-left) + var(--space-3)); right: calc(var(--safe-right) + var(--space-3)); }
-  :root[data-journey] .dock, :root[data-journey]:not([data-plot]) .time-bar { display: none; }
-  :root[data-journey][data-plot] .journey-card { bottom: calc(var(--safe-bottom) + var(--space-4) + 48px + var(--space-3)); }
+  :root[data-journey] .dock, :root[data-selected='true'] .dock { display: none; }
+  :root:not([data-journey]) .object-card { bottom: calc(var(--safe-bottom) + var(--space-3)); left: calc(var(--safe-left) + var(--space-3)); right: calc(var(--safe-right) + var(--space-3)); }
   :root[data-journey] .object-card { top: calc(var(--safe-top) + var(--space-4) + 48px + var(--space-3)); bottom: auto; }
   :root[data-journey][data-selected='true'] .point-button { display: none; }
   :root[data-journey] .object-card .card-actions, :root[data-journey] .object-card .card-disclosure, :root[data-journey] .object-card .card-more { display: none; }
@@ -395,7 +379,7 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
 
 /* Phone: a sheet takes the whole screen above the dock. */
 @media (max-width: 899px) {
-  :root[data-sheet] .top-bar, :root[data-sheet] .time-bar, :root[data-sheet] .object-card, :root[data-sheet] .journey-card { display: none; }
+  :root[data-sheet] .top-bar, :root[data-sheet] .object-card, :root[data-sheet] .journey-card { display: none; }
 }
 
 /* Wide screens: the sheet is a column on the left and the sky stays in view. */
@@ -403,13 +387,12 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
   .top-bar { right: auto; width: 400px; }
   .sheet { right: auto; width: 400px; top: calc(var(--safe-top) + 48px + var(--space-4) + var(--space-3)); bottom: calc(var(--safe-bottom) + var(--space-4)); }
   .dock { left: 50%; right: auto; width: 400px; transform: translateX(-50%); }
-  .time-bar { left: 50%; right: auto; width: 480px; transform: translateX(-50%); }
-  .speed-menu { left: 0; transform: none; animation-name: pop-in-left; }
+  .time-panel { right: auto; width: 400px; }
   .journey-card { right: auto; width: 400px; max-height: calc(100vh - 100px); }
   :root[data-sheet] .journey-card { display: none; }
   .object-card { left: auto; width: 380px; top: calc(var(--safe-top) + var(--space-4)); bottom: auto; max-height: calc(100vh - 200px); }
   .toast { top: calc(var(--safe-top) + var(--space-4)); }
-  :root[data-sheet] .dock, :root[data-sheet] .time-bar { left: calc(50% + 208px); }
+  :root[data-sheet] .dock { left: calc(50% + 208px); }
 }
 
 /* Phone pointing */
@@ -436,18 +419,13 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
 .plot-slider { width: 100%; accent-color: var(--color-accent); min-height: var(--tap); }
 .plot-readout { font-size: var(--text-sm); color: var(--color-text-muted); min-height: 2.6em; }
 :root[data-plot] .journey-card { max-height: calc(100vh - 200px); }
-/* On a phone the diagram card stops above the time bar, which a diagram step may still need. */
+/* On a phone the diagram card reaches up to just below the top bar. */
 @media (max-width: 899px) {
   :root[data-plot] .journey-card {
-    max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 48px - var(--space-4) * 2 - var(--space-3) * 2 - 48px - var(--space-3));
+    max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 48px - var(--space-4) - var(--space-3) * 2);
   }
 }
 
-/* On a phone, menus above the time bar centre on the screen rather than on their button. */
-@media (max-width: 899px) {
-  .popover { position: fixed; left: 50%; bottom: calc(var(--safe-bottom) + 60px + var(--space-4) + var(--space-3) + 48px + var(--space-2)); }
-  .jump-menu { width: min(340px, calc(100vw - var(--space-8))); }
-}
 .loading-logo { width: 72px; height: 72px; border-radius: 18px; box-shadow: var(--shadow); }
 
 /* Measuring tool */
@@ -534,5 +512,8 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
 }
 .update-banner[hidden] { display: none; }
 @media (max-width: 899px) {
-  .update-banner { top: auto; bottom: calc(var(--safe-bottom) + 60px + 48px + var(--space-4) + var(--space-3) * 3); }
+  .update-banner { top: auto; bottom: calc(var(--safe-bottom) + 60px + var(--space-4) + var(--space-3)); }
 }
+
+/* An open time panel sits above the object card and dock. */
+.top-bar:has(.time-panel:not([hidden])) { z-index: 5; }

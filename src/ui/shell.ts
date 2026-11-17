@@ -1,11 +1,11 @@
-// The app shell: the living sky behind, a top bar, the time bar, the object
-// card, the dock of four places (Sky, Space, Tonight, Learn), and one sheet at
-// a time for everything else.
+// The app shell: the living sky behind, a top bar whose chip holds the time,
+// and one bar at the bottom: the dock of four places (Sky, Space, Tonight,
+// Learn), or the object card or journey step in its place. One sheet at a time
+// holds everything else.
 
 import type { App } from '../app.ts';
 import { Pointing } from '../render/pointing.ts';
-import { jdNow } from '../astro/time.ts';
-import { calendarNote, formatDate, formatDistanceAU, formatTime, localTime } from '../sim/format.ts';
+import { formatDistanceAU } from '../sim/format.ts';
 import { lightNote } from '../sim/lore.ts';
 import { h, fill, icon, iconButton, lumenGlyph, swipeToDismiss } from './dom.ts';
 import { blurb, detailFacts, quickFacts, riseSetFacts, whereNow } from './facts.ts';
@@ -15,7 +15,7 @@ import { placeTimePanel, searchPanel, settingsPanel } from './panels.ts';
 import { tonightPanel } from './tonight.ts';
 import { type StarLabPanel, starLabPanel } from './starlab.ts';
 import { type StarSeed, starSeed } from '../sim/starlink.ts';
-import { timeBar } from './timebar.ts';
+import { timeChip } from './timebar.ts';
 
 /** The four places in the dock. */
 type Place = 'sky' | 'space' | 'tonight' | 'learn';
@@ -75,7 +75,7 @@ export class Shell {
     if (point) root.append(point);
     root.append(this.scaleButton());
     const measure = measureTool(app);
-    root.append(measure.layer, this.topBar(), measure.banner, this.reticle(), this.objectCard(), this.journey.el, this.timeBar(), this.dock(), this.sheetEl, this.toastEl, this.stillHint(), nightVision);
+    root.append(measure.layer, this.topBar(), measure.banner, this.reticle(), this.objectCard(), this.journey.el, this.dock(), this.sheetEl, this.toastEl, this.stillHint(), nightVision);
 
     const syncSettings = () => {
       const s = app.store.data.settings;
@@ -173,33 +173,11 @@ export class Shell {
   // ---------------------------------------------------------------- top bar
 
   private topBar(): HTMLElement {
-    const app = this.app;
-    const place = h('span', { class: 'chip-place' });
-    const when = h('span', { class: 'chip-when' });
-    const note = h('span', { class: 'chip-note' });
-    const chip = h('button', { class: 'chip glass', type: 'button', 'aria-label': 'Change place and time', onclick: () => this.openSheet('place') },
-      h('span', { class: 'chip-main' }, place, when), note);
-    const update = () => {
-      const jd = app.clock.jdUT, site = app.site;
-      place.textContent = site.name;
-      // This year needs no year; any other does, and then the weekday makes way for it.
-      const thisYear = localTime(jd, site).year === localTime(jdNow(), site).year;
-      when.textContent = `${formatDate(jd, site, { weekday: thisYear, noYear: thisYear })} · ${formatTime(jd, site, { hour12: app.store.data.settings.hour12 })}`;
-      const parts = [app.clock.accuracy.label, calendarNote(jd, site)].filter(Boolean);
-      note.textContent = parts.join(' · ');
-      note.hidden = parts.length === 0;
-    };
-    for (const e of ['second', 'time', 'site', 'settings'] as const) app.on(e, update);
-    let lastText = 0;
-    app.on('frame', () => {
-      // While time is racing, keep the readout current without rebuilding it every frame.
-      const now = performance.now();
-      if (now - lastText > 120) { lastText = now; update(); }
-    });
-    update();
+    const { chip, panel } = timeChip(this.app, () => this.openSheet('place'));
     return h('div', { class: 'top-bar chrome' }, chip,
       iconButton('search', 'Search the sky', () => this.openSheet('search'), 'glass'),
-      iconButton('sliders', 'View and settings', () => this.openSheet('settings'), 'glass'));
+      iconButton('sliders', 'View and settings', () => this.openSheet('settings'), 'glass'),
+      panel);
   }
 
   /** Phone pointing: only offered on devices that can do it. */
@@ -248,12 +226,6 @@ export class Shell {
     app.on('mode', sync);
     sync();
     return button;
-  }
-
-  // ---------------------------------------------------------------- time bar
-
-  private timeBar(): HTMLElement {
-    return timeBar(this.app, () => this.openSheet('place'));
   }
 
   // ---------------------------------------------------------------- object card

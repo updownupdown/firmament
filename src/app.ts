@@ -18,7 +18,7 @@ import { type LayerFlags, type Scene, type SceneCamera, encodeScene, sceneJd } f
 import { type Store, browserStorage } from './sim/store.ts';
 import { type Site, type SkyObject, Universe } from './sim/universe.ts';
 
-export type Section = 'sky' | 'tonight' | 'journeys';
+export type Section = 'sky' | 'tonight' | 'learn';
 export type ViewMode = 'sky' | 'space';
 
 export type AppEvent =

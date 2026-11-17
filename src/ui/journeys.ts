@@ -1,5 +1,5 @@
-// Journeys in the shell: a sheet that lists them, and a card that walks
-// through one while the sky stays in view.
+// Learn in the shell: a sheet that lists the labs and journeys, and a card
+// at the bottom that walks through a journey while the sky stays in view.
 
 import { JOURNEYS, findJourney } from '../journeys/content.ts';
 import { JOURNEY_THEMES, JourneyRun, type Verdict } from '../journeys/engine.ts';
@@ -8,29 +8,52 @@ import { h, fill, icon, iconButton } from './dom.ts';
 import { type PlotView, plotView } from './plot.ts';
 import type { Panel, Shell } from './shell.ts';
 
-export function journeysPanel(shell: Shell): Panel {
+/** Journeys that are sandboxes more than lessons, listed under Labs beside the Star lab. */
+const LAB_JOURNEYS = new Set(['what-if']);
+
+/** Learn: what you were in the middle of, the labs, then the journeys by theme. */
+export function learnPanel(shell: Shell): Panel {
   const app = shell.app;
   const el = h('div', { class: 'panel' });
   const refresh = () => {
-    const item = (j: (typeof JOURNEYS)[number]) => {
-      const p = app.store.data.journeys[j.id];
-      const state = p?.done ? 'Done' : p && p.step > 0 ? `Step ${p.step + 1} of ${j.steps.length}` : `${j.minutes} min`;
-      return h('button', { class: 'card journey-item', type: 'button', onclick: () => shell.startJourney(j.id) },
-        h('span', { class: 'journey-head' }, h('span', { class: 'row-name' }, j.title),
-          h('span', { class: `tag${p?.done ? ' up' : ''}` }, p?.done ? [icon('check', 12), ' Done'] : state)),
-        h('span', { class: 'hint' }, j.summary));
+    const progress = (j: (typeof JOURNEYS)[number]) => app.store.data.journeys[j.id];
+    const state = (j: (typeof JOURNEYS)[number]) => {
+      const p = progress(j);
+      return p?.done ? 'Done' : p && p.step > 0 ? `Step ${p.step + 1} of ${j.steps.length}` : `${j.minutes} min`;
     };
-    const done = JOURNEYS.filter((j) => app.store.data.journeys[j.id]?.done).length;
+    const tag = (j: (typeof JOURNEYS)[number]) => {
+      const done = !!progress(j)?.done;
+      return h('span', { class: `tag${done ? ' up' : ''}` }, done ? [icon('check', 12), ' Done'] : state(j));
+    };
+    const item = (j: (typeof JOURNEYS)[number]) =>
+      h('button', { class: 'card journey-item', type: 'button', onclick: () => shell.startJourney(j.id) },
+        h('span', { class: 'journey-head' }, h('span', { class: 'row-name' }, j.title), tag(j)),
+        h('span', { class: 'hint' }, j.summary));
+    const lab = (title: string, glyph: string, hint: string, onClick: () => void) =>
+      h('button', { class: 'card lab-tile', type: 'button', onclick: onClick },
+        icon(glyph, 24), h('span', { class: 'row-name' }, title), h('span', { class: 'hint' }, hint));
+
+    const started = JOURNEYS.filter((j) => { const p = progress(j); return p && !p.done && p.step > 0; });
+    const done = JOURNEYS.filter((j) => progress(j)?.done).length;
+    const whatIf = JOURNEYS.find((j) => LAB_JOURNEYS.has(j.id));
     fill(el,
-      h('p', { class: 'lede' }, `Short investigations that use the real sky. Each takes a few minutes.${done ? ` You have finished ${done} of ${JOURNEYS.length}.` : ''}`),
-      h('button', { class: 'card journey-item lab-entry', type: 'button', onclick: () => shell.openStarLab() },
-        h('span', { class: 'journey-head' }, h('span', { class: 'row-name' }, 'Star lab'), h('span', { class: 'tag' }, 'Sandbox')),
-        h('span', { class: 'hint' }, 'Build a star from its mass and metals and watch it live and die: how long it lasts, what it becomes, and the elements it makes.')),
-      JOURNEY_THEMES.map((theme) => h('section', { class: 'view-section' },
-        h('h3', { class: 'section-title' }, theme),
-        JOURNEYS.filter((j) => j.theme === theme).map(item))));
+      started.length ? h('section', { class: 'view-section' },
+        h('h3', { class: 'section-title' }, 'Continue'),
+        started.map((j) => h('button', { class: 'card journey-item continue-item', type: 'button', onclick: () => shell.startJourney(j.id) },
+          h('span', { class: 'journey-head' }, h('span', { class: 'row-name' }, j.title), h('span', { class: 'tag' }, state(j))),
+          h('span', { class: 'hint' }, `Pick up at “${j.steps[progress(j)!.step].title}”.`)))) : null,
+      h('section', { class: 'view-section' },
+        h('h3', { class: 'section-title' }, 'Labs'),
+        h('div', { class: 'lab-grid' },
+          lab('Star lab', 'star', 'Build a star and watch it live and die.', () => shell.openStarLab()),
+          whatIf ? lab(whatIf.title, 'orbit', 'Change the planets and see what gravity does.', () => shell.startJourney(whatIf.id)) : null)),
+      h('p', { class: 'lede' }, `Journeys are short investigations that use the real sky. Each takes a few minutes.${done ? ` You have finished ${done} of ${JOURNEYS.length}.` : ''}`),
+      JOURNEY_THEMES.map((theme) => {
+        const list = JOURNEYS.filter((j) => j.theme === theme && !LAB_JOURNEYS.has(j.id));
+        return list.length ? h('section', { class: 'view-section' }, h('h3', { class: 'section-title' }, theme), list.map(item)) : null;
+      }));
   };
-  return { title: 'Journeys', el, refresh };
+  return { title: 'Learn', el, refresh };
 }
 
 export interface JourneyPlayer {

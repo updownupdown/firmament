@@ -24,6 +24,14 @@
   --sky-label: #aeb8d0;
   --sky-label-strong: #f2f4f8;
 
+  /* Journey diagrams (read by src/ui/plot.ts). */
+  --plot-sun: #f0c27a;
+  --plot-earth: #7fb2ff;
+  --plot-mars: #ff8a65;
+  --plot-orbit: rgba(255, 255, 255, 0.28);
+  --plot-sight: rgba(157, 180, 255, 0.75);
+  --plot-height: 280px;
+
   --font: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   --text-xs: 0.75rem;
   --text-sm: 0.8125rem;

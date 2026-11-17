@@ -6,7 +6,8 @@ import { jdNow } from '../astro/time.ts';
 import type { Culture, Dso } from '../data/types.ts';
 import { sceneJd } from '../sim/scene.ts';
 import { type Site, Universe } from '../sim/universe.ts';
-import { ACRUX, ANTARES, JOURNEYS, POLARIS, THUBAN, VEGA, findJourney } from './content.ts';
+import { ACRUX, ANTARES, JOURNEYS, KEPLER_FIX, KEPLER_TRACK, MARS_ARRIVAL_2027, MARS_WINDOW_2026, POLARIS, THUBAN, VEGA, findJourney } from './content.ts';
+import { MARS_YEAR, departureDv, eclipticXY, hohmann, marsFix, marsTrack, nextWindow } from './orbits.ts';
 import { JourneyRun, checkTask } from './engine.ts';
 
 const HOME: Site = { name: 'Toronto', lat: 43.653, lon: -79.383, height: 76, tz: 'America/Toronto' };
@@ -117,4 +118,62 @@ test('a run only moves on once the task is done', () => {
   assert.equal(run.go(1), true);
   assert.equal(run.index, 1);
   assert.equal(run.go(-1), true);
+});
+
+test('kepler: Mars is up over Prague, and two sightings a Martian year apart find it', () => {
+  const u = at('kepler', 0);
+  assert.ok(alt(u, 'mars') > 10, `Mars ${alt(u, 'mars')}`);
+  assert.ok(alt(u, 'sun') < -12);
+  const eph = testEphemeris();
+  const fix = marsFix(eph, KEPLER_FIX)!;
+  assert.ok(fix, 'the fix has usable geometry');
+  // The crossing is where Mars really was, to within the 0.02-day mismatch of the Martian year.
+  const truth = eclipticXY(eph.helio('mars', KEPLER_FIX));
+  assert.ok(Math.hypot(fix.mars[0] - truth[0], fix.mars[1] - truth[1]) < 0.01);
+  const step = findJourney('kepler')!.steps[2].task!;
+  assert.equal(checkTask(step, 0.05, u).ok, true);
+  assert.equal(checkTask(step, 0.4, u).ok, false);
+});
+
+test('kepler: the track spans Mars\'s real perihelion and aphelion, and the answer reads off it', () => {
+  const eph = testEphemeris();
+  const track = marsTrack(eph, KEPLER_TRACK.jd0, KEPLER_TRACK.count);
+  assert.equal(track.length, KEPLER_TRACK.count);
+  const r = track.map((f) => Math.hypot(f.mars[0], f.mars[1]));
+  // Mars: a = 1.5237 AU, e = 0.0934, so 1.381 to 1.666 AU.
+  assert.ok(Math.max(...r) > 1.64 && Math.max(...r) < 1.67, `max ${Math.max(...r)}`);
+  assert.ok(Math.min(...r) > 1.38 && Math.min(...r) < 1.41, `min ${Math.min(...r)}`);
+  assert.ok(Math.abs(MARS_YEAR - 686.98) < 0.01);
+  const task = findJourney('kepler')!.steps[3].task!;
+  const u = at('kepler', 3);
+  assert.equal(checkTask(task, 1.66, u).ok, true);
+  assert.equal(checkTask(task, 1.52, u).ok, false);
+});
+
+test('mars mission: the 2026 window, its flight time and arrival, checked with Lambert', () => {
+  const eph = testEphemeris();
+  const j = findJourney('mars-mission')!;
+  const plot = j.steps[1].plot!;
+  assert.equal(plot.kind, 'transfer');
+  if (plot.kind !== 'transfer') return;
+  const window = nextWindow(eph, plot.from)!;
+  assert.ok(window > plot.from && window < plot.to);
+  assert.ok(Math.abs(window - MARS_WINDOW_2026) < 2, `window ${window - MARS_WINDOW_2026}`);
+  const t = hohmann(eph, window);
+  assert.ok(Math.abs(t.arrive - MARS_ARRIVAL_2027) < 3, `arrival ${t.arrive - MARS_ARRIVAL_2027}`);
+  assert.ok(t.days > 250 && t.days < 280);
+  // The slider starts well away from the answer.
+  assert.ok(Math.abs(hohmann(eph, plot.start).missDeg) > 20);
+  // A real trajectory between the actual positions costs least near the Hohmann window.
+  const best = (launch: number) => {
+    let dv = Infinity;
+    for (let days = 150; days <= 330; days += 5) dv = Math.min(dv, departureDv(eph, launch, days));
+    return dv;
+  };
+  const atWindow = best(window);
+  assert.ok(atWindow > 2.8 && atWindow < 3.6, `dv ${atWindow}`);
+  for (const d of [-60, -30, 30, 60]) assert.ok(best(window + d) > atWindow, `dv at ${d} days`);
+  // The task accepts launch dates within two degrees.
+  assert.equal(checkTask(j.steps[1].task!, hohmann(eph, window + 1).missDeg, at('pole', 0)).ok, true);
+  assert.equal(checkTask(j.steps[1].task!, hohmann(eph, window + 20).missDeg, at('pole', 0)).ok, false);
 });

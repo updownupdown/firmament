@@ -6,6 +6,7 @@ import { jdFromCalendar } from '../astro/time.ts';
 import { jdFromLocal } from '../sim/format.ts';
 import type { Site, Universe } from '../sim/universe.ts';
 import type { Journey } from './engine.ts';
+import { hohmann, marsTrack } from './orbits.ts';
 
 const site = (name: string, lat: number, lon: number, tz = '', country?: string): Site => ({ name, country, lat, lon, height: 0, tz });
 
@@ -22,6 +23,8 @@ const SYENE = site('Syene (Aswan)', 24.09, 32.9, 'Africa/Cairo', 'Egypt');
 const ALEXANDRIA = site('Alexandria', 31.2, 29.92, 'Africa/Cairo', 'Egypt');
 const PADUA = site('Padua', 45.41, 11.88, 'Europe/Rome', 'Italy');
 const HILO = site('Hilo', 19.72, -155.08, 'Pacific/Honolulu', 'United States');
+const PRAGUE = site('Prague', 50.09, 14.42, 'Europe/Prague', 'Czechia');
+const CAPE_CANAVERAL = site('Cape Canaveral', 28.39, -80.6, 'America/New_York', 'United States');
 
 const POLE_LAYERS = { gridEquatorial: true, atmosphere: false, lines: true, constellationLabels: true, starLabels: true };
 const PLAIN_LAYERS = { gridEquatorial: false, gridAltAz: false, atmosphere: true, ground: true };
@@ -30,6 +33,15 @@ const PLAIN_LAYERS = { gridEquatorial: false, gridAltAz: false, atmosphere: true
 export const ERATOSTHENES_NOON = jdFromLocal(SYENE, -239, 6, 26, 11, 57);
 /** Evenings in Padua, January 1610 (Gregorian dates, as Galileo wrote them), about an hour after sunset. */
 export const galileoNight = (day: number): number => jdFromCalendar(1610, 1, day, 17, 0);
+
+/** Tycho Brahe's years of Mars observations, which Kepler inherited in 1601. */
+export const KEPLER_FIX = jdFromCalendar(1591, 8, 1, 0, 0);
+export const KEPLER_TRACK = { jd0: jdFromCalendar(1590, 1, 1, 0, 0), count: 12 };
+/** The 2026 Mars launch window, and arrival on the Hohmann transfer from it (orbits.test.ts checks both). */
+export const MARS_WINDOW_2026 = jdFromCalendar(2026, 11, 4, 0, 0);
+export const MARS_ARRIVAL_2027 = jdFromCalendar(2027, 7, 27, 0, 0);
+const farthestMars = (u: Universe): number =>
+  Math.max(...marsTrack(u.eph, KEPLER_TRACK.jd0, KEPLER_TRACK.count).map((f) => Math.hypot(f.mars[0], f.mars[1])));
 
 const sunFromOverhead = (u: Universe): number => 90 - u.horizontal(u.bodies.get('sun')!.dir).altApparent / DEG;
 
@@ -178,6 +190,74 @@ export const JOURNEYS: Journey[] = [
         title: 'Whose sky',
         text: 'Neither picture is in the sky itself. People everywhere joined the dots their own way, for their own reasons: calendars, navigation, memory. Open the view settings and choose "Whose sky" to see Chinese, Norse, Māori and other traditions over the same stars.',
         scene: { culture: 'western', highlight: [] },
+      },
+    ],
+  },
+  {
+    id: 'kepler',
+    title: 'Kepler\'s Mars',
+    summary: 'Nobody can see how far away Mars is. Kepler found its orbit anyway, with two sightings and a triangle.',
+    minutes: 6,
+    steps: [
+      {
+        title: 'Prague, 1602',
+        text: 'Johannes Kepler has inherited twenty years of Tycho Brahe\'s observations: the most precise measurements of the planets ever made, all by eye. Every one gives a direction to Mars. None says how far away it is.',
+        scene: { time: { jd: jdFromCalendar(1602, 3, 15, 21, 0) }, rate: 0, site: PRAGUE, camera: { look: 'mars', fov: 70 }, layers: { ...PLAIN_LAYERS, lines: true, planetLabels: true } },
+        task: { kind: 'find', refs: ['mars'], prompt: 'Tap Mars.', hint: 'Mars is the reddish point that is labelled, high in the south.' },
+      },
+      {
+        title: 'The trick',
+        text: 'Mars goes round the Sun once every 687 days. So on two dates 687 days apart, Mars is in exactly the same place, but the Earth is not: it has gone round almost twice and stopped at a different point of its own orbit. That gives two lookouts with a known baseline.',
+        task: { kind: 'choice', prompt: 'Two lookouts sight the same object from different places. What does that let you find?', options: ['How bright it is', 'Where it is: the sight lines cross there', 'How fast it moves'], answer: 1, explain: 'Where the sight lines cross. Surveyors call it triangulation; Kepler used the Earth\'s orbit as the baseline.' },
+      },
+      {
+        title: 'Two sightings',
+        text: 'Here is the solar system from above. The Sun is in the middle and the dashed circle is the Earth\'s orbit. The blue dots are the Earth on 1 August 1591 and 687 days later, and each line is the direction Tycho would have seen Mars.',
+        plot: { kind: 'triangulate', jd: KEPLER_FIX },
+        task: { kind: 'plot', prompt: 'Tap where the two sight lines cross. That is Mars.', tolerance: 0.12, hint: 'Close, but not on the crossing. Follow both lines until they meet.', explain: 'There it is, without ever measuring its distance directly.' },
+      },
+      {
+        title: 'The whole orbit',
+        text: 'Kepler did this again and again, through Tycho\'s records. Each pair of dates gives one point on Mars\'s path. Tap any red point to read its distance from the Sun, in astronomical units (the Earth\'s average distance).',
+        plot: { kind: 'mars-orbit', jd0: KEPLER_TRACK.jd0, count: KEPLER_TRACK.count },
+        task: { kind: 'number', prompt: 'How far from the Sun does Mars get, at most?', answer: farthestMars, tolerance: 0.04, unit: 'AU', hint: 'Tap the points on the far side of the path from the Earth\'s orbit until you find the largest distance.', explain: 'About 1.66 AU. At its closest it comes within 1.38 AU, so the path is not a circle centred on the Sun.' },
+      },
+      {
+        title: 'Not a circle',
+        text: 'For 2,000 years astronomers had built the heavens from perfect circles. Kepler spent six years trying to make Mars fit one and missed Tycho\'s numbers by eight minutes of arc, about a quarter of the Moon\'s width. He refused to ignore it.',
+        plot: { kind: 'mars-orbit', jd0: KEPLER_TRACK.jd0, count: KEPLER_TRACK.count },
+        task: { kind: 'choice', prompt: 'What shape fits the points?', options: ['A circle centred on the Sun', 'An oval with the Sun off to one side', 'A circle centred on the Earth'], answer: 1, explain: 'An ellipse, with the Sun at one focus. Kepler published it in 1609 as his first law, and it holds for every planet.' },
+      },
+    ],
+  },
+  {
+    id: 'mars-mission',
+    title: 'Plan a trip to Mars',
+    summary: 'You cannot fly straight at Mars. Find the day to launch so that Mars is waiting when you arrive.',
+    minutes: 5,
+    steps: [
+      {
+        title: 'Two moving targets',
+        text: 'Autumn 2026, seen from above. The Earth and Mars are both racing round the Sun, the Earth faster on the inside track. A spacecraft launched from the Earth starts out with the Earth\'s speed and has to coast for months.',
+        scene: { time: { jd: jdFromCalendar(2026, 10, 1, 0, 0) }, rate: 0, site: CAPE_CANAVERAL, camera: { look: 'sun', mode: 'space', dist: 5.5, orbit: { yaw: -90, pitch: 80 } }, layers: { orbits: true, planetLabels: true } },
+        task: { kind: 'choice', prompt: 'So where should the spacecraft aim?', options: ['At Mars, where it is now', 'At where Mars will be when the spacecraft gets there', 'At the Sun'], answer: 1, explain: 'At where Mars will be, months from now. Hitting a moving target means leading it.' },
+      },
+      {
+        title: 'The cheapest path',
+        text: 'The least fuel takes the spacecraft half way round an ellipse that just touches the Earth\'s orbit at launch and Mars\'s orbit at the far side, Walter Hohmann\'s transfer from 1925. Slide the launch date. The dashed path ends at the ring; the red dot is where Mars will be on that day.',
+        plot: { kind: 'transfer', from: jdFromCalendar(2026, 8, 1, 0, 0), to: jdFromCalendar(2027, 2, 1, 0, 0), start: jdFromCalendar(2026, 8, 15, 0, 0) },
+        task: { kind: 'plot', prompt: 'Find the launch date when Mars arrives at the ring together with the spacecraft.', tolerance: 2, hint: 'Keep sliding. Mars needs to be on the ring, not ahead of it or behind.', explain: 'Early November 2026. Launch then and Mars is right there at the end of the trip.' },
+      },
+      {
+        title: 'A launch window',
+        text: 'The Earth laps Mars once every 26 months, and only then are the two lined up like this. Space agencies plan Mars missions around these windows; miss one and the spacecraft waits on the ground for the next.',
+        plot: { kind: 'transfer', from: jdFromCalendar(2026, 8, 1, 0, 0), to: jdFromCalendar(2027, 2, 1, 0, 0), start: MARS_WINDOW_2026 },
+        task: { kind: 'number', prompt: 'How many days does the trip take? The diagram shows it.', answer: (u) => hohmann(u.eph, MARS_WINDOW_2026).days, tolerance: 6, unit: 'days', explain: 'About 265 days, close to nine months: the same as the real missions that use these windows.' },
+      },
+      {
+        title: 'Arrival',
+        text: 'July 2027: the spacecraft would be arriving at Mars now, nearly opposite where the Earth was at launch. Run time backwards to watch the trip in reverse, or tap Mars to fly in closer.',
+        scene: { time: { jd: MARS_ARRIVAL_2027 }, rate: 0, select: 'mars', camera: { look: 'sun', mode: 'space', dist: 5.5, orbit: { yaw: -90, pitch: 80 } } },
       },
     ],
   },

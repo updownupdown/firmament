@@ -232,6 +232,21 @@ input[type='range']::-moz-range-thumb { width: 20px; height: 20px; border-radius
 .card.prompt { gap: var(--space-3); }
 .card.prompt p { font-size: var(--text-lg); line-height: 1.5; }
 .card.prompt .pill-button { align-self: flex-start; padding: 0 var(--space-5); }
+
+/* Lumen, the optional guide: a soft point of light that breathes slowly. */
+.lumen-card { gap: var(--space-3); border-color: var(--color-accent-edge); }
+.lumen-head { display: flex; align-items: center; gap: var(--space-3); }
+.lumen-name { color: var(--color-accent-strong); font-size: var(--text-sm); font-weight: var(--weight-medium); letter-spacing: var(--tracking-wide); }
+.lumen-glyph {
+  position: relative; width: 14px; height: 14px; flex: none; border-radius: 50%;
+  background: radial-gradient(circle, var(--color-text) 0 22%, var(--color-accent) 45%, transparent 72%);
+  box-shadow: 0 0 10px 3px var(--color-accent-wash), 0 0 22px 8px var(--color-accent-wash);
+  animation: lumen-breathe calc(var(--duration) * 25) var(--ease) infinite alternate;
+}
+@keyframes lumen-breathe { from { opacity: 0.7; transform: scale(0.9); } to { opacity: 1; transform: scale(1.08); } }
+.card.prompt .lumen-line { font-size: var(--text-sm); line-height: 1.5; color: var(--color-text-muted); display: flex; flex-direction: column; gap: 2px; }
+.lumen-invite p { font-size: var(--text-sm); line-height: 1.5; color: var(--color-text-muted); }
+.lumen-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .card.actions { background: transparent; border: none; padding: 0; align-items: stretch; }
 .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .tile { gap: var(--space-1); }
@@ -362,7 +377,7 @@ button.tile:hover, button.row:hover, .result:hover, .check-item:hover, .chip-but
 .toast {
   position: fixed; z-index: 6; left: 50%; transform: translateX(-50%);
   top: calc(var(--safe-top) + 48px + var(--space-4) + var(--space-3));
-  width: max-content; max-width: calc(100vw - var(--space-8)); padding: var(--space-3) var(--space-5);
+  width: max-content; max-width: min(480px, calc(100vw - var(--space-8))); padding: var(--space-3) var(--space-5);
   border-radius: var(--radius-lg); font-size: var(--text-sm); text-align: center;
 }
 

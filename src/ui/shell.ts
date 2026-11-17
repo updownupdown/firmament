@@ -142,7 +142,8 @@ export class Shell {
     this.toastEl.textContent = message;
     this.toastEl.hidden = false;
     clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => { this.toastEl.hidden = true; }, 3200);
+    // Longer notes (Lumen's) stay up long enough to read.
+    this.toastTimer = window.setTimeout(() => { this.toastEl.hidden = true; }, 3200 + message.length * 35);
   }
 
   // ---------------------------------------------------------------- top bar

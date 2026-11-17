@@ -17,6 +17,8 @@ export interface Settings {
   reducedMotion: boolean;
   /** Design direction chosen by the owner or the player. */
   theme: string;
+  /** Lumen, the optional guide: not yet offered, turned on, or turned off. Off until the player opts in. */
+  guide: 'unset' | 'on' | 'off';
 }
 
 export interface LogEntry {
@@ -59,7 +61,7 @@ export function defaultData(): StoreData {
     version: STORE_VERSION,
     settings: {
       layers: { ...DEFAULT_LAYERS }, culture: 'western', bortle: 4, hour12: false,
-      nightVision: false, reducedMotion: false, theme: 'default',
+      nightVision: false, reducedMotion: false, theme: 'default', guide: 'unset',
     },
     site: null, recentSites: [], log: [], journeys: {}, seen: [],
   };
@@ -86,6 +88,7 @@ export function migrate(raw: unknown): StoreData {
       ...base.settings, ...settings,
       layers: { ...base.settings.layers, ...(settings.layers ?? {}) },
       bortle: Math.min(9, Math.max(1, Math.round(Number(settings.bortle ?? base.settings.bortle)) || base.settings.bortle)),
+      guide: settings.guide === 'on' || settings.guide === 'off' ? settings.guide : 'unset',
     },
     site: validSite(r.site) ? r.site : null,
     recentSites: Array.isArray(r.recentSites) ? r.recentSites.filter(validSite).slice(0, 8) : [],

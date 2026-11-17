@@ -95,6 +95,11 @@ export function iconButton(name: string, label: string, onClick: () => void, ext
   return h('button', { class: `icon-button ${extraClass}`.trim(), type: 'button', 'aria-label': label, title: label, onclick: onClick }, icon(name));
 }
 
+/** Lumen, the optional guide: a soft point of light. Decorative; the name beside it says who is speaking. */
+export function lumenGlyph(): HTMLSpanElement {
+  return h('span', { class: 'lumen-glyph', 'aria-hidden': 'true' });
+}
+
 /** A labelled on/off switch. */
 export function toggle(label: string, checked: boolean, onChange: (on: boolean) => void, hint?: string): HTMLLabelElement {
   const input = h('input', { type: 'checkbox', role: 'switch', checked, onchange: () => onChange(input.checked) });

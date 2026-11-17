@@ -223,6 +223,8 @@ export interface SmallBody {
   id: string;
   name: string;
   kind: 'dwarf' | 'asteroid' | 'comet';
+  /** Where it lives, shown under the name: "Main asteroid belt", "Kuiper belt", ... */
+  group: string;
   elements: Elements;
   /** H, G magnitude parameters (asteroids) or H, K (comets: m = H + 5 log Δ + K log r). */
   H: number;
@@ -237,20 +239,83 @@ const el = (q: number, e: number, iDeg: number, nodeDeg: number, periDeg: number
 });
 
 /**
- * A few famous small bodies with fixed osculating elements (J2000 ecliptic).
+ * Famous small bodies with fixed osculating elements (J2000 ecliptic).
  * Fixed elements drift over decades because of planetary perturbations, so
  * these are good to a degree or so near their epoch, worse far from it.
+ *
+ * Asteroid and trans-Neptunian elements are the Minor Planet Center's, as
+ * collected in Stellarium's ssystem_minor.ini (epochs 2017–2025); the time of
+ * perihelion is epoch − M/n. Radii are published mean (volume-equivalent)
+ * radii, rounded: Dawn for Ceres and Vesta, occultations and thermal
+ * measurements for the rest.
  */
 export const SMALL_BODIES: SmallBody[] = [
   {
-    id: 'halley', name: "Halley's Comet", kind: 'comet', H: 5.5, K: 8, radiusKm: 5.5,
+    id: 'halley', name: "Halley's Comet", kind: 'comet', group: 'Comet', H: 5.5, K: 8, radiusKm: 5.5,
     elements: el(0.5871, 0.96714, 162.262, 58.42, 111.33, 2446470.96),
-    note: 'Returns about every 76 years; next perihelion in 2061.',
+    note: 'Returns about every 76 years; next perihelion in 2061. It comes from the scattered disc beyond Neptune.',
   },
   {
-    id: 'halebopp', name: 'Hale–Bopp', kind: 'comet', H: -0.8, K: 8, radiusKm: 30,
+    id: 'halebopp', name: 'Hale–Bopp', kind: 'comet', group: 'Comet', H: -0.8, K: 8, radiusKm: 30,
     elements: el(0.9141, 0.99509, 89.43, 282.47, 130.59, 2450539.64),
-    note: 'The Great Comet of 1997, visible to the naked eye for 18 months.',
+    note: 'The Great Comet of 1997, visible to the naked eye for 18 months. Its orbit takes it out toward the Oort cloud.',
+  },
+  // Main asteroid belt
+  {
+    id: 'ceres', name: 'Ceres', kind: 'dwarf', group: 'Dwarf planet · Main asteroid belt', H: 3.34, G: 0.15, radiusKm: 470,
+    elements: el(2.545538, 0.0795763, 10.58789, 80.24963, 73.29974, 2461599.95),
+    note: 'The largest object in the asteroid belt and the first found, in 1801. It holds about a third of the belt\'s mass.',
+  },
+  {
+    id: 'vesta', name: 'Vesta', kind: 'asteroid', group: 'Main asteroid belt', H: 3.25, G: 0.15, radiusKm: 263,
+    elements: el(2.148607, 0.0901676, 7.14406, 103.70232, 151.53712, 2460901.79),
+    note: 'The brightest asteroid, sometimes just visible to the naked eye. Meteorites from Vesta have landed on Earth.',
+  },
+  {
+    id: 'pallas', name: 'Pallas', kind: 'asteroid', group: 'Main asteroid belt', H: 4.11, G: 0.15, radiusKm: 256,
+    elements: el(2.131062, 0.230643, 34.92833, 172.88859, 310.9334, 2461694.94),
+    note: 'The second asteroid found, in 1802. Its orbit is tipped steeply, 35° to the plane of the planets.',
+  },
+  {
+    id: 'hygiea', name: 'Hygiea', kind: 'asteroid', group: 'Main asteroid belt', H: 5.64, G: 0.15, radiusKm: 217,
+    elements: el(2.806947, 0.1082238, 3.83294, 283.12164, 312.60583, 2461812.47),
+    note: 'The fourth-largest asteroid, dark and nearly round.',
+  },
+  // Kuiper belt and beyond
+  {
+    id: 'haumea', name: 'Haumea', kind: 'dwarf', group: 'Dwarf planet · Kuiper belt', H: 0.2, radiusKm: 798,
+    elements: el(34.408493, 0.1983178, 28.20847, 121.86591, 240.99593, 2500289.98),
+    note: 'Spins once every four hours, fast enough to stretch it into an egg shape. It has a ring and two moons.',
+  },
+  {
+    id: 'makemake', name: 'Makemake', kind: 'dwarf', group: 'Dwarf planet · Kuiper belt', H: -0.1, radiusKm: 715,
+    elements: el(37.962496, 0.1635304, 29.03373, 79.26068, 296.7554, 2408356.89),
+    note: 'The second-brightest object in the Kuiper belt after Pluto, coated in frozen methane.',
+  },
+  {
+    id: 'quaoar', name: 'Quaoar', kind: 'asteroid', group: 'Kuiper belt', H: 2.4, radiusKm: 555,
+    elements: el(41.569362, 0.0376011, 7.9912, 189.04724, 163.15048, 2480486.81),
+    note: 'A large icy world on a nearly circular orbit, with a ring far wider than theory allows.',
+  },
+  {
+    id: 'orcus', name: 'Orcus', kind: 'asteroid', group: 'Kuiper belt · plutino', H: 2.2, G: 0.15, radiusKm: 455,
+    elements: el(30.418352, 0.224754, 20.55649, 268.39889, 73.82944, 2503898.61),
+    note: 'Goes round the Sun twice for every three of Neptune\'s turns, like Pluto, but always on the opposite side of its orbit from Pluto.',
+  },
+  {
+    id: 'eris', name: 'Eris', kind: 'dwarf', group: 'Dwarf planet · Scattered disc', H: -1.1, radiusKm: 1163,
+    elements: el(38.526069, 0.434306, 43.77787, 36.06369, 150.71804, 2545813.02),
+    note: 'Almost the size of Pluto and more massive. Its discovery in 2005 led to the definition of a planet in 2006.',
+  },
+  {
+    id: 'gonggong', name: 'Gonggong', kind: 'asteroid', group: 'Scattered disc', H: 1.8, G: 0.15, radiusKm: 615,
+    elements: el(33.095653, 0.5064904, 30.90385, 336.82029, 207.05238, 2399626.85),
+    note: 'One of the largest worlds beyond Neptune, deep red, and slow to spin.',
+  },
+  {
+    id: 'sedna', name: 'Sedna', kind: 'asteroid', group: 'Detached object · inner Oort cloud?', H: 1.5, G: 0.15, radiusKm: 500,
+    elements: el(76.304358, 0.8618058, 11.92774, 144.39469, 310.87403, 2479102.15),
+    note: 'Never comes closer than 76 AU and swings out to about 1,000 AU, too far for Neptune to have put it there. One orbit takes about 13,000 years.',
   },
 ];
 

@@ -4,7 +4,7 @@
 import type { App } from '../app.ts';
 import { angleBetween, normalize, type Vec3 } from '../astro/math.ts';
 import { formatAngularSize, handMeasure } from '../sim/format.ts';
-import { h, iconButton } from './dom.ts';
+import { h, iconButton, swipeToDismiss } from './dom.ts';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
@@ -43,6 +43,7 @@ export function measureTool(app: App): MeasureTool {
   const text = h('p', { class: 'measure-text', role: 'status', 'aria-live': 'polite' });
   const banner = h('div', { class: 'measure-banner glass chrome', hidden: true },
     text, iconButton('close', 'Stop measuring', () => app.stopMeasure()));
+  swipeToDismiss(banner, () => app.stopMeasure());
 
   const draw = () => {
     const m = app.measure;

@@ -3,18 +3,19 @@
 // and handed to the GPU in camera space, so there is no jitter up close.
 
 import { BODIES } from '../astro/bodies.ts';
-import { EPS_J2000 } from '../astro/frames.ts';
+import { ECL_TO_EQ_J2000, EPS_J2000 } from '../astro/frames.ts';
+import { type Population, REGIONS, type Region, allPopulations, regionById } from '../astro/populations.ts';
 import { GALILEAN, galileanMoons } from '../astro/galilean.ts';
 import { SMALL_BODIES } from '../astro/kepler.ts';
 import { J2000 } from '../astro/time.ts';
-import { AU_KM, DEG, type Mat3, type Vec3, add, apply, clamp, cross, fromSpherical, normalize, scale, sub } from '../astro/math.ts';
+import { AU_KM, DEG, type Mat3, type Vec3, add, apply, clamp, cross, fromSpherical, mul, normalize, scale, sub } from '../astro/math.ts';
 import type { LayerFlags } from '../sim/scene.ts';
 import type { Universe } from '../sim/universe.ts';
 import { type Controllable, ZoomPast } from './camera.ts';
 import { Mesh, Program } from './gl.ts';
 import type { LabelItem } from './labels.ts';
 import {
-  ORBIT_FRAG, ORBIT_VERT, SPACE_BODY_FRAG, SPACE_BODY_VERT, SPACE_MILKY_FRAG, SPACE_MILKY_VERT, SPACE_STAR_VERT,
+  ORBIT_FRAG, ORBIT_VERT, POP_FRAG, POP_VERT, SPACE_BODY_FRAG, SPACE_BODY_VERT, SPACE_MILKY_FRAG, SPACE_MILKY_VERT, SPACE_STAR_VERT,
   STAR_ATTRIBUTES, STAR_FRAG,
 } from './shaders.ts';
 
@@ -24,7 +25,7 @@ const ECL_Y: Vec3 = [0, Math.cos(EPS_J2000), Math.sin(EPS_J2000)];
 const ECL_N: Vec3 = [0, -Math.sin(EPS_J2000), Math.cos(EPS_J2000)];
 
 export const MIN_DIST = 2e-4;   // AU: about 30,000 km
-export const MAX_DIST = 400;    // AU
+export const MAX_DIST = 300000; // AU: far enough to take in the whole Oort cloud
 
 export interface SpacePoint {
   x: number;
@@ -267,6 +268,8 @@ interface SpaceBody {
   spin?: { w0: number; rate: number };
   /** Eccentric orbits are sampled evenly in eccentric anomaly instead of time. */
   comet?: { q: number; e: number; tp: number };
+  /** A comet, asteroid or distant icy world: drawn more quietly than the planets. */
+  minor?: boolean;
 }
 
 export interface DrawnSpaceBody {
@@ -314,7 +317,10 @@ function buildBodies(): SpaceBody[] {
   for (const sb of SMALL_BODIES) {
     const { q, e, tp } = sb.elements;
     list.push({
-      id: sb.id, name: sb.name, radiusAU: sb.radiusKm / AU_KM, color: [0.75, 0.88, 1], kind: 0, minPx: 2,
+      id: sb.id, name: sb.name, radiusAU: sb.radiusKm / AU_KM, kind: 0, minPx: sb.kind === 'comet' ? 2 : 1.6,
+      // Comets icy blue, the rocky belt grey-brown, the far icy worlds pale and reddish.
+      color: sb.kind === 'comet' ? [0.75, 0.88, 1] : sb.elements.q < 6 ? [0.72, 0.68, 0.62] : [0.86, 0.74, 0.66],
+      minor: true,
       period: keplerPeriod(q, e), comet: { q, e, tp },
     });
   }
@@ -349,6 +355,9 @@ export class SpaceRenderer {
   private readonly byId = new Map(this.bodies.map((b) => [b.id, b]));
   /** Distances and sizes squeezed so everything fits (see COMPRESS). */
   private compressed = false;
+  private readonly popProgram: Program;
+  /** Belts and clouds of small bodies, built on first use. */
+  private populations: { pop: Population; mesh: Mesh }[] | null = null;
 
   constructor(gl: WebGL2RenderingContext, universe: Universe, starMesh: Mesh, milkyWay: WebGLTexture) {
     this.gl = gl;
@@ -361,6 +370,7 @@ export class SpaceRenderer {
     this.starProgram = new Program(gl, SPACE_STAR_VERT, STAR_FRAG, STAR_ATTRIBUTES);
     this.orbitProgram = new Program(gl, ORBIT_VERT, ORBIT_FRAG, ['aPos']);
     this.bodyProgram = new Program(gl, SPACE_BODY_VERT, SPACE_BODY_FRAG, ['aCorner']);
+    this.popProgram = new Program(gl, POP_VERT, POP_FRAG, ['aOrbitA', 'aOrbitB']);
     this.orbitMesh = new Mesh(gl, 4, [{ index: 0, size: 4, offset: 0 }]);
     this.quad = new Mesh(gl, 1, [{ index: 1, size: 1, offset: 0 }], { quadSlot: 0 });
     this.quad.set(new Float32Array([0]));
@@ -524,6 +534,7 @@ export class SpaceRenderer {
     this.starMesh.drawPoints();
 
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    if (opts.layers.smallBodies) this.drawPopulations(focusPos, fx, fy, pixelRatio);
     if (opts.layers.orbits) {
       this.orbitProgram.use().v2('uF', fx, fy).f('uNear', cam.dist * 1e-3);
       for (const b of this.bodies) {
@@ -558,7 +569,7 @@ export class SpaceRenderer {
         const marked = opts.selected === b.id;
         const col = marked ? opts.accentColor : opts.lineColor;
         this.orbitMesh.set(data.subarray(0, n * 4), gl.DYNAMIC_DRAW);
-        this.orbitProgram.v4('uColor', col[0], col[1], col[2], alpha * (marked ? 0.95 : 0.5));
+        this.orbitProgram.v4('uColor', col[0], col[1], col[2], alpha * (marked ? 0.95 : b.minor ? 0.22 : 0.5));
         this.orbitMesh.drawLineStrip();
       }
     }
@@ -591,6 +602,63 @@ export class SpaceRenderer {
     this.drawn = drawn;
   }
 
+  /** How visible a ring of radius `r` AU is from here: 0 when it is a speck or we are deep inside it. */
+  private ringAlpha(r: number): number {
+    const size = this.compressed ? Math.sqrt(r) : r;
+    const apparent = size / this.camera.dist;
+    return clamp((apparent - 0.03) / 0.06, 0, 1) * clamp(2.6 - Math.log10(Math.max(apparent, 1e-9)) * 0.9, 0, 1);
+  }
+
+  private drawPopulations(focusPos: Vec3, fx: number, fy: number, pixelRatio: number): void {
+    const gl = this.gl, cam = this.camera;
+    if (!this.populations) {
+      this.populations = allPopulations().map((pop) => {
+        const mesh = new Mesh(gl, 7, [{ index: 0, size: 4, offset: 0 }, { index: 1, size: 3, offset: 4 }]);
+        mesh.set(pop.data);
+        return { pop, mesh };
+      });
+    }
+    const centre = cam.toCamera(scale(focusPos, -1));
+    const p = this.popProgram.use()
+      .m3('uEclToView', mul(cam.view, ECL_TO_EQ_J2000)).v3('uCentre', centre).f('uDist', cam.dist).v2('uF', fx, fy)
+      .f('uDays', this.universe.frame.jdTT - J2000).f('uCompressed', this.compressed ? 1 : 0)
+      .f('uPointSize', Math.max(1, 1.6 * pixelRatio));
+    for (const { pop, mesh } of this.populations) {
+      const region = REGIONS.find((r) => r.populations.includes(pop.id))!;
+      const alpha = this.ringAlpha((region.inner + region.outer) / 2) * (region.id === 'oort' ? 0.5 : 0.6);
+      if (alpha <= 0.01) continue;
+      p.v4('uColor', pop.color[0], pop.color[1], pop.color[2], alpha);
+      mesh.drawPoints();
+    }
+  }
+
+  /** Where to put a region's name: on its near side, toward the camera, in the plane of the planets. */
+  private regionAnchor(region: Region): Vec3 {
+    const back = [this.camera.view[6], this.camera.view[7], this.camera.view[8]] as Vec3;
+    // Project the direction toward the camera onto the ecliptic plane.
+    const n = ECL_N, d = back[0] * n[0] + back[1] * n[1] + back[2] * n[2];
+    let flat: Vec3 = [back[0] - d * n[0], back[1] - d * n[1], back[2] - d * n[2]];
+    if (Math.hypot(...flat) < 1e-3) flat = ECL_X;
+    // Looking down from above, the near edge sits at the bottom of the screen; the Oort cloud's name goes on top.
+    const r = region.id === 'oort' ? region.outer * 0.6 : region.id === 'scattered' ? 70 : (region.inner + region.outer) / 2;
+    const at = region.id === 'oort' ? scale(n, r) : scale(normalize(flat), r);
+    return this.compressed ? COMPRESS.helio(at) : at;
+  }
+
+  /** Fly out to take in a region of small bodies, centred on the Sun. */
+  showRegion(id: string): void {
+    const region = regionById(id);
+    if (!region) return;
+    this.setFocus('sun');
+    this.camera.flyTo(this.regionDistance(region), 1.8);
+  }
+
+  /** A camera distance that frames a region. */
+  regionDistance(region: Region): number {
+    const r = region.id === 'scattered' ? 160 : region.outer;
+    return (this.compressed ? Math.sqrt(r) : r) * 2.6;
+  }
+
   /** Where a body's prime meridian points (J2000). The Moon keeps one face to the Earth. */
   private primeMeridian(b: SpaceBody, days: number): Vec3 {
     const pole = b.pole ?? [0, 0, 1];
@@ -607,8 +675,17 @@ export class SpaceRenderer {
   }
 
   /** Names for what was drawn. */
-  labels(selected: string | null): LabelItem[] {
+  labels(selected: string | null, smallBodies = true): LabelItem[] {
     const items: LabelItem[] = [];
+    const cam = this.camera, focusPos = this.positions.get(cam.focus) ?? [0, 0, 0];
+    for (const region of smallBodies ? REGIONS : []) {
+      const ref = `region:${region.id}`;
+      const shown = this.ringAlpha((region.inner + region.outer) / 2);
+      if (shown < 0.3 && selected !== ref) continue;
+      const s = cam.projectCamera(cam.toCamera(sub(this.regionAnchor(region), focusPos)));
+      if (!s || !s.onScreen) continue;
+      items.push({ key: ref, text: region.name, x: s.x, y: s.y, kind: 'region', priority: 300, offset: 0, centred: true, selected: selected === ref });
+    }
     const parentOf = new Map(this.bodies.filter((b) => b.parent).map((b) => [b.id, b.parent!]));
     for (const d of this.drawn) {
       // A body that fills the view needs no name tag.
@@ -619,7 +696,7 @@ export class SpaceRenderer {
       const host = parent ? this.drawn.find((x) => x.id === parent) : undefined;
       if (host && !sel && Math.hypot(d.x - host.x, d.y - host.y) < host.radiusPx + 28) continue;
       // Home first: the Sun needs no name to be found, the Earth does.
-      const rank = d.id === 'earth' ? 910 : d.id === 'sun' ? 900 : d.id === this.camera.focus ? 880 : parent || d.id === 'pluto' ? 500 : 800;
+      const rank = d.id === 'earth' ? 910 : d.id === 'sun' ? 900 : d.id === this.camera.focus ? 880 : parent || d.id === 'pluto' ? 500 : this.byId.get(d.id)?.minor ? 450 : 800;
       items.push({ key: `space:${d.id}`, text: d.name, x: d.x, y: d.y, kind: 'body', priority: rank - d.depth * 0.01, offset: d.radiusPx * (d.id === 'saturn' && d.radiusPx > 6 ? 2.3 : 1) + 5, selected: sel });
     }
     return items;

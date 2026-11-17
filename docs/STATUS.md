@@ -35,8 +35,11 @@ the build stands against that plan and what to do next, in order.
   equator→horizon matrix (frame axes are **x = south, y = east, z = up**),
   az/alt helpers, refraction, and WGS84 observer position.
 - `vsop87.ts`, `moon.ts` (ELP/MPP02), `kepler.ts` (Kepler solvers,
-  elements ↔ state, universal propagation, Lambert, Pluto from Standish, Halley
-  and Hale–Bopp), `nbody.ts` (leapfrog), `galilean.ts` (Meeus ch. 44),
+  elements ↔ state, universal propagation, Lambert, Pluto from Standish, and
+  `SMALL_BODIES`: Halley, Hale–Bopp, Ceres, Vesta, Pallas, Hygiea, Haumea,
+  Makemake, Quaoar, Orcus, Eris, Gonggong and Sedna, each with a `group` shown
+  as its subtitle; MPC elements via Stellarium's `ssystem_minor.ini`),
+  `populations.ts` (belts and clouds of small bodies, below), `nbody.ts` (leapfrog), `galilean.ts` (Meeus ch. 44),
   `bodies.ts` (radii, poles, rotation, magnitudes), `stars.ts` (catalog loader,
   linear 3D space motion, designations, B–V → colour).
 - `ephemeris.ts`: `Ephemeris`, `makeFrame(eph, jdUT, site)` → a `Frame` holding
@@ -340,6 +343,32 @@ On James's request (2026-11-17) the lab starts with a list of star types
 (`STAR_TYPES`, red dwarf to a first star), each with its lifetime and fate;
 picking one plays its life from birth. Mass and metals sit in a folded
 "Fine-tune" card; a real star from a card skips the list.
+
+**Belts and clouds of small bodies** (`src/astro/populations.ts`; tests in
+`populations.test.ts`), added 2026-11-17 at the owner's request.
+- `REGIONS`: main asteroid belt, Jupiter trojans, Kuiper belt, scattered disc,
+  Oort cloud, each with published distances, counts and a blurb. They resolve
+  as `region:<id>` objects (kind `region`, no place on the sky): search finds
+  them, their names are labels in Space view, and selecting one flies Space
+  view out to frame it (`SpaceRenderer.showRegion`). Their card uses the
+  region's facts; "Show in space" switches from the sky.
+- Populations are seeded samples (a few thousand points each) whose orbital
+  elements follow published distributions, with the Kirkwood gaps, trojans
+  locked 60° ahead of and behind Jupiter's mean longitude, and plutinos locked
+  3:2 with Neptune's mean motion (resonant angle near 180°, so they never meet
+  it). The Oort cloud is static, density ∝ r^-3.5 from 2,000 to 100,000 AU.
+  `POP_VERT` solves Kepler's equation per point on the GPU, so belts turn with
+  time at no CPU cost. Each fades in by its size on screen (`ringAlpha`).
+- Layer `smallBodies` ("Belts" in Space view settings, on by default).
+  `MAX_DIST` is now 300,000 AU so the whole Oort cloud fits.
+- Tests: Vesta and Ceres reach opposition on the published dates (2 May and
+  2 October 2025); Sedna's perihelion (76 AU, 2075–76); Eris at about 96 AU;
+  the gaps are empty; the trojan swarm stays 60° from Jupiter; plutinos stay
+  more than 8 AU from Neptune for 400 years.
+
+**Notices**: toasts have a close button and can be swiped away (sideways or
+up), and so can the update and measuring banners (`swipeToDismiss` in
+`dom.ts`). Pointing at a toast holds it up.
 
 ## Next steps, in order
 

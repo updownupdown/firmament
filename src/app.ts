@@ -106,6 +106,11 @@ export class App {
         if (this.mode === 'space') {
           // In space a tap both picks a body and swings the camera round to circle it.
           const named = this.labels.hit(x, y);
+          if (named?.startsWith('region:')) {
+            this.space.showRegion(named);
+            this.select(named);
+            return;
+          }
           const id = named && this.space.position(named) ? named : this.space.pick(x, y);
           if (id) this.space.setFocus(id);
           this.select(id && this.universe.resolve(id) ? id : null);
@@ -343,6 +348,13 @@ export class App {
 
   /** Turn to an object and keep it centred as the sky moves. */
   centre(ref: string, fov?: number): void {
+    if (ref.startsWith('region:')) {
+      // A belt or cloud is seen from outside, not on the sky.
+      if (this.mode !== 'space') this.setMode('space', 'sun');
+      this.space.showRegion(ref);
+      this.invalidate();
+      return;
+    }
     if (this.mode === 'space') {
       this.space.setFocus(ref);
       if (fov !== undefined) this.space.camera.flyTo(this.space.framingDistance(ref));
@@ -417,7 +429,7 @@ export class App {
       return d && d.onScreen ? { x: d.x, y: d.y, radiusPx: d.radiusPx } : null;
     }
     const obj = this.universe.resolve(ref);
-    if (!obj || obj.kind === 'constellation') return null;
+    if (!obj || obj.kind === 'constellation' || obj.kind === 'region') return null;
     const s = this.renderer.project(obj.dir);
     if (!s) return null;
     return { x: s.x, y: s.y, radiusPx: this.renderer.drawn.find((d) => d.id === ref)?.radiusPx ?? 0 };
@@ -533,7 +545,7 @@ export class App {
       cam.width = p.width; cam.height = p.height;
       cam.update();
       this.space.render({ layers: this.layers, lineColor: this.lineColor, accentColor: this.accentColor, selected: this.selected }, this.renderer.pixelRatio);
-      this.labels.update(layoutLabels(this.still ? [] : this.space.labels(this.selected), p.width, p.height));
+      this.labels.update(layoutLabels(this.still ? [] : this.space.labels(this.selected, this.layers.smallBodies), p.width, p.height));
       this.renderer.dirty = false;
       this.emit('frame');
       return;

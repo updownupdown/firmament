@@ -58,6 +58,7 @@ export function whereNow(u: Universe, obj: SkyObject, atmosphere: boolean): stri
 
 /** The headline numbers for the compact card. */
 export function quickFacts(u: Universe, obj: SkyObject): Fact[] {
+  if (obj.region) return obj.region.facts.slice(0, 2);
   const hz = u.horizontal(obj.dir);
   const facts: Fact[] = [];
   if (obj.mag !== null && obj.kind !== 'sun') facts.push({ label: 'Magnitude', value: formatMagnitude(obj.mag) });
@@ -71,6 +72,7 @@ export function quickFacts(u: Universe, obj: SkyObject): Fact[] {
 
 /** Everything else, for the expanded card. */
 export function detailFacts(u: Universe, obj: SkyObject, style: TimeStyle): Fact[] {
+  if (obj.region) return obj.region.facts.slice(2);
   const facts: Fact[] = [];
   const hz = u.horizontal(obj.dir);
   const [ra, dec] = u.equatorial(obj.dir);
@@ -123,7 +125,7 @@ export function detailFacts(u: Universe, obj: SkyObject, style: TimeStyle): Fact
 
 /** Rise, highest point and set over the next 24 hours, in plain words. */
 export function riseSetFacts(u: Universe, obj: SkyObject, jdUT: number, style: TimeStyle): Fact[] {
-  if (obj.kind === 'constellation') return [];
+  if (obj.kind === 'constellation' || obj.region) return [];
   const rs = u.riseSet(obj.ref, jdUT);
   if (!rs) return [];
   if (rs.alwaysUp) return [{ label: 'Rises and sets', value: 'Never sets from here' }];
@@ -142,6 +144,7 @@ export function riseSetFacts(u: Universe, obj: SkyObject, jdUT: number, style: T
 
 /** A sentence or two of context for the best-known objects. */
 export function blurb(obj: SkyObject): string | null {
+  if (obj.region) return obj.region.blurb;
   const small = SMALL_BODIES.find((s) => s.id === obj.ref);
   if (small?.note) return small.note;
   return BLURBS[obj.ref] ?? null;

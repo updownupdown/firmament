@@ -11,7 +11,7 @@ import { h, fill, icon, toggle } from './dom.ts';
 import type { Panel, Shell } from './shell.ts';
 
 const KIND_LABEL: Record<ObjectKind, string> = {
-  sun: 'Star', moon: 'Moon', planet: 'Planet', dwarf: 'Dwarf planet', satellite: 'Moon', comet: 'Comet',
+  sun: 'Star', moon: 'Moon', planet: 'Planet', dwarf: 'Dwarf planet', satellite: 'Moon', comet: 'Comet', minor: 'Small body', region: 'Region',
   star: 'Star', dso: 'Deep sky', constellation: 'Constellation',
 };
 
@@ -27,14 +27,22 @@ export function searchPanel(shell: Shell): Panel {
   const status = h('p', { class: 'hint', role: 'status' });
 
   const go = (ref: string) => {
+    if (ref.startsWith('region:')) {
+      // Belts and clouds are seen from Space view.
+      shell.show({ select: ref, camera: { mode: 'space', look: 'sun' } });
+      app.centre(ref);
+      return;
+    }
     shell.show({ select: ref, camera: { look: ref, fov: Math.min(app.renderer.projection.fov, app.framingFov(ref) * 4) / DEG } });
   };
   const row = (hit: SearchHit) => {
     const obj = app.universe.resolve(hit.ref);
     const up = obj ? app.universe.horizontal(obj.dir).altApparent > 0 : true;
+    const tag = hit.kind === 'region' ? h('span', { class: 'tag' }, 'Space view')
+      : h('span', { class: `tag${up ? ' up' : ''}` }, up ? 'Up now' : 'Below horizon');
     return h('li', null, h('button', { class: 'result', type: 'button', onclick: () => go(hit.ref) },
       h('span', { class: 'result-main' }, h('span', { class: 'result-name' }, hit.name), h('span', { class: 'result-sub' }, hit.subtitle || KIND_LABEL[hit.kind])),
-      h('span', { class: `tag${up ? ' up' : ''}` }, up ? 'Up now' : 'Below horizon')));
+      tag));
   };
   const refresh = () => {
     const q = input.value.trim();
@@ -88,6 +96,7 @@ const LAYER_GROUPS: { title: string; note?: string; items: LayerTile[] }[] = [
   ] },
   { title: 'Space view', items: [
     ['orbits', 'Orbits', 'orbit', 'Orbit lines in Space view'],
+    ['smallBodies', 'Belts', 'belt', 'The asteroid belt, Kuiper belt and Oort cloud in Space view'],
     ['compressed', 'Compressed', 'squeeze', 'Squeeze distances and sizes so planets show as discs'],
   ] },
 ];

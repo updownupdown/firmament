@@ -73,6 +73,7 @@ const ICONS: Record<string, string> = {
   air: '<path d="M2 15h16"/><path d="M5.5 15a4.5 4.5 0 0 1 9 0"/><path d="M3 11.5c2-1 3 1 5 0M12 6.5c2-1 3 1 5 0"/>',
   squeeze: '<path d="M2.5 10h5M12.5 10h5M5.5 7l2.5 3-2.5 3M14.5 7L12 10l2.5 3"/>',
   reset: '<path d="M4.5 9.5a5.5 5.5 0 1 0 1.7-4"/><path d="M5.5 2.5v3.5H9"/>',
+  belt: '<circle cx="10" cy="10" r="1.8"/><ellipse cx="10" cy="10" rx="7.5" ry="3.2" stroke-dasharray="1.2 2"/>',
   ruler: '<path d="M3 14.5L14.5 3l2.5 2.5L5.5 17z"/><path d="M6.5 11.5l1.5 1.5M9 9l1.5 1.5M11.5 6.5L13 8"/>',
 };
 
@@ -107,4 +108,59 @@ export function toggle(label: string, checked: boolean, onChange: (on: boolean) 
   return h('label', { class: 'toggle' },
     h('span', { class: 'toggle-text' }, h('span', null, label), hint ? h('span', { class: 'hint' }, hint) : null),
     input, h('span', { class: 'toggle-track', 'aria-hidden': 'true' }));
+}
+
+/**
+ * Lets a notice be flicked away sideways (or up, for one at the top of the
+ * screen). Taps on its buttons still work: a drag only starts after the
+ * finger has moved a few pixels. Uses the `translate` property so it composes
+ * with whatever `transform` places the element.
+ */
+export function swipeToDismiss(el: HTMLElement, dismiss: () => void): void {
+  let id = -1, x0 = 0, y0 = 0, t0 = 0, dx = 0, dy = 0, dragging = false;
+  const reset = () => {
+    el.style.transition = '';
+    el.style.translate = '';
+    el.style.opacity = '';
+  };
+  el.style.touchAction = 'pan-y';
+  el.addEventListener('pointerdown', (e) => {
+    if (id !== -1) return;
+    id = e.pointerId; x0 = e.clientX; y0 = e.clientY; t0 = e.timeStamp; dx = dy = 0; dragging = false;
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== id) return;
+    dx = e.clientX - x0;
+    dy = Math.min(0, e.clientY - y0);
+    if (!dragging && Math.hypot(dx, dy) > 8) {
+      dragging = true;
+      el.setPointerCapture(id);
+      el.style.transition = 'none';
+    }
+    if (!dragging) return;
+    const along = Math.abs(dx) > Math.abs(dy) ? dx : 0, up = along ? 0 : dy;
+    el.style.translate = `${along}px ${up}px`;
+    el.style.opacity = String(Math.max(0.2, 1 - Math.hypot(along, up) / 220));
+  });
+  const end = (e: PointerEvent) => {
+    if (e.pointerId !== id) return;
+    id = -1;
+    if (!dragging) return;
+    const dist = Math.max(Math.abs(dx), -dy), speed = dist / Math.max(1, e.timeStamp - t0);
+    if (dist > 90 || (dist > 30 && speed > 0.5)) {
+      el.style.transition = 'opacity var(--duration) var(--ease)';
+      el.style.opacity = '0';
+      setTimeout(() => { dismiss(); reset(); }, 120);
+    } else {
+      el.style.transition = 'translate var(--duration) var(--ease), opacity var(--duration) var(--ease)';
+      el.style.translate = '';
+      el.style.opacity = '';
+    }
+    // A drag is not a tap on whatever button it began on.
+    const eat = (c: Event) => { c.stopPropagation(); c.preventDefault(); };
+    el.addEventListener('click', eat, { capture: true, once: true });
+    setTimeout(() => el.removeEventListener('click', eat, { capture: true }), 400);
+  };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
 }

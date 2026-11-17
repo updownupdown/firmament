@@ -788,3 +788,49 @@ void main() {
   float a = 1.0 - smoothstep(0.2, 1.0, r);
   outColor = vec4(vec3(0.80, 0.85, 1.0) * vBright * a, 0.0);
 }`;
+
+/**
+ * Crowds of small bodies (asteroid belt, Kuiper belt, Oort cloud) as points.
+ * Each point carries orbital elements and is moved along its orbit here, so a
+ * whole belt turns with time for no CPU cost. See astro/populations.ts.
+ */
+export const POP_VERT = HEADER + `
+layout(location = 0) in vec4 aOrbitA;   // a (AU), e, i, node
+layout(location = 1) in vec3 aOrbitB;   // argument of perihelion, mean anomaly at J2000 (rev), mean motion (rev/day)
+uniform mat3 uEclToView;   // J2000 ecliptic -> camera, rotation only
+uniform vec3 uCentre;      // camera-space position of the Sun
+uniform float uDist;       // camera distance from its focus, AU
+uniform vec2 uF;
+uniform float uDays;       // days since J2000 (TT)
+uniform float uCompressed;
+uniform float uPointSize;
+out float vFade;
+void main() {
+  float a = aOrbitA.x, e = aOrbitA.y, inc = aOrbitA.z, node = aOrbitA.w;
+  float M = 2.0 * PI * fract(aOrbitB.y + aOrbitB.z * uDays);
+  float E = M + e * sin(M);
+  for (int k = 0; k < 5; k++) E -= (E - e * sin(E) - M) / (1.0 - e * cos(E));
+  vec2 q = a * vec2(cos(E) - e, sqrt(1.0 - e * e) * sin(E));
+  float cO = cos(node), sO = sin(node), cw = cos(aOrbitB.x), sw = sin(aOrbitB.x), ci = cos(inc), si = sin(inc);
+  vec3 P = vec3(cO * cw - sO * sw * ci, sO * cw + cO * sw * ci, sw * si);
+  vec3 Q = vec3(-cO * sw - sO * cw * ci, -sO * sw + cO * cw * ci, cw * si);
+  vec3 p = P * q.x + Q * q.y;
+  if (uCompressed > 0.5) p *= inversesqrt(max(length(p), 1e-6));
+  vec3 c = uCentre + uEclToView * p;
+  float depth = -c.z;
+  if (depth < uDist * 1e-3) { gl_Position = vec4(3.0, 3.0, 3.0, 1.0); gl_PointSize = 1.0; vFade = 0.0; return; }
+  gl_Position = vec4(uF * c.xy, 0.0, depth);
+  // Points far nearer than the focus would streak across the view as big blobs: keep them small and dim.
+  vFade = smoothstep(uDist * 0.02, uDist * 0.3, depth);
+  gl_PointSize = uPointSize;
+}`;
+
+export const POP_FRAG = HEADER + `
+in float vFade;
+uniform vec4 uColor;
+out vec4 outColor;
+void main() {
+  float r = length(gl_PointCoord - 0.5) * 2.0;
+  float a = uColor.a * vFade * (1.0 - smoothstep(0.4, 1.0, r));
+  outColor = vec4(uColor.rgb * a, a);
+}`;

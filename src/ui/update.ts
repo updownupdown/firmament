@@ -2,7 +2,7 @@
 // fills in), and now and then asks the server for the latest one. When they
 // differ, a quiet banner offers to reload.
 
-import { h, iconButton } from './dom.ts';
+import { h, iconButton, swipeToDismiss } from './dom.ts';
 
 const CHECK_EVERY_MS = 15 * 60 * 1000;
 
@@ -27,6 +27,7 @@ export function watchForUpdates(): HTMLElement {
     iconButton('close', 'Not now', () => { banner.hidden = true; dismissed = true; }));
   const running = currentBuild();
   let dismissed = false, last = 0;
+  swipeToDismiss(banner, () => { banner.hidden = true; dismissed = true; });
 
   const reload = async () => {
     // Let the service worker pick up the new files first, so the reload is not served the old ones.

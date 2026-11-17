@@ -139,8 +139,8 @@ chosen by the owner on 2026-11-16)
   the bright planets, the Moon or the best-placed constellation, chosen by day
   number), dark-sky and Moon tiles, planets, constellations overhead and the
   next seven weeks of events from the worker.
-- `log.ts`: `logSighting` checks altitude and sky brightness and marks entries
-  unconfirmed when the object could not have been seen; checklists for planets,
+- `log.ts`: `logSighting` marks entries unconfirmed when the object could not
+  have been seen (see Sky events below); checklists for planets,
   Moon phases, the 88 constellations and the Messier objects.
 - `facts.ts`: the words and numbers on the object card.
 - Visual checks: build, serve `dist/` and screenshot with Playwright (Chromium
@@ -166,13 +166,34 @@ chosen by the owner on 2026-11-16)
 cache-first and everything else network-first, and is registered from
 `main.ts`. Checked by reloading with the network off.
 
+**Sky events in the Log** (`src/sim/sightings.ts`; tests in `sightings.test.ts`)
+- `checkSighting` (objects) and `checkEvent` (calendar events) decide whether
+  something could be seen from the player's place at the clock's instant.
+  `checkEvent` also gives the best moment from here: the local maximum of a
+  solar eclipse, the darkest hour with the radiant high for a meteor shower.
+- `EVENT_GOALS` is the Log's "Sky events" checklist: lunar and solar eclipses,
+  a close conjunction and ten meteor showers. Tapping one searches month by
+  month (up to six years) for the next that counts from the player's place.
+- The Log shows a "Happening now" card when an event is within reach of the
+  clock, with its own "I saw it".
+
+**Phone pointing** (`src/render/pointing.ts`; tests in `pointing.test.ts`)
+- `pointingDirection(alpha, beta, gamma)` is where the back of the phone
+  faces. `Pointing` listens to `deviceorientationabsolute` (Chrome) or
+  `deviceorientation` with `webkitCompassHeading` (Safari, after a permission
+  tap) and smooths the readings. `App.setPointing` makes the sky camera follow
+  it; dragging the sky stops it. The button only appears on touch devices.
+- Not yet tried on a real phone: only the maths and an emulated sensor are
+  tested. Compass north is magnetic; no declination correction is applied.
+
 ## Next steps, in order
 
 ### 1. Remaining work
-- Phone pointing (DeviceOrientation; iOS needs a permission tap).
+- Try phone pointing on a real iPhone and Android phone.
+- The Moon does not darken during a lunar eclipse, and the Sun is not
+  bitten during a solar one.
 - Journeys with custom interactives: Kepler's Mars and mission planning.
 - Space view: Jupiter's moons, surface detail, Milky Way, distance in links.
-- Log checklist for events (eclipses, showers).
 - The Tonight guide character is still unnamed; ask the owner.
 
 ### 2. Launch

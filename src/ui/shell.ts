@@ -2,6 +2,7 @@
 // card, the dock, and one sheet at a time for everything else.
 
 import type { App, Section } from '../app.ts';
+import { Pointing } from '../render/pointing.ts';
 import { RATE_STEPS, describeRate } from '../sim/clock.ts';
 import { jdNow } from '../astro/time.ts';
 import { calendarNote, formatDate, formatDistanceAU, formatTime, localTime } from '../sim/format.ts';
@@ -56,6 +57,8 @@ export class Shell {
     this.toastEl = h('div', { class: 'toast glass', role: 'status', 'aria-live': 'polite', hidden: true });
     this.journey = journeyPlayer(this);
     const nightVision = h('div', { class: 'night-vision', 'aria-hidden': 'true' });
+    const point = this.pointButton();
+    if (point) root.append(point);
     root.append(this.topBar(), this.reticle(), this.objectCard(), this.journey.el, this.timeBar(), this.dock(), this.sheetEl, this.toastEl, this.stillHint(), nightVision);
 
     const syncSettings = () => {
@@ -179,6 +182,32 @@ export class Shell {
     return h('div', { class: 'top-bar chrome' }, chip, mode,
       iconButton('search', 'Search the sky', () => this.openSheet('search'), 'glass'),
       iconButton('sliders', 'View and settings', () => this.openSheet('settings'), 'glass'));
+  }
+
+  /** Phone pointing: only offered on devices that can do it. */
+  private pointButton(): HTMLElement | null {
+    const app = this.app;
+    if (!Pointing.supported) return null;
+    const button = iconButton('phone', '', () => {
+      if (app.pointing.active) { void app.setPointing(false); return; }
+      app.setPointing(true).then((result) => {
+        if (result === 'denied') this.toast('Motion access was not allowed, so the sky cannot follow your phone.');
+        else if (result === 'unsupported') this.toast('This device does not report which way it is pointing.');
+      });
+      this.toast('Hold your phone up to the sky. Drag the sky to stop.');
+    }, 'glass point-button chrome');
+    const sync = () => {
+      const on = app.pointing.active;
+      const label = on ? 'Stop following the phone' : 'Point your phone at the sky';
+      button.setAttribute('aria-label', label);
+      button.setAttribute('aria-pressed', String(on));
+      button.title = label;
+      button.hidden = app.mode === 'space';
+    };
+    app.on('pointing', sync);
+    app.on('mode', sync);
+    sync();
+    return button;
   }
 
   // ---------------------------------------------------------------- time bar

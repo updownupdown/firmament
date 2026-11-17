@@ -8,6 +8,7 @@ import { type CoreData, loadBoundaries, loadCulture, loadFaintStars } from './da
 import { SkyCamera, attachControls } from './render/camera.ts';
 import { LabelLayer, collectLabels, layoutLabels } from './render/labels.ts';
 import { pick } from './render/pick.ts';
+import { Pointing, type PointingResult } from './render/pointing.ts';
 import { SkyRenderer } from './render/sky.ts';
 import { SpaceRenderer } from './render/space.ts';
 import { Clock } from './sim/clock.ts';
@@ -25,7 +26,7 @@ export type AppEvent =
   | 'frame'
   /** About once a second of real time, for clocks and live readouts. */
   | 'second'
-  | 'select' | 'settings' | 'site' | 'section' | 'time' | 'data' | 'mode';
+  | 'select' | 'settings' | 'site' | 'section' | 'time' | 'data' | 'mode' | 'pointing';
 
 const DEFAULT_SITE: Site = (() => {
   const p = PLACES[0];
@@ -49,6 +50,9 @@ export class App {
   readonly space: SpaceRenderer;
   /** Standing on the Earth looking up, or out in space looking back. */
   mode: ViewMode = 'sky';
+  /** Phone pointing: the view follows where the device is held. */
+  readonly pointing = new Pointing();
+  private readonly pointingTrack = () => this.pointing.direction() ?? { az: this.renderer.projection.az, alt: this.renderer.projection.alt };
   readonly events: EventService;
   readonly canvas: HTMLCanvasElement;
   selected: string | null = null;
@@ -62,6 +66,7 @@ export class App {
   private readonly listeners = new Map<AppEvent, Set<() => void>>();
   private readonly lineColor: [number, number, number];
   private readonly accentColor: [number, number, number];
+  private pointingFollowing = false;
   private lastFrame = 0;
   private lastSecond = 0;
   private sinceDraw = Infinity;
@@ -246,7 +251,7 @@ export class App {
   select(ref: string | null): void {
     const obj = ref ? this.universe.resolve(ref) : null;
     this.selected = obj ? obj.ref : null;
-    if (!obj) this.camera.track = null;
+    if (!obj && this.camera.track !== this.pointingTrack) this.camera.track = null;
     this.invalidate();
     this.emit('select');
   }
@@ -284,9 +289,36 @@ export class App {
     return 25 * DEG;
   }
 
+  /** Follow the phone as it is held up to the sky. Call from a tap. */
+  async setPointing(on: boolean): Promise<PointingResult> {
+    if (!on) {
+      if (this.camera.track === this.pointingTrack) this.camera.track = null;
+      if (this.pointing.active) {
+        this.pointing.stop();
+        this.emit('pointing');
+      }
+      return 'ok';
+    }
+    const allowed = await this.pointing.request();
+    if (allowed !== 'ok') return allowed;
+    if (this.mode === 'space') this.setMode('sky');
+    this.pointing.onChange = () => this.invalidate();
+    const heard = this.pointing.listen();
+    // A phone held up shows about this much sky at arm's length.
+    this.camera.flyTo({ fov: 70 * DEG }, 0);
+    this.camera.track = this.pointingTrack;
+    this.pointingFollowing = true;
+    this.emit('pointing');
+    if (await heard) return 'ok';
+    if (this.camera.track === this.pointingTrack) this.camera.track = null;
+    this.emit('pointing');
+    return 'unsupported';
+  }
+
   /** Switch between the sky from the ground and the solar system from outside. */
   setMode(mode: ViewMode): void {
     if (mode === this.mode) return;
+    if (mode === 'space') void this.setPointing(false);
     this.mode = mode;
     if (mode === 'space') {
       // Lift off: start just above the Earth and pull back until the inner planets are in view.
@@ -380,6 +412,11 @@ export class App {
       this.lastFrame = now;
       this.clock.tick(dt);
       const space = this.mode === 'space';
+      // Dragging the sky, or centring on something, takes the view back from the phone.
+      if (this.pointingFollowing && this.camera.track !== this.pointingTrack) {
+        this.pointingFollowing = false;
+        void this.setPointing(false);
+      }
       const moved = space ? this.space.camera.tick(dt) : this.camera.tick(dt);
       this.sinceDraw += dt;
       // The sky turns 15 arcseconds a second: redraw once it has moved a third of a pixel.

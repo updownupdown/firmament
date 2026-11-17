@@ -180,6 +180,29 @@ chosen by the owner on 2026-11-16)
   (`departureDv`) that a real trajectory costs least near that date
   (about 3.1 km/s).
 
+**Time bar** (`src/ui/timebar.ts`): play/pause, a speed menu that opens
+upward (direction plus the `RATE_STEPS`), and a "go to" menu with date and time
+fields in the place's local time plus quick jumps. The old spring-back jog
+slider is gone. Years outside 1 to 9999 go through Place and time.
+
+**Picking**: tapping a label picks what it names (`LabelLayer.hit`). The
+nearest-object pick leans toward bright and named stars, and toward
+`App.pickPreference` (a journey's "find" targets). On phones a journey card
+folds to just its task while there is something to find.
+
+**Type and look**: Outfit (OFL, self-hosted in `public/fonts`, marked external
+in the build), glass with a sheen and top-edge light (`--glass-sheen`,
+`--glass-edge`), uppercase tracked small labels.
+
+**Install**: `public/manifest.webmanifest`, `icon.svg` (the logo), PNG icons
+including a maskable one, iOS meta tags. Settings shows "Install as an app"
+when the browser offers it (or a hint on iOS).
+
+**Milky Way from stars**: `milkyWayStars` scatters 320k points (140k on
+phones) with the density of `milkyway.png`, drawn as faint points
+(`MILKY_STAR_*` shaders) over a weaker glow. They are statistical stand-ins for
+unresolved stars, not catalog stars, so they cannot be picked.
+
 **Offline**: `public/sw.js` precaches every file of a build, serves `data/`
 cache-first and everything else network-first, and is registered from
 `main.ts`. Checked by reloading with the network off.
@@ -214,7 +237,9 @@ eclipses were already drawn (the Moon covers the Sun; corona in totality).
 ## Next steps, in order
 
 ### 1. Remaining work
-- Try phone pointing on a real iPhone and Android phone.
+- Phone pointing was confirmed working by the owner on 2026-11-17.
+- More real stars: Tycho-2 (2.5M stars to about mag 12) loaded in sky tiles
+  only when zoomed in. Needs the catalog added to `scripts/build_data.py`.
 - The Tonight guide character is still unnamed; ask the owner.
 
 ### 2. Launch

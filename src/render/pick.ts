@@ -8,8 +8,13 @@ import { type SkyRenderer, dsoLimit } from './sky.ts';
 
 const STRIDE = 11;
 
-/** Reference of the object nearest to a screen point, or null if nothing is close. */
-export function pick(r: SkyRenderer, layers: LayerFlags, x: number, y: number, radius = 30): string | null {
+/**
+ * Reference of the object nearest to a screen point, or null if nothing is
+ * close. A tap rarely lands exactly on a star, so bright and named stars pull
+ * harder than faint ones, and anything in `prefer` (a journey's target) pulls
+ * hardest of all.
+ */
+export function pick(r: SkyRenderer, layers: LayerFlags, x: number, y: number, radius = 36, prefer: ReadonlySet<string> = new Set()): string | null {
   const u = r.universe, p = r.projection, c = r.conditions;
   const floor = layers.ground ? -0.5 * DEG : -90 * DEG;
   let best: string | null = null;
@@ -17,7 +22,7 @@ export function pick(r: SkyRenderer, layers: LayerFlags, x: number, y: number, r
   const consider = (ref: string, sx: number, sy: number, bonus: number, reach = 0) => {
     const d = Math.max(0, Math.hypot(sx - x, sy - y) - reach);
     if (d > radius) return;
-    const score = d - bonus;
+    const score = d - bonus - (prefer.has(ref) ? 30 : 0);
     if (score < bestScore) { bestScore = score; best = ref; }
   };
 
@@ -46,7 +51,9 @@ export function pick(r: SkyRenderer, layers: LayerFlags, x: number, y: number, r
     const h = apply(m, dir);
     if (Math.asin(clamp(h[2], -1, 1)) < floor) continue;
     const s = p.project(h);
-    if (s) consider(starRef(u.stars, i), s.x, s.y, clamp((c.limitMag - data[o + 7]) * 1.5, 0, 9));
+    if (!s) continue;
+    const named = u.stars.meta.get(i)?.n ? 6 : 0;
+    consider(starRef(u.stars, i), s.x, s.y, clamp((c.limitMag - data[o + 7]) * 2.2, 0, 16) + named);
   }
 
   if (layers.dsos) {

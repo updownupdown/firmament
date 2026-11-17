@@ -753,3 +753,36 @@ void main() {
   vec3 c = vec3(0.012, 0.018, 0.035) + vec3(0.62, 0.70, 0.90) * pow(mw, 1.3) * 0.30 * uGain;
   outColor = vec4(c, 1.0);
 }`;
+
+// ---------------------------------------------------------------- Milky Way stars
+//
+// The Milky Way's glow is the light of stars too faint to see one by one. A
+// few hundred thousand points, scattered with the same density as the glow,
+// stand in for them: grainy star clouds from afar that resolve into separate
+// points as you zoom in. They are not real stars, so nothing can pick them.
+
+export const MILKY_STAR_VERT = HEADER + PROJECT + `
+layout(location = 0) in vec4 aStar;   // xyz: J2000 direction; w: relative brightness 0..1
+uniform mat3 uJ2000ToHorizon;
+uniform vec3 uAberration;
+uniform float uGain;
+uniform float uPixelRatio;
+uniform float uAtmosphere;
+out float vBright;
+void main() {
+  vec3 h = refractDir(uJ2000ToHorizon * normalize(aStar.xyz + uAberration));
+  float thin = uAtmosphere > 0.5 ? smoothstep(-0.02, 0.30, h.z) : 1.0;
+  vBright = aStar.w * uGain * thin;
+  if (vBright < 0.004) { gl_Position = vec4(3.0, 3.0, 3.0, 1.0); gl_PointSize = 1.0; return; }
+  gl_Position = projectCamera(uView * h);
+  gl_PointSize = max(1.0, 1.4 * uPixelRatio);
+}`;
+
+export const MILKY_STAR_FRAG = HEADER + `
+in float vBright;
+out vec4 outColor;
+void main() {
+  float r = length(gl_PointCoord - 0.5) * 2.0;
+  float a = 1.0 - smoothstep(0.2, 1.0, r);
+  outColor = vec4(vec3(0.80, 0.85, 1.0) * vBright * a, 0.0);
+}`;

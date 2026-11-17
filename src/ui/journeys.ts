@@ -48,10 +48,19 @@ export function journeyPlayer(shell: Shell): JourneyPlayer {
   const feedback = h('p', { class: 'journey-feedback', role: 'status', 'aria-live': 'polite' });
   const back = h('button', { class: 'pill-button', type: 'button', onclick: () => move(-1) }, 'Back');
   const next = h('button', { class: 'pill-button primary', type: 'button', onclick: () => move(1) }, 'Next');
+  // On a phone the card folds down to the task alone, so the sky it points at stays in view.
+  const fold = h('button', { class: 'link-button fold-button', type: 'button', onclick: () => setCollapsed(!collapsed) });
+  const setCollapsed = (on: boolean) => {
+    collapsed = on;
+    el.classList.toggle('collapsed', on);
+    fold.textContent = on ? 'Read more' : 'Show less';
+    fold.setAttribute('aria-expanded', String(!on));
+  };
+  let collapsed = false;
   const el = h('section', { class: 'journey-card glass chrome', hidden: true, 'aria-label': 'Journey' },
     h('header', { class: 'card-header' }, h('div', { class: 'card-heading' }, progress, title),
       iconButton('close', 'Leave this journey', () => stop(false))),
-    text, figure, task, feedback, h('div', { class: 'journey-nav' }, back, next));
+    text, fold, figure, task, feedback, h('div', { class: 'journey-nav' }, back, next));
 
   const save = (done: boolean) => {
     if (!run) return;
@@ -69,6 +78,7 @@ export function journeyPlayer(shell: Shell): JourneyPlayer {
     delete document.documentElement.dataset.plot;
     fill(figure);
     plot = null;
+    app.pickPreference = new Set();
     app.select(null);
     if (app.mode === 'space') app.setMode('sky');
     if (home) app.apply({ ...home, highlight: [] });
@@ -86,7 +96,7 @@ export function journeyPlayer(shell: Shell): JourneyPlayer {
   const answer = (value: string | number) => {
     if (!run) return;
     verdict = run.answer(value, app.universe);
-    if (verdict.ok) { renderTask(); plot?.reveal(); }
+    if (verdict.ok) { renderTask(); plot?.reveal(); app.pickPreference = new Set(); }
     showVerdict();
   };
 
@@ -136,6 +146,12 @@ export function journeyPlayer(shell: Shell): JourneyPlayer {
       fill(figure);
       delete document.documentElement.dataset.plot;
     }
+    const t = step.task;
+    app.pickPreference = new Set(t?.kind === 'find' && !run.solved ? t.refs : []);
+    // Fold the words away on a phone while the task is to find something in the sky.
+    const narrow = matchMedia('(max-width: 899px)').matches;
+    fold.hidden = !narrow || !step.task || !!step.plot;
+    setCollapsed(narrow && t?.kind === 'find' && !run.solved);
     renderTask();
     showVerdict();
     el.scrollTop = 0;

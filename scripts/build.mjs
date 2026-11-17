@@ -61,6 +61,8 @@ const options = {
   sourcemap: true,
   metafile: true,
   loader: { '.glsl': 'text', '.css': 'css' },
+  // Fonts are copied from public/ and referenced as they are.
+  external: ['fonts/*'],
   define: { __DEV__: serve ? 'true' : 'false' },
   logLevel: 'warning',
 };

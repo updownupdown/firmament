@@ -170,7 +170,7 @@ export class SkyRenderer {
   private readonly graticule: Mesh;
   private readonly circle: Mesh;
   private readonly markers: Mesh;
-  private readonly milkyWay: WebGLTexture;
+  readonly milkyWay: WebGLTexture;
   private highlighted: string | null = null;
   private figureCulture = '';
   private figureStars = 0;

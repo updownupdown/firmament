@@ -1,6 +1,6 @@
 # Status and handoff
 
-Last updated 2026-11-16. Read `docs/ARCHITECTURE.md` first; this file says where
+Last updated 2026-11-17. Read `docs/ARCHITECTURE.md` first; this file says where
 the build stands against that plan and what to do next, in order.
 
 ## Done
@@ -110,9 +110,17 @@ the build stands against that plan and what to do next, in order.
   do not jitter. `App.setMode('space')` lifts off from above the Earth;
   tapping a body circles it; any "Show me" lands again. `attachControls` takes
   a `Controllable`, so both cameras share the input code.
-- Space view does not yet have: Jupiter's moons, surface detail on planets,
-  the Milky Way, a compressed-scale toggle, or the camera distance in shared
-  links.
+- Space view also draws Io, Europa, Ganymede and Callisto with their orbits
+  (`galileanAround`), surface detail on the Sun, Moon, Earth, Mars, Jupiter
+  (with the Great Red Spot) and Saturn once a disc is over about 6 px (the
+  noise and Moon chunks are shared with the sky shader as `SURFACE`), the
+  globe's shadow on Saturn's rings, and the Milky Way behind everything.
+- Shared links keep the Space camera: `c=jupiter,,space,0.0125au,-60;12deg`
+  (distance, then yaw and pitch). `SpaceRenderer.place` opens there with no
+  flight. Lifting off toward a far body first pulls back until the Earth and
+  the target both fit, then closes in. The camera cannot zoom inside the
+  focus body (`SpaceCamera.floor`).
+- Space view does not yet have a compressed-scale toggle.
 
 **App and UI** (`src/app.ts`, `src/ui`; design direction **"Quiet glass"**,
 chosen by the owner on 2026-11-16)
@@ -198,7 +206,6 @@ eclipses were already drawn (the Moon covers the Sun; corona in totality).
 ### 1. Remaining work
 - Try phone pointing on a real iPhone and Android phone.
 - Journeys with custom interactives: Kepler's Mars and mission planning.
-- Space view: Jupiter's moons, surface detail, Milky Way, distance in links.
 - The Tonight guide character is still unnamed; ask the owner.
 
 ### 2. Launch

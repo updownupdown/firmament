@@ -145,6 +145,9 @@ test('scene: survives a round trip through the URL hash', () => {
 
   assert.deepEqual(decodeScene(encodeScene({ camera: { look: { az: 180, alt: 30 }, mode: 'space' } })).camera,
     { look: { az: 180, alt: 30 }, mode: 'space' });
+  const spaceCam = { look: 'jupiter', mode: 'space' as const, dist: 0.01234, orbit: { yaw: -70.5, pitch: 32 } };
+  assert.deepEqual(decodeScene(encodeScene({ camera: spaceCam })).camera, spaceCam);
+  assert.equal(encodeScene({ camera: spaceCam }), 'c=jupiter,,space,0.01234au,-70.5;32deg');
   assert.deepEqual(decodeScene(encodeScene({ time: { offsetDays: -2.5 } })).time, { offsetDays: -2.5 });
   assert.deepEqual(decodeScene('t=now').time, 'now');
   // Junk never throws and never produces half-valid values.

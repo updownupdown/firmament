@@ -14,7 +14,7 @@ import { SpaceRenderer } from './render/space.ts';
 import { Clock } from './sim/clock.ts';
 import { EventService, workerCompute } from './sim/events.ts';
 import { PLACES } from './sim/places.ts';
-import { type LayerFlags, type Scene, encodeScene, sceneJd } from './sim/scene.ts';
+import { type LayerFlags, type Scene, type SceneCamera, encodeScene, sceneJd } from './sim/scene.ts';
 import { type Store, browserStorage } from './sim/store.ts';
 import { type Site, type SkyObject, Universe } from './sim/universe.ts';
 
@@ -82,7 +82,7 @@ export class App {
     });
     this.renderer = new SkyRenderer(canvas, this.universe, 'data/milkyway.png');
     this.camera = new SkyCamera(this.renderer.projection);
-    this.space = new SpaceRenderer(this.renderer.gl, this.universe, this.renderer.stars);
+    this.space = new SpaceRenderer(this.renderer.gl, this.universe, this.renderer.stars, this.renderer.milkyWay);
     this.labels = new LabelLayer(labelRoot);
     this.events = new EventService(
       workerCompute(() => new Worker('events-worker.js', { type: 'module' })), browserStorage(),
@@ -316,14 +316,14 @@ export class App {
   }
 
   /** Switch between the sky from the ground and the solar system from outside. */
-  setMode(mode: ViewMode): void {
+  setMode(mode: ViewMode, target?: string): void {
     if (mode === this.mode) return;
     if (mode === 'space') void this.setPointing(false);
     this.mode = mode;
     if (mode === 'space') {
       // Lift off: start just above the Earth and pull back until the inner planets are in view.
       this.universe.update(this.clock.jdUT);
-      this.space.liftOff(this.selected ?? 'sun');
+      this.space.liftOff(target ?? this.selected ?? 'sun');
     }
     this.invalidate();
     this.emit('mode');
@@ -365,10 +365,14 @@ export class App {
     this.highlight = scene.highlight ?? [];
     if (scene.select !== undefined) this.select(scene.select);
     const cam = scene.camera;
-    if (cam?.mode) this.setMode(cam.mode);
+    const lookRef = typeof cam?.look === 'string' ? cam.look : undefined;
+    if (cam?.mode) this.setMode(cam.mode, lookRef);
     else if (cam && this.mode === 'space') this.setMode('sky');
     if (cam && this.mode === 'space') {
-      if (typeof cam.look === 'string') this.centre(cam.look, cam.fov);
+      if (cam.dist !== undefined) {
+        // A shared view opens exactly where it was left.
+        this.space.place(lookRef ?? this.space.camera.focus, cam.dist, cam.orbit && cam.orbit.yaw * DEG, cam.orbit && cam.orbit.pitch * DEG);
+      } else if (lookRef) this.centre(lookRef, cam.fov);
     } else if (cam) {
       const fov = cam.fov !== undefined ? cam.fov * DEG : undefined;
       if (typeof cam.look === 'string') {
@@ -392,12 +396,18 @@ export class App {
     const p = this.renderer.projection;
     return {
       time: { jd: this.clock.jdUT }, rate: this.clock.paused ? 0 : this.clock.rate, site: this.site,
-      camera: this.mode === 'space' ? { look: this.space.camera.focus, mode: 'space' } : this.selected && this.camera.track
+      camera: this.mode === 'space' ? this.spaceCamera() : this.selected && this.camera.track
         ? { look: this.selected, fov: p.fov / DEG, track: true }
         : { look: { az: p.az / DEG, alt: p.alt / DEG }, fov: p.fov / DEG },
       culture: this.universe.cultureId, bortle: this.store.data.settings.bortle,
       select: this.selected ?? undefined,
     };
+  }
+
+  private spaceCamera(): SceneCamera {
+    const c = this.space.camera;
+    const yaw = ((((c.yaw / DEG) % 360) + 540) % 360) - 180;
+    return { look: c.focus, mode: 'space', dist: c.dist, orbit: { yaw, pitch: c.pitch / DEG } };
   }
 
   shareUrl(): string {
@@ -423,7 +433,9 @@ export class App {
       const drift = (0.3 * this.renderer.projection.pixelAngle) / (7.3e-5 * Math.max(1, Math.abs(this.clock.rate)));
       // In space, planets only visibly move when time is running fast.
       const due = !this.clock.paused && this.sinceDraw >= (space ? (Math.abs(this.clock.rate) > 300 ? 0 : 1) : Math.min(drift, 1));
-      if (moved || due || this.renderer.dirty || this.renderer.resize()) this.draw();
+      // Resize first: a camera already moving on the first frame must not draw at the canvas's old size.
+      const resized = this.renderer.resize();
+      if (moved || due || resized || this.renderer.dirty) this.draw();
       if (now - this.lastSecond >= 1000) {
         this.lastSecond = now;
         this.emit('second');

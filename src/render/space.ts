@@ -4,15 +4,18 @@
 
 import { BODIES } from '../astro/bodies.ts';
 import { EPS_J2000 } from '../astro/frames.ts';
+import { GALILEAN, galileanMoons } from '../astro/galilean.ts';
 import { SMALL_BODIES } from '../astro/kepler.ts';
-import { AU_KM, DEG, type Mat3, type Vec3, add, apply, clamp, fromSpherical, normalize, scale, sub } from '../astro/math.ts';
+import { J2000 } from '../astro/time.ts';
+import { AU_KM, DEG, type Mat3, type Vec3, add, apply, clamp, cross, fromSpherical, normalize, scale, sub } from '../astro/math.ts';
 import type { LayerFlags } from '../sim/scene.ts';
 import type { Universe } from '../sim/universe.ts';
 import type { Controllable } from './camera.ts';
 import { Mesh, Program } from './gl.ts';
 import type { LabelItem } from './labels.ts';
 import {
-  ORBIT_FRAG, ORBIT_VERT, SPACE_BODY_FRAG, SPACE_BODY_VERT, SPACE_STAR_VERT, STAR_ATTRIBUTES, STAR_FRAG,
+  ORBIT_FRAG, ORBIT_VERT, SPACE_BODY_FRAG, SPACE_BODY_VERT, SPACE_MILKY_FRAG, SPACE_MILKY_VERT, SPACE_STAR_VERT,
+  STAR_ATTRIBUTES, STAR_FRAG,
 } from './shaders.ts';
 
 // The ecliptic frame expressed in J2000 equatorial coordinates: the camera's "up" is ecliptic north.
@@ -45,13 +48,15 @@ export class SpaceCamera implements Controllable {
   readonly fovY = 40 * DEG;
   held = false;
   reducedMotion = false;
+  /** The closest the user may zoom in on the focus, AU (just clear of its surface). */
+  floor = 0;
   /** What is left of the glide from the previous focus (AU, J2000). */
   offset: Vec3 = [0, 0, 0];
   /** J2000 → camera rotation (camera looks along −z). */
   view: Mat3 = [1, 0, 0, 0, 1, 0, 0, 0, 1];
   private velYaw = 0;
   private velPitch = 0;
-  private flight: { from: number; to: number; t: number; duration: number; glide?: Vec3 } | null = null;
+  private flight: { from: number; to: number; t: number; duration: number; glide?: Vec3; then?: number } | null = null;
 
   constructor() {
     this.update();
@@ -102,7 +107,7 @@ export class SpaceCamera implements Controllable {
 
   /** Ease the distance to a new value. */
   flyTo(dist: number, duration = 1.4): void {
-    const to = clamp(dist, MIN_DIST, MAX_DIST);
+    const to = clamp(dist, Math.max(MIN_DIST, this.floor), MAX_DIST);
     if (this.reducedMotion || duration <= 0) { this.dist = to; this.flight = null; return; }
     this.flight = { from: this.dist, to, t: 0, duration };
   }
@@ -117,7 +122,9 @@ export class SpaceCamera implements Controllable {
     if (this.reducedMotion) { this.dist = to; this.flight = null; return; }
     this.dist = from;
     this.offset = shift;
-    this.flight = { from, to, t: 0, duration, glide: shift };
+    // A far target cannot share the frame with the start: pull back until both fit, then close in.
+    const wide = Math.max(to, Math.hypot(...shift) * 1.3);
+    this.flight = { from, to: wide, t: 0, duration, glide: shift, then: wide > to * 1.01 ? to : undefined };
   }
 
   drag(dx: number, dy: number, dt: number): void {
@@ -137,7 +144,7 @@ export class SpaceCamera implements Controllable {
   zoom(factor: number): void {
     if (this.flight?.glide) this.offset = [0, 0, 0];
     this.flight = null;
-    this.dist = clamp(this.dist / factor, MIN_DIST, MAX_DIST);
+    this.dist = clamp(this.dist / factor, Math.max(MIN_DIST, Math.min(this.floor, this.dist)), MAX_DIST);
     this.update();
   }
 
@@ -166,7 +173,10 @@ export class SpaceCamera implements Controllable {
       const e = f.t < 0.5 ? 4 * f.t ** 3 : 1 - Math.pow(-2 * f.t + 2, 3) / 2;
       this.dist = Math.exp(Math.log(f.from) + (Math.log(f.to) - Math.log(f.from)) * e);
       if (f.glide) this.offset = f.t >= 1 ? [0, 0, 0] : scale(f.glide, 1 - (this.dist / f.to) ** 2);
-      if (f.t >= 1) this.flight = null;
+      if (f.t >= 1) {
+        this.flight = null;
+        if (f.then !== undefined) this.flyTo(f.then, 2);
+      }
       changed = true;
     }
     const left = Math.hypot(...this.offset);
@@ -223,6 +233,8 @@ interface SpaceBody {
   /** Orbits this body rather than the Sun. */
   parent?: string;
   pole?: Vec3;
+  /** Prime meridian angle at J2000 and its rate (radians, radians per day). */
+  spin?: { w0: number; rate: number };
   /** Eccentric orbits are sampled evenly in eccentric anomaly instead of time. */
   comet?: { q: number; e: number; tp: number };
 }
@@ -242,18 +254,33 @@ interface OrbitCache {
   points: Float64Array;
 }
 
+/** Surface kinds, matching the sky view's body shader. */
+const SPACE_KIND: Record<string, number> = { sun: 1, moon: 2, jupiter: 3, saturn: 4, mars: 5, earth: 7 };
+
+/** Sidereal periods of Io, Europa, Ganymede and Callisto, days. */
+const GALILEAN_PERIODS = [1.769138, 3.551181, 7.154553, 16.689018];
+const JUPITER_RADIUS_AU = BODIES.jupiter.radiusEq / AU_KM;
+
 function buildBodies(): SpaceBody[] {
   const list: SpaceBody[] = [];
-  const planet = (id: keyof typeof BODIES, minPx: number, kind = 0) => {
+  const planet = (id: keyof typeof BODIES, minPx: number) => {
     const b = BODIES[id];
     list.push({
-      id, name: b.name, radiusAU: b.radiusEq / AU_KM, color: b.color, kind, minPx, period: b.period ?? 0,
+      id, name: b.name, radiusAU: b.radiusEq / AU_KM, color: b.color, kind: SPACE_KIND[id] ?? 0, minPx, period: b.period ?? 0,
       parent: id === 'moon' ? 'earth' : undefined, pole: fromSpherical(b.poleRa, b.poleDec),
+      spin: id === 'moon' ? undefined : { w0: b.w0, rate: b.wRate },
     });
   };
-  planet('sun', 6, 1);
+  planet('sun', 6);
   planet('mercury', 3); planet('venus', 3.5); planet('earth', 3.5); planet('moon', 1.8); planet('mars', 3);
-  planet('jupiter', 4.5); planet('saturn', 4, 4); planet('uranus', 3.5); planet('neptune', 3.5); planet('pluto', 2);
+  planet('jupiter', 4.5); planet('saturn', 4); planet('uranus', 3.5); planet('neptune', 3.5); planet('pluto', 2);
+  const jupiterPole = fromSpherical(BODIES.jupiter.poleRa, BODIES.jupiter.poleDec);
+  GALILEAN.forEach((m, k) => {
+    list.push({
+      id: m.id, name: m.name, radiusAU: m.radiusKm / AU_KM, color: m.color, kind: 0, minPx: 1.5,
+      period: GALILEAN_PERIODS[k], parent: 'jupiter', pole: jupiterPole,
+    });
+  });
   for (const sb of SMALL_BODIES) {
     const { q, e, tp } = sb.elements;
     list.push({
@@ -280,6 +307,9 @@ export class SpaceRenderer {
   private readonly universe: Universe;
   private readonly starMesh: Mesh;
   private readonly starProgram: Program;
+  private readonly milkyProgram: Program;
+  private readonly milkyWay: WebGLTexture;
+  private readonly screen: Mesh;
   private readonly orbitProgram: Program;
   private readonly bodyProgram: Program;
   private readonly orbitMesh: Mesh;
@@ -287,10 +317,14 @@ export class SpaceRenderer {
   private readonly orbits = new Map<string, OrbitCache>();
   private readonly positions = new Map<string, Vec3>();
 
-  constructor(gl: WebGL2RenderingContext, universe: Universe, starMesh: Mesh) {
+  constructor(gl: WebGL2RenderingContext, universe: Universe, starMesh: Mesh, milkyWay: WebGLTexture) {
     this.gl = gl;
     this.universe = universe;
     this.starMesh = starMesh;
+    this.milkyWay = milkyWay;
+    this.milkyProgram = new Program(gl, SPACE_MILKY_VERT, SPACE_MILKY_FRAG, ['aCorner']);
+    this.screen = new Mesh(gl, 1, [], { quadSlot: 0 });
+    this.screen.set(new Float32Array([0]));
     this.starProgram = new Program(gl, SPACE_STAR_VERT, STAR_FRAG, STAR_ATTRIBUTES);
     this.orbitProgram = new Program(gl, ORBIT_VERT, ORBIT_FRAG, ['aPos']);
     this.bodyProgram = new Program(gl, SPACE_BODY_VERT, SPACE_BODY_FRAG, ['aCorner']);
@@ -307,27 +341,50 @@ export class SpaceRenderer {
   private updatePositions(): void {
     const eph = this.universe.eph, jd = this.universe.frame.jdTT;
     for (const b of this.bodies) {
+      if (b.parent === 'jupiter') continue;
       this.positions.set(b.id, b.id === 'earth' ? eph.earth(jd) : eph.helio(b.id, jd));
     }
+    const jupiter = this.positions.get('jupiter')!;
+    galileanAround(jd, jupiter, this.positions.get('earth')!).forEach((p, k) => this.positions.set(GALILEAN[k].id, p));
   }
 
-  /** Circle a different body, gliding from the current one. */
   /** Begin above the Earth and pull back to a view centred on `target`. */
   liftOff(target: string): void {
     this.updatePositions();
     const id = this.bodies.some((b) => b.id === target) ? target : 'sun';
     const cam = this.camera;
     cam.focus = id;
+    cam.floor = this.floorFor(id);
     const to = id === 'sun' ? 4.2 : Math.max(0.03, this.framingDistance(id) * 6);
     cam.liftOff(sub(this.positions.get('earth')!, this.positions.get(id)!), 3e-4, id === 'earth' ? 0.012 : to);
     cam.update();
   }
 
+  /** Circle a different body, gliding from the current one. */
   setFocus(id: string): void {
-    if (!this.bodies.some((b) => b.id === id)) return;
+    if (!this.bodies.some((b) => b.id === id) || id === this.camera.focus) return;
     if (!this.positions.size) this.updatePositions();
     const from = this.positions.get(this.camera.focus)!, to = this.positions.get(id)!;
     this.camera.setFocus(id, sub(from, to));
+    this.camera.floor = this.floorFor(id);
+    if (this.camera.dist < this.camera.floor) this.camera.flyTo(this.framingDistance(id));
+  }
+
+  /** Put the camera exactly here, with no flight: for shared links. Angles in radians. */
+  place(id: string, dist: number, yaw?: number, pitch?: number): void {
+    const cam = this.camera;
+    if (this.bodies.some((b) => b.id === id)) cam.focus = id;
+    cam.floor = this.floorFor(cam.focus);
+    cam.offset = [0, 0, 0];
+    cam.flyTo(dist, 0);
+    if (yaw !== undefined) cam.yaw = yaw;
+    if (pitch !== undefined) cam.pitch = pitch;
+    cam.update();
+  }
+
+  private floorFor(id: string): number {
+    const b = this.bodies.find((x) => x.id === id);
+    return b ? b.radiusAU * (b.kind === 4 ? 2.6 : b.kind === 1 ? 2 : 1.6) : 0;
   }
 
   /** A distance from which a body comfortably fills part of the view. */
@@ -357,6 +414,11 @@ export class SpaceRenderer {
         const p = eph.helio(b.id, tp + turn * b.period + (b.period * (E - e * Math.sin(E))) / (2 * Math.PI));
         points.set(p, k * 3);
       }
+    } else if (b.parent === 'jupiter') {
+      const k = GALILEAN.findIndex((m) => m.id === b.id);
+      // The moons' orbits are circles about Jupiter; hold Jupiter still while sampling.
+      const jupiter = eph.helio('jupiter', jd), earth = eph.earth(jd);
+      points = sampleOrbit((t) => sub(galileanAround(t, jupiter, earth)[k], jupiter), jd, b.period, 96);
     } else if (b.parent) {
       points = sampleOrbit((t) => eph.moonGeo(t), jd, b.period, 96);
     } else {
@@ -375,6 +437,14 @@ export class SpaceRenderer {
     gl.clearColor(0.012, 0.018, 0.035, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
     const fx = (2 * cam.focal) / cam.width, fy = (2 * cam.focal) / cam.height;
+
+    if (opts.layers.milkyWay) {
+      gl.blendFunc(gl.ONE, gl.ZERO);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.milkyWay);
+      this.milkyProgram.use().m3('uView', cam.view).v2('uF', fx, fy).i('uMilkyWay', 0).f('uGain', 1);
+      this.screen.drawQuads();
+    }
 
     // Stars, at infinity.
     gl.blendFunc(gl.ONE, gl.ONE);
@@ -430,6 +500,7 @@ export class SpaceRenderer {
     }
     drawn.sort((a, b) => b.depth - a.depth);
     const p = this.bodyProgram.use();
+    const days = this.universe.frame.jdTT - J2000;
     for (const d of drawn) {
       const extent = d.body.kind === 1 ? 5 : d.body.kind === 4 ? 2.6 : 1.4;
       const half = d.radiusPx * extent;
@@ -439,23 +510,41 @@ export class SpaceRenderer {
         .v2('uHalf', (half / cam.width) * 2, (half / cam.height) * 2)
         .v3('uColor', d.body.color).v3('uLight', d.id === 'sun' ? [0, 0, 1] : apply(cam.view, toSun))
         .v3('uPole', d.body.pole ? apply(cam.view, d.body.pole) : [0, 1, 0])
+        .v3('uPrime', apply(cam.view, this.primeMeridian(d.body, days)))
         .i('uKind', d.body.kind).f('uExtent', extent).f('uPixels', d.radiusPx * pixelRatio);
       this.quad.drawQuads();
     }
     this.drawn = drawn;
   }
 
+  /** Where a body's prime meridian points (J2000). The Moon keeps one face to the Earth. */
+  private primeMeridian(b: SpaceBody, days: number): Vec3 {
+    const pole = b.pole ?? [0, 0, 1];
+    if (b.spin) {
+      const node = normalize(cross([0, 0, 1], pole));
+      const w = b.spin.w0 + b.spin.rate * days;
+      return add(scale(node, Math.cos(w)), scale(cross(pole, node), Math.sin(w)));
+    }
+    const parent = b.parent ? this.positions.get(b.parent) : undefined;
+    const here = this.positions.get(b.id);
+    if (!parent || !here) return normalize(cross(pole, [1, 0, 0]));
+    const toParent = normalize(sub(parent, here));
+    return normalize(sub(toParent, scale(pole, toParent[0] * pole[0] + toParent[1] * pole[1] + toParent[2] * pole[2])));
+  }
+
   /** Names for what was drawn. */
   labels(selected: string | null): LabelItem[] {
     const items: LabelItem[] = [];
-    const earth = this.drawn.find((d) => d.id === 'earth');
+    const parentOf = new Map(this.bodies.filter((b) => b.parent).map((b) => [b.id, b.parent!]));
     for (const d of this.drawn) {
       // A body that fills the view needs no name tag.
       if (!d.onScreen || d.radiusPx > 110) continue;
       const sel = d.id === selected;
-      // The Moon gets its name once it has pulled clear of the Earth.
-      if (d.id === 'moon' && !sel && earth && Math.hypot(d.x - earth.x, d.y - earth.y) < 28) continue;
-      const rank = d.id === 'sun' ? 900 : d.id === this.camera.focus ? 880 : d.id === 'moon' || d.id === 'pluto' ? 500 : 800;
+      // A moon gets its name once it has pulled clear of its planet.
+      const parent = parentOf.get(d.id);
+      const host = parent ? this.drawn.find((x) => x.id === parent) : undefined;
+      if (host && !sel && Math.hypot(d.x - host.x, d.y - host.y) < host.radiusPx + 28) continue;
+      const rank = d.id === 'sun' ? 900 : d.id === this.camera.focus ? 880 : parent || d.id === 'pluto' ? 500 : 800;
       items.push({ key: `space:${d.id}`, text: d.name, x: d.x, y: d.y, kind: 'body', priority: rank - d.depth * 0.01, offset: d.radiusPx * (d.id === 'saturn' && d.radiusPx > 6 ? 2.3 : 1) + 5, selected: sel });
     }
     return items;
@@ -471,4 +560,11 @@ export class SpaceRenderer {
     }
     return best;
   }
+}
+
+/** Heliocentric positions (AU, J2000) of Io, Europa, Ganymede and Callisto. */
+export function galileanAround(jdTT: number, jupiter: Vec3, earth: Vec3): Vec3[] {
+  const toEarth = sub(earth, jupiter);
+  const dist = Math.hypot(toEarth[0], toEarth[1], toEarth[2]);
+  return galileanMoons(jdTT, toEarth, dist).map((o) => add(jupiter, scale(o, JUPITER_RADIUS_AU)));
 }

@@ -57,3 +57,35 @@ test('an orbit trail ends on the body', () => {
   assert.ok(Math.hypot(pts[180] - here[0], pts[181] - here[1]) < 1e-12);
   assert.ok(Math.hypot(pts[0] - here[0], pts[1] - here[1]) < 1e-9);
 });
+
+test('the Galilean moons circle Jupiter at their true distances', async () => {
+  const { galileanAround } = await import('./space.ts');
+  const jupiter: Vec3 = [-5, 1, 0.4], earth: Vec3 = [0.2, 0.9, 0.4];
+  const AU = 149597870.7;
+  // Semi-major axes, km (Io, Europa, Ganymede, Callisto).
+  const expected = [421700, 671034, 1070412, 1882709];
+  const moons = galileanAround(2461000.5, jupiter, earth);
+  moons.forEach((m, k) => {
+    const km = Math.hypot(m[0] - jupiter[0], m[1] - jupiter[1], m[2] - jupiter[2]) * AU;
+    assert.ok(Math.abs(km / expected[k] - 1) < 0.01, `moon ${k}: ${km} km`);
+  });
+  // Half an orbit later Io is on the far side of Jupiter.
+  const later = galileanAround(2461000.5 + 1.769138 / 2, jupiter, earth)[0];
+  const a = moons[0].map((x, i) => x - jupiter[i]), b = later.map((x, i) => x - jupiter[i]);
+  const cos = (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) / (Math.hypot(...a) * Math.hypot(...b));
+  assert.ok(cos < -0.99, `cos ${cos}`);
+});
+
+test('lifting off toward a far body keeps the start centred, then closes in on the target', () => {
+  const cam = new SpaceCamera();
+  cam.width = 800; cam.height = 600;
+  const shift: Vec3 = [4.3, -2.7, -1.2];   // the Earth, seen from Jupiter
+  cam.liftOff(shift, 3e-4, 0.03);
+  cam.tick(0.05);
+  // The Earth (at `shift` from the focus) is still in the middle of the view.
+  const s = cam.projectCamera(cam.toCamera(shift))!;
+  assert.ok(Math.hypot(s.x - 400, s.y - 300) < 1, `${s.x}, ${s.y}`);
+  for (let i = 0; i < 200; i++) cam.tick(0.05);
+  assert.ok(Math.abs(cam.dist - 0.03) < 1e-9, `${cam.dist}`);
+  assert.deepEqual(cam.offset, [0, 0, 0]);
+});

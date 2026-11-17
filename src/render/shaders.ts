@@ -354,25 +354,8 @@ void main() {
   gl_Position = vec4(vNdc, 0.0, 1.0);
 }`;
 
-export const BODY_FRAG = HEADER + UNPROJECT + SKY + `
-// Kinds: 0 plain, 1 Sun, 2 Moon, 3 Jupiter, 4 Saturn, 5 Mars, 6 glare only, 7 Earth, 8 comet coma, 9 corona
-uniform int uKind;
-uniform float uExtent;      // quad half-size in units of the body's radius
-uniform float uRadiusPx;    // body radius in device pixels
-uniform vec3 uSun;          // direction to the Sun in the disc's frame (x right, y up, z toward the viewer)
-uniform vec3 uPole;         // north pole in the same frame
-uniform vec3 uPrime;        // direction of the prime meridian (on the equator) in the same frame
-uniform vec3 uColor;
-uniform float uDim;         // extinction near the horizon, 0..1
-uniform float uEarthshine;
-uniform float uGlare;       // strength of the glare sprite
-uniform float uFlatten;     // polar flattening
-uniform vec3 uShadow;       // Earth's shadow on the Moon: centre (xy, body radii) and umbra radius (0 = none)
-uniform vec2 uShadowEdge;   // penumbra radius (body radii), and how much the eye has adapted to the umbra (0..1)
-in vec2 vLocal;
-in vec2 vNdc;
-out vec4 outColor;
-
+/** Value noise and the Moon's face, shared by both views' body shaders. */
+const SURFACE = `
 float vnoise(vec3 p) {
   vec3 i = floor(p), f = fract(p);
   f = f * f * (3.0 - 2.0 * f);
@@ -421,6 +404,26 @@ float moonAlbedo(vec3 b) {
   albedo += 0.08 * spot(b, -47.0, 24.0, 1.6);    // Aristarchus
   return albedo;
 }
+`;
+
+export const BODY_FRAG = HEADER + UNPROJECT + SKY + SURFACE + `
+// Kinds: 0 plain, 1 Sun, 2 Moon, 3 Jupiter, 4 Saturn, 5 Mars, 6 glare only, 7 Earth, 8 comet coma, 9 corona
+uniform int uKind;
+uniform float uExtent;      // quad half-size in units of the body's radius
+uniform float uRadiusPx;    // body radius in device pixels
+uniform vec3 uSun;          // direction to the Sun in the disc's frame (x right, y up, z toward the viewer)
+uniform vec3 uPole;         // north pole in the same frame
+uniform vec3 uPrime;        // direction of the prime meridian (on the equator) in the same frame
+uniform vec3 uColor;
+uniform float uDim;         // extinction near the horizon, 0..1
+uniform float uEarthshine;
+uniform float uGlare;       // strength of the glare sprite
+uniform float uFlatten;     // polar flattening
+uniform vec3 uShadow;       // Earth's shadow on the Moon: centre (xy, body radii) and umbra radius (0 = none)
+uniform vec2 uShadowEdge;   // penumbra radius (body radii), and how much the eye has adapted to the umbra (0..1)
+in vec2 vLocal;
+in vec2 vNdc;
+out vec4 outColor;
 
 void main() {
   vec2 p = vLocal * uExtent;            // in body radii
@@ -637,15 +640,45 @@ void main() {
   gl_Position = vec4(uCentre + aCorner * uHalf, 0.0, 1.0);
 }`;
 
-export const SPACE_BODY_FRAG = HEADER + `
+export const SPACE_BODY_FRAG = HEADER + SURFACE + `
 in vec2 vUv;
 uniform vec3 uColor;
 uniform vec3 uLight;    // camera-space direction to the Sun
-uniform vec3 uPole;     // camera-space north pole (for rings)
-uniform int uKind;      // 0 lit sphere, 1 Sun, 4 ringed
+uniform vec3 uPole;     // camera-space north pole
+uniform vec3 uPrime;    // camera-space direction of the prime meridian, on the equator
+// Kinds as in the sky view: 0 plain, 1 Sun, 2 Moon, 3 Jupiter, 4 Saturn, 5 Mars, 7 Earth
+uniform int uKind;
 uniform float uExtent;  // quad half-size in body radii
 uniform float uPixels;  // body radius in device pixels
 out vec4 outColor;
+
+vec3 surfaceAt(vec3 b, float lat) {
+  if (uKind == 2) return uColor * moonAlbedo(b);
+  if (uKind == 3) {
+    float bands = 0.5 + 0.5 * sin(lat * 13.0 + 0.6 * sin(lat * 7.0));
+    float fine = fbm(vec3(b.xy * 2.0, b.z * 18.0));
+    vec3 c = mix(vec3(0.62, 0.44, 0.30), vec3(0.93, 0.88, 0.78), smoothstep(0.25, 0.75, bands * 0.75 + fine * 0.35));
+    // The Great Red Spot, at about 22 degrees south.
+    float lon = atan(b.y, b.x);
+    float grs = 1.0 - smoothstep(0.6, 1.0, length(vec2((lon - 0.9) / 0.20, (lat + 0.39) / 0.09)));
+    c = mix(c, vec3(0.78, 0.42, 0.28), grs * 0.8);
+    return mix(c, vec3(0.55, 0.52, 0.50), smoothstep(1.05, 1.4, abs(lat)));
+  }
+  if (uKind == 4) return mix(vec3(0.80, 0.70, 0.50), vec3(0.94, 0.87, 0.68), 0.5 + 0.5 * sin(lat * 10.0));
+  if (uKind == 5) {
+    float f = fbm(b * 2.6 + 3.0);
+    vec3 c = mix(vec3(0.86, 0.50, 0.30), vec3(0.50, 0.27, 0.18), smoothstep(0.45, 0.68, f));
+    return mix(c, vec3(0.96, 0.95, 0.93), smoothstep(1.28, 1.40, abs(lat)));
+  }
+  if (uKind == 7) {
+    float land = smoothstep(0.50, 0.56, fbm(b * 2.2 + 7.0));
+    vec3 c = mix(vec3(0.07, 0.20, 0.45), vec3(0.22, 0.36, 0.16), land);
+    c = mix(c, vec3(0.95), smoothstep(1.15, 1.35, abs(lat)));
+    return mix(c, vec3(1.0), smoothstep(0.52, 0.75, fbm(b * 3.5 + 1.0)) * 0.8);
+  }
+  return uColor;
+}
+
 void main() {
   vec2 p = vUv * uExtent;
   float r = length(p);
@@ -653,13 +686,24 @@ void main() {
   float disc = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, r);
   if (uKind == 1) {
     float glow = exp(-max(r - 1.0, 0.0) * 1.3) * 0.55 * (1.0 - smoothstep(uExtent * 0.7, uExtent, r));
-    vec3 c = uColor * disc + vec3(1.0, 0.82, 0.55) * glow * (1.0 - disc);
+    float mu = sqrt(max(0.0, 1.0 - r * r));
+    vec3 face = mix(vec3(1.0, 0.72, 0.42), vec3(1.0, 0.98, 0.94), 0.42 + 0.58 * pow(mu, 0.55)) * uColor;
+    vec3 c = face * disc + vec3(1.0, 0.82, 0.55) * glow * (1.0 - disc);
     outColor = vec4(c, max(disc, glow));
     return;
   }
   vec3 n = vec3(p, sqrt(max(0.0, 1.0 - r * r)));
   float lit = clamp(dot(n, uLight), 0.0, 1.0);
-  vec3 c = uColor * (0.035 + 0.965 * pow(lit, 0.75)) * disc;
+  vec3 surface = uColor;
+  // Surface detail only once the disc is big enough to show it.
+  if (uPixels > 6.0 && disc > 0.0) {
+    vec3 east = cross(uPole, uPrime);
+    vec3 b = vec3(dot(n, uPrime), dot(n, east), dot(n, uPole));
+    float lat = asin(clamp(b.z, -1.0, 1.0));
+    surface = mix(uColor, surfaceAt(b, lat), smoothstep(6.0, 18.0, uPixels));
+  }
+  float shade = uKind == 2 ? smoothstep(-0.02, 0.10, lit) * (0.55 + 0.45 * pow(lit, 0.6)) : pow(lit, 0.75);
+  vec3 c = surface * (0.035 + 0.965 * shade) * disc;
   float a = disc;
   if (uKind == 4 && abs(uPole.z) > 0.002) {
     // Where the line of sight through this pixel crosses the ring plane.
@@ -669,10 +713,43 @@ void main() {
     float ring = smoothstep(1.24 - w, 1.24 + w, rr) * (1.0 - smoothstep(2.27 - w, 2.27 + w, rr));
     ring *= 1.0 - 0.75 * smoothstep(1.95 - w, 1.95, rr) * (1.0 - smoothstep(2.03, 2.03 + w, rr));
     ring *= 0.55 + 0.45 * smoothstep(1.5, 1.6, rr);
+    // The globe's shadow falls on the rings behind it.
+    vec3 q = vec3(p, pz);
+    float along = dot(q, uLight);
+    float shadow = along < 0.0 ? smoothstep(0.95, 1.05, length(q - uLight * along)) : 1.0;
     float front = max(step(0.0, pz), 1.0 - disc);
     float ra = ring * front * 0.9;
-    c = c * (1.0 - ra) + vec3(0.86, 0.78, 0.62) * 0.9 * ra;
+    c = c * (1.0 - ra) + vec3(0.86, 0.78, 0.62) * 0.9 * (0.15 + 0.85 * shadow) * ra;
     a = a + ra * (1.0 - a);
   }
   outColor = vec4(c, a);
+}`;
+
+/** The Milky Way behind Space view: a full-screen pass over the same equirectangular map. */
+export const SPACE_MILKY_VERT = HEADER + `
+layout(location = 0) in vec2 aCorner;
+out vec2 vNdc;
+void main() {
+  vNdc = aCorner;
+  gl_Position = vec4(aCorner, 0.0, 1.0);
+}`;
+
+export const SPACE_MILKY_FRAG = HEADER + `
+in vec2 vNdc;
+uniform mat3 uView;     // J2000 → camera
+uniform vec2 uF;
+uniform sampler2D uMilkyWay;
+uniform float uGain;
+out vec4 outColor;
+void main() {
+  vec3 e = normalize(transpose(uView) * vec3(vNdc / uF, -1.0));
+  float ra = atan(e.y, e.x);
+  float dec = asin(clamp(e.z, -1.0, 1.0));
+  vec2 uv = vec2(ra / (2.0 * PI), 0.5 - dec / PI);
+  vec2 uvAlt = vec2(fract(uv.x + 0.5) - 0.5, uv.y);
+  vec2 dx = dFdx(uvAlt), dy = dFdy(uvAlt);
+  if (abs(uvAlt.x) > 0.25) { dx = dFdx(vec2(fract(uv.x), uv.y)); dy = dFdy(vec2(fract(uv.x), uv.y)); }
+  float mw = textureGrad(uMilkyWay, uv, dx, dy).r;
+  vec3 c = vec3(0.012, 0.018, 0.035) + vec3(0.62, 0.70, 0.90) * pow(mw, 1.3) * 0.30 * uGain;
+  outColor = vec4(c, 1.0);
 }`;

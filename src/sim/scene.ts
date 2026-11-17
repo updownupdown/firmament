@@ -59,6 +59,10 @@ export interface SceneCamera {
   mode?: 'sky' | 'space';
   /** Keep the camera on `look` as the sky turns. */
   track?: boolean;
+  /** Space view: distance from the body being circled, AU. */
+  dist?: number;
+  /** Space view: angle around the ecliptic pole and height above the ecliptic plane, degrees. */
+  orbit?: { yaw: number; pitch: number };
 }
 
 export interface Scene {
@@ -83,6 +87,7 @@ export interface Scene {
 //   r=3600            rate
 //   s=43.653,-79.383,76,America/Toronto,Toronto
 //   c=jupiter,12      camera: look target (or az;alt), fov, then optional flags (space, track)
+//                     and, in Space view, distance and direction: c=jupiter,,space,0.02au,-70;32deg
 //   l=1101…           layer flags in LAYER_ORDER ('-' leaves a layer untouched)
 //   k=chinese         sky culture
 //   b=4               Bortle class
@@ -113,6 +118,8 @@ export function encodeScene(scene: Scene): string {
     const fields = [look, c.fov === undefined ? '' : String(round(c.fov, 2))];
     if (c.mode === 'space') fields.push('space');
     if (c.track) fields.push('track');
+    if (c.dist !== undefined) fields.push(`${Number(c.dist.toPrecision(4))}au`);
+    if (c.orbit) fields.push(`${round(c.orbit.yaw, 1)};${round(c.orbit.pitch, 1)}deg`);
     parts.push(`c=${fields.join(',')}`);
   }
   if (scene.layers) {
@@ -177,6 +184,15 @@ export function decodeScene(hash: string): Scene {
         if (fov !== undefined && fov > 0) cam.fov = fov;
         if (f.includes('space')) cam.mode = 'space';
         if (f.includes('track')) cam.track = true;
+        for (const field of f.slice(2)) {
+          if (field.endsWith('au')) {
+            const d = finite(field.slice(0, -2));
+            if (d !== undefined && d > 0) cam.dist = d;
+          } else if (field.endsWith('deg')) {
+            const [y, p] = field.slice(0, -3).split(';').map(finite);
+            if (y !== undefined && p !== undefined) cam.orbit = { yaw: y, pitch: p };
+          }
+        }
         scene.camera = cam;
         break;
       }

@@ -10,12 +10,28 @@ export type Task =
   | { kind: 'find'; refs: string[]; prompt: string; hint?: string }
   | { kind: 'choice'; prompt: string; options: string[]; answer: number; explain?: string }
   /** Type a number. `answer` may be read off the simulated sky at the moment of checking. */
-  | { kind: 'number'; prompt: string; answer: number | ((u: Universe) => number); tolerance: number; unit: string; hint?: string; explain?: string };
+  | { kind: 'number'; prompt: string; answer: number | ((u: Universe) => number); tolerance: number; unit: string; hint?: string; explain?: string }
+  /**
+   * Do something on the step's diagram. The diagram measures how far off the
+   * attempt is (in its own units: AU for a tap, degrees for a launch date) and
+   * submits that; within `tolerance` counts.
+   */
+  | { kind: 'plot'; prompt: string; tolerance: number; hint?: string; explain?: string };
+
+/** A diagram drawn in the journey card, worked out from the ephemeris (see orbits.ts). */
+export type Plot =
+  /** Two sightings of Mars one Martian year apart, and the lines of sight from the Earth. */
+  | { kind: 'triangulate'; jd: number }
+  /** Many such fixes through one Martian year, tracing out Mars's orbit. */
+  | { kind: 'mars-orbit'; jd0: number; count: number }
+  /** A Hohmann transfer to Mars with a launch-date slider (`from`…`to`, starting at `start`). */
+  | { kind: 'transfer'; from: number; to: number; start: number };
 
 export interface Step {
   title: string;
   text: string;
   scene?: Scene;
+  plot?: Plot;
   task?: Task;
 }
 
@@ -41,6 +57,11 @@ export function checkTask(task: Task, value: string | number, u: Universe): Verd
   if (task.kind === 'choice') {
     const ok = value === task.answer;
     return { ok, message: ok ? task.explain ?? 'Right.' : 'Not quite. Try another.' };
+  }
+  if (task.kind === 'plot') {
+    const miss = Number(value);
+    const ok = Number.isFinite(miss) && Math.abs(miss) <= task.tolerance;
+    return { ok, message: ok ? task.explain ?? 'That is it.' : task.hint ?? 'Not quite. Try again.' };
   }
   const x = Number(value);
   if (typeof value === 'string' && value.trim() === '' || !Number.isFinite(x)) return { ok: false, message: 'Enter a number.' };

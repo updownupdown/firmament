@@ -5,6 +5,7 @@ import { JOURNEYS, findJourney } from '../journeys/content.ts';
 import { JourneyRun, type Verdict } from '../journeys/engine.ts';
 import type { Scene } from '../sim/scene.ts';
 import { h, fill, icon, iconButton } from './dom.ts';
+import { type PlotView, plotView } from './plot.ts';
 import type { Panel, Shell } from './shell.ts';
 
 export function journeysPanel(shell: Shell): Panel {
@@ -42,13 +43,15 @@ export function journeyPlayer(shell: Shell): JourneyPlayer {
   const title = h('h2', { class: 'journey-title', tabindex: '-1' });
   const text = h('p', { class: 'journey-text' });
   const task = h('div', { class: 'journey-task' });
+  const figure = h('div', { class: 'journey-figure' });
+  let plot: PlotView | null = null;
   const feedback = h('p', { class: 'journey-feedback', role: 'status', 'aria-live': 'polite' });
   const back = h('button', { class: 'pill-button', type: 'button', onclick: () => move(-1) }, 'Back');
   const next = h('button', { class: 'pill-button primary', type: 'button', onclick: () => move(1) }, 'Next');
   const el = h('section', { class: 'journey-card glass chrome', hidden: true, 'aria-label': 'Journey' },
     h('header', { class: 'card-header' }, h('div', { class: 'card-heading' }, progress, title),
       iconButton('close', 'Leave this journey', () => stop(false))),
-    text, task, feedback, h('div', { class: 'journey-nav' }, back, next));
+    text, figure, task, feedback, h('div', { class: 'journey-nav' }, back, next));
 
   const save = (done: boolean) => {
     if (!run) return;
@@ -63,7 +66,11 @@ export function journeyPlayer(shell: Shell): JourneyPlayer {
     run = null;
     el.hidden = true;
     delete document.documentElement.dataset.journey;
+    delete document.documentElement.dataset.plot;
+    fill(figure);
+    plot = null;
     app.select(null);
+    if (app.mode === 'space') app.setMode('sky');
     if (home) app.apply({ ...home, highlight: [] });
     home = null;
     if (finished) shell.toast(`You finished “${j.title}”.`);
@@ -79,7 +86,7 @@ export function journeyPlayer(shell: Shell): JourneyPlayer {
   const answer = (value: string | number) => {
     if (!run) return;
     verdict = run.answer(value, app.universe);
-    if (verdict.ok) renderTask();
+    if (verdict.ok) { renderTask(); plot?.reveal(); }
     showVerdict();
   };
 
@@ -94,6 +101,8 @@ export function journeyPlayer(shell: Shell): JourneyPlayer {
         class: `pill-button option${run!.solved && i === t.answer ? ' correct' : ''}`, type: 'button', disabled: run!.solved,
         onclick: () => answer(i),
       }, label))));
+    } else if (t.kind === 'plot') {
+      fill(task, prompt);
     } else {
       const input = h('input', { class: 'field', type: 'number', step: 'any', inputmode: 'decimal', 'aria-label': t.prompt, disabled: run.solved });
       const form = h('form', { class: 'journey-number', onsubmit: (e: Event) => { e.preventDefault(); answer(input.value); } },
@@ -114,6 +123,18 @@ export function journeyPlayer(shell: Shell): JourneyPlayer {
     if (applyScene && step.scene) {
       // A step that does not mention a selection should not inherit the last one's highlight.
       app.apply({ highlight: [], ...step.scene });
+    }
+    if (step.plot) {
+      plot = plotView(app, step.plot);
+      // A diagram that only illustrates (no plot task) shows its answer from the start.
+      if (step.task?.kind !== 'plot') plot.reveal();
+      plot.onAttempt = (miss) => { if (run && !run.solved && run.step.task?.kind === 'plot') answer(miss); };
+      fill(figure, plot.el);
+      document.documentElement.dataset.plot = '';
+    } else {
+      plot = null;
+      fill(figure);
+      delete document.documentElement.dataset.plot;
     }
     renderTask();
     showVerdict();

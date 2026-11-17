@@ -166,9 +166,19 @@ chosen by the owner on 2026-11-16)
   Every scene and answer is asserted against the simulation in the tests.
 - The player is a card over the sky. It saves progress in the store, and puts
   the player's own place, layers and culture back when a journey ends.
-- Planned but not written: Kepler's Mars (triangulating the orbit) and mission
-  planning (a Hohmann transfer checked with `lambert`). Both need a custom
-  canvas task, which the engine does not have yet.
+- Diagrams: a `Step` can carry a `plot` (`triangulate`, `mars-orbit`,
+  `transfer`), drawn on a 2D canvas in the card by `src/ui/plot.ts` from the
+  geometry in `src/journeys/orbits.ts` (ecliptic plane from above, AU). A
+  `plot` task is answered by the diagram itself: it reports a miss (AU from a
+  tap, or degrees for a launch date) and within `tolerance` counts. Plot
+  colours are the `--plot-*` tokens.
+- Two more journeys use them. Kepler's Mars (Prague, 1602): two sightings one
+  Martian year apart cross at Mars (`marsFix`); twelve of them trace the orbit
+  (`marsTrack`), 1.38 to 1.66 AU. Plan a trip to Mars: slide the launch date
+  until a Hohmann transfer (`hohmann`) meets Mars; `nextWindow` finds
+  4 November 2026, arriving 27 July 2027, and the tests check with `lambert`
+  (`departureDv`) that a real trajectory costs least near that date
+  (about 3.1 km/s).
 
 **Offline**: `public/sw.js` precaches every file of a build, serves `data/`
 cache-first and everything else network-first, and is registered from
@@ -205,7 +215,6 @@ eclipses were already drawn (the Moon covers the Sun; corona in totality).
 
 ### 1. Remaining work
 - Try phone pointing on a real iPhone and Android phone.
-- Journeys with custom interactives: Kepler's Mars and mission planning.
 - The Tonight guide character is still unnamed; ask the owner.
 
 ### 2. Launch

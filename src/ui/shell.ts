@@ -1,14 +1,15 @@
 // The app shell: the living sky behind, a top bar, the time bar, the object
-// card, the dock, and one sheet at a time for everything else.
+// card, the dock of four places (Sky, Space, Tonight, Learn), and one sheet at
+// a time for everything else.
 
-import type { App, Section } from '../app.ts';
+import type { App } from '../app.ts';
 import { Pointing } from '../render/pointing.ts';
 import { jdNow } from '../astro/time.ts';
 import { calendarNote, formatDate, formatDistanceAU, formatTime, localTime } from '../sim/format.ts';
 import { lightNote } from '../sim/lore.ts';
 import { h, fill, icon, iconButton, lumenGlyph, swipeToDismiss } from './dom.ts';
 import { blurb, detailFacts, quickFacts, riseSetFacts, whereNow } from './facts.ts';
-import { type JourneyPlayer, journeyPlayer, journeysPanel } from './journeys.ts';
+import { type JourneyPlayer, journeyPlayer, learnPanel } from './journeys.ts';
 import { measureTool } from './measure.ts';
 import { placeTimePanel, searchPanel, settingsPanel } from './panels.ts';
 import { tonightPanel } from './tonight.ts';
@@ -16,7 +17,10 @@ import { type StarLabPanel, starLabPanel } from './starlab.ts';
 import { type StarSeed, starSeed } from '../sim/starlink.ts';
 import { timeBar } from './timebar.ts';
 
-export type SheetId = 'search' | 'settings' | 'place' | 'tonight' | 'journeys' | 'stars' | null;
+/** The four places in the dock. */
+type Place = 'sky' | 'space' | 'tonight' | 'learn';
+
+export type SheetId = 'search' | 'settings' | 'place' | 'tonight' | 'learn' | 'stars' | null;
 
 export interface Panel {
   title: string;
@@ -49,7 +53,7 @@ export class Shell {
       settings: settingsPanel(this),
       place: placeTimePanel(this),
       tonight: tonightPanel(this),
-      journeys: journeysPanel(this),
+      learn: learnPanel(this),
       stars: (this.starLab = starLabPanel(this)),
     };
     this.sheetTitle = h('h2', { class: 'sheet-title', tabindex: '-1' });
@@ -121,7 +125,7 @@ export class Shell {
     panel.refresh();
     this.sheetBody.scrollTop = 0;
     (panel.focus ?? this.sheetTitle).focus({ preventScroll: true });
-    this.app.setSection(id === 'tonight' || id === 'journeys' ? id : 'sky');
+    this.app.setSection(id === 'tonight' || id === 'learn' ? id : 'sky');
     this.syncDock();
   }
 
@@ -193,18 +197,7 @@ export class Shell {
       if (now - lastText > 120) { lastText = now; update(); }
     });
     update();
-    const mode = iconButton('orbit', '', () => app.setMode(app.mode === 'space' ? 'sky' : 'space'), 'glass');
-    const syncMode = () => {
-      const space = app.mode === 'space';
-      const label = space ? 'Land: back to the sky from the ground' : 'Lift off: see the solar system from space';
-      fill(mode, icon(space ? 'horizon' : 'orbit'));
-      mode.setAttribute('aria-label', label);
-      mode.title = label;
-      document.documentElement.dataset.mode = app.mode;
-    };
-    app.on('mode', syncMode);
-    syncMode();
-    return h('div', { class: 'top-bar chrome' }, chip, mode,
+    return h('div', { class: 'top-bar chrome' }, chip,
       iconButton('search', 'Search the sky', () => this.openSheet('search'), 'glass'),
       iconButton('sliders', 'View and settings', () => this.openSheet('settings'), 'glass'));
   }
@@ -377,26 +370,34 @@ export class Shell {
 
   // ---------------------------------------------------------------- dock
 
-  private dockButtons: Partial<Record<Section, HTMLButtonElement>> = {};
+  private dockButtons: Partial<Record<Place, HTMLButtonElement>> = {};
 
+  /** The four places: the sky from the ground, space, tonight's guide, and Learn (journeys and labs). */
   private dock(): HTMLElement {
-    const make = (section: Section, label: string, onClick: () => void) => {
-      const b = h('button', { class: 'dock-item', type: 'button', onclick: onClick }, label);
-      this.dockButtons[section] = b;
+    const app = this.app;
+    const make = (place: Place, label: string, glyph: string, onClick: () => void) => {
+      const b = h('button', { class: 'dock-item', type: 'button', onclick: onClick }, icon(glyph, 20), h('span', null, label));
+      this.dockButtons[place] = b;
       return b;
     };
-    const el = h('nav', { class: 'dock glass chrome', 'aria-label': 'Sections' },
-      make('sky', 'Sky', () => this.closeSheet()),
-      make('tonight', 'Tonight', () => this.openSheet('tonight')),
-      make('journeys', 'Journeys', () => this.openSheet('journeys')));
+    const el = h('nav', { class: 'dock glass chrome', 'aria-label': 'Places' },
+      make('sky', 'Sky', 'sky', () => { this.closeSheet(); app.setMode('sky'); }),
+      make('space', 'Space', 'orbit', () => { this.closeSheet(); app.setMode('space'); }),
+      make('tonight', 'Tonight', 'moon', () => this.openSheet('tonight')),
+      make('learn', 'Learn', 'book', () => this.openSheet('learn')));
+    app.on('mode', () => {
+      document.documentElement.dataset.mode = app.mode;
+      this.syncDock();
+    });
+    document.documentElement.dataset.mode = app.mode;
     this.syncDock();
     return el;
   }
 
   private syncDock(): void {
-    const current: Section = this.sheet === 'tonight' || this.sheet === 'journeys' ? this.sheet : 'sky';
-    for (const [section, button] of Object.entries(this.dockButtons)) {
-      if (section === current) button.setAttribute('aria-current', 'page');
+    const current = this.sheet === 'tonight' || this.sheet === 'learn' ? this.sheet : this.app.mode === 'space' ? 'space' : 'sky';
+    for (const [place, button] of Object.entries(this.dockButtons)) {
+      if (place === current) button.setAttribute('aria-current', 'page');
       else button.removeAttribute('aria-current');
     }
   }

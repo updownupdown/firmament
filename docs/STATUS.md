@@ -9,7 +9,7 @@ the build stands against that plan and what to do next, in order.
 - esbuild build (`scripts/build.mjs`), `tsc --noEmit` typecheck, `node --test`.
 - GitHub Actions (`.github/workflows/deploy.yml`) tests, builds and deploys
   `main` to https://updownupdown.github.io/firmament/. This is confirmed working.
-- The live site runs the app: Sky view, Tonight and Journeys.
+- The live site runs the app: Sky, Space, Tonight and Learn (journeys and labs).
 
 **Data** (`scripts/build_data.py` → `public/data/`, committed)
 - `stars-bright.bin` (8,920 stars ≤ mag 6.5) and `stars-faint.bin` (101k stars to
@@ -137,10 +137,12 @@ chosen by the owner on 2026-11-16)
 - `shell.ts`: top chip (place, date, time, accuracy note), search and view
   buttons, time bar (pause, slower/faster along `RATE_STEPS` in both directions,
   a spring-back jog slider, Now), object card (quick facts, centre,
-  zoom, details with rise/transit/set), selection reticle, the lift-off / land
-  button, dock (Sky, Tonight,
-  Journeys) and one sheet at a time: full screen above the dock on phones, a left
-  column from 900 px. `Esc` closes, `/` searches, space pauses.
+  zoom, details with rise/transit/set), selection reticle, the dock of four
+  places (Sky and Space switch the view mode; Tonight and Learn open sheets) and
+  one sheet at a time: full screen above the dock on phones, a left column from
+  900 px. During a journey on a phone the journey card sits at the bottom in
+  place of the dock and time bar (diagram steps keep the time bar), and the
+  object card moves under the top bar. `Esc` closes, `/` searches, space pauses.
 - `panels.ts`: search; view settings (layer toggles, sky culture, Bortle slider,
   night vision, 12-hour clock, reduced motion, share link, Still mode, credits
   rendered from `ATTRIBUTION.md`); place and time (city search, geolocation,
@@ -338,7 +340,7 @@ Catalogue stars link in through "Life story" on a star's card (and the Sun's):
 a published birth mass from `KNOWN_STARS` where there is one, else `fitStar`
 finds the mass and age whose track passes nearest the star's luminosity
 (from magnitude, distance and a bolometric correction) and temperature (from
-its spectral type). The lab also opens from the top of the Journeys list.
+its spectral type). The lab also opens from Labs in the Learn sheet.
 On James's request (2026-11-17) the lab starts with a list of star types
 (`STAR_TYPES`, red dwarf to a first star), each with its lifetime and fate;
 picking one plays its life from birth. Mass and metals sit in a folded
@@ -386,3 +388,13 @@ for first-time visitors.
   and merge it once CI is green.
 - Use Playwright (if available) to screenshot the built site for visual
   checks before merging.
+
+## Layout plan (chosen 2026-11-17)
+
+James picked option C from the layout study
+(https://claude.ai/artifact/MkgFRjfXzB3usHW9VqBw3D), built in two steps.
+Step 1 (done): the four-place dock (Sky, Space, Tonight, Learn), the Learn
+sheet (Continue, Labs, Journeys by theme) and the journey card at the bottom on
+phones. Step 2: fold the time bar into the top chip (play/pause inside it, tap
+the time for speed and date), so the bottom holds one bar that is the dock, the
+object card when something is selected, or the journey step.

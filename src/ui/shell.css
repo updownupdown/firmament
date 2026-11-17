@@ -108,7 +108,8 @@ input[type='range']::-moz-range-thumb { width: 20px; height: 20px; border-radius
 }
 .dock-item {
   background: transparent; border: none; border-radius: var(--radius-pill);
-  color: var(--color-text-muted); font-size: var(--text-sm); font-weight: var(--weight-medium);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-width: 0;
+  color: var(--color-text-muted); font-size: var(--text-xs); font-weight: var(--weight-medium); line-height: 1.1;
   transition: background var(--duration) var(--ease), color var(--duration) var(--ease);
 }
 .dock-item:hover { color: var(--color-text); }
@@ -334,8 +335,21 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
 .journey-nav { display: flex; justify-content: space-between; gap: var(--space-2); }
 .journey-nav .primary { margin-left: auto; }
 .pill-button:disabled { opacity: 0.45; cursor: default; }
+/* Learn: what you were doing, then the labs as tiles. */
+.continue-item { background: var(--color-accent-wash); border-color: var(--color-accent-edge); }
+.lab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+.lab-tile { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); text-align: left; }
+.lab-tile svg { color: var(--color-accent); margin-bottom: var(--space-1); }
+
 /* While a journey runs on a phone, the object card shrinks to its essentials. */
 @media (max-width: 899px) {
+  /* The journey sits at the bottom, over the ground, in place of the dock and time bar,
+     so the sky it points at stays clear. Diagram steps keep the time bar. */
+  .journey-card { top: auto; bottom: calc(var(--safe-bottom) + var(--space-3)); left: calc(var(--safe-left) + var(--space-3)); right: calc(var(--safe-right) + var(--space-3)); }
+  :root[data-journey] .dock, :root[data-journey]:not([data-plot]) .time-bar { display: none; }
+  :root[data-journey][data-plot] .journey-card { bottom: calc(var(--safe-bottom) + var(--space-4) + 48px + var(--space-3)); }
+  :root[data-journey] .object-card { top: calc(var(--safe-top) + var(--space-4) + 48px + var(--space-3)); bottom: auto; }
+  :root[data-journey][data-selected='true'] .point-button { display: none; }
   :root[data-journey] .object-card .card-actions, :root[data-journey] .object-card .card-disclosure, :root[data-journey] .object-card .card-more { display: none; }
   .journey-card { padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4); max-height: 46vh; }
   .journey-text { font-size: var(--text-sm); }
@@ -388,7 +402,7 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
 @media (min-width: 900px) {
   .top-bar { right: auto; width: 400px; }
   .sheet { right: auto; width: 400px; top: calc(var(--safe-top) + 48px + var(--space-4) + var(--space-3)); bottom: calc(var(--safe-bottom) + var(--space-4)); }
-  .dock { left: 50%; right: auto; width: 320px; transform: translateX(-50%); }
+  .dock { left: 50%; right: auto; width: 400px; transform: translateX(-50%); }
   .time-bar { left: 50%; right: auto; width: 480px; transform: translateX(-50%); }
   .speed-menu { left: 0; transform: none; animation-name: pop-in-left; }
   .journey-card { right: auto; width: 400px; max-height: calc(100vh - 100px); }
@@ -422,10 +436,10 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
 .plot-slider { width: 100%; accent-color: var(--color-accent); min-height: var(--tap); }
 .plot-readout { font-size: var(--text-sm); color: var(--color-text-muted); min-height: 2.6em; }
 :root[data-plot] .journey-card { max-height: calc(100vh - 200px); }
-/* On a phone the diagram card stops above the time bar and dock, which a diagram step may still need. */
+/* On a phone the diagram card stops above the time bar, which a diagram step may still need. */
 @media (max-width: 899px) {
   :root[data-plot] .journey-card {
-    max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 48px - var(--space-4) - var(--space-6) - 60px - 48px - var(--space-4) - var(--space-3) * 3);
+    max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 48px - var(--space-4) * 2 - var(--space-3) * 2 - 48px - var(--space-3));
   }
 }
 

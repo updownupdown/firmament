@@ -1,7 +1,7 @@
 # Firmament architecture
 
 Firmament is a planetarium and solar system simulator you can play: the real
-sky for any time and place, plus journeys, a daily guide and an observing log
+sky for any time and place, plus journeys and a daily guide
 built on top of one shared simulation. It is a web app only (no native or watch
 apps), deployed to GitHub Pages.
 
@@ -113,7 +113,7 @@ interface Scene {
 }
 ```
 
-Every Tonight prompt, journey step, log entry, event in the calendar and shared
+Every Tonight prompt, journey step, event in the calendar and shared
 link (encoded in the URL hash) is a Scene. "Show me" means `app.apply(scene)`.
 
 ### 5. App shell and sections
@@ -138,17 +138,15 @@ separate pages.
     the shifting Big Dipper.
   - Mission planning: Hohmann transfers and gravity assists.
   - Sky cultures: the same stars as different peoples drew them.
-- **Log** — the observing collection: planets, Moon phases, Messier objects,
-  constellations, events. An entry is checked against the sky at that time and
-  place (was it above the horizon and dark enough?).
 - **Space** — entered by zooming out of Sky: orrery, orbits, true or compressed
   scale.
 
-Navigation is a dock with Sky, Tonight, Journeys and Log; Space is reached from
+Navigation is a dock with Sky, Tonight and Journeys; Space is reached from
 Sky by zooming out or from a button, and is also used by journeys.
 
-Persistence is `localStorage` with a versioned schema: settings, observer,
-log entries and journey progress.
+Persistence is `localStorage` with a versioned schema: settings, observer
+and journey progress. (An observing log with "I saw it" was built and later
+removed at the owner's request, 2026-11-17.)
 
 ### 6. Data pipeline
 

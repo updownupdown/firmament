@@ -126,9 +126,9 @@ export function collectLabels(r: SkyRenderer, layers: LayerFlags, selectedRef: s
 interface Box { x0: number; y0: number; x1: number; y1: number }
 
 /** Keep the highest-priority labels that do not overlap. Sizes are estimated from the text. */
-export function layoutLabels(items: LabelItem[], width: number, height: number): (LabelItem & { left: number; top: number })[] {
+export function layoutLabels(items: LabelItem[], width: number, height: number): (LabelItem & { left: number; top: number; width: number })[] {
   const placed: Box[] = [];
-  const out: (LabelItem & { left: number; top: number })[] = [];
+  const out: (LabelItem & { left: number; top: number; width: number })[] = [];
   const sorted = [...items].sort((a, b) => Number(b.selected ?? false) - Number(a.selected ?? false) || b.priority - a.priority);
   for (const it of sorted) {
     const w = it.text.length * (it.kind === 'con' ? 7.6 : 6.6) + 6;
@@ -139,7 +139,7 @@ export function layoutLabels(items: LabelItem[], width: number, height: number):
     if (box.x1 < 0 || box.x0 > width || box.y1 < 0 || box.y0 > height) continue;
     if (!it.selected && placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) continue;
     placed.push(box);
-    out.push({ ...it, left, top });
+    out.push({ ...it, left, top, width: w });
   }
   return out;
 }
@@ -148,13 +148,28 @@ export function layoutLabels(items: LabelItem[], width: number, height: number):
 export class LabelLayer {
   private readonly root: HTMLElement;
   private readonly live = new Map<string, { el: HTMLElement; text: string; kind: string }>();
+  /** Where each label was last placed, for tapping a name. */
+  private boxes: { key: string; left: number; top: number; right: number; bottom: number }[] = [];
 
   constructor(root: HTMLElement) {
     this.root = root;
   }
 
-  update(items: (LabelItem & { left: number; top: number })[]): void {
+  /**
+   * The object whose name is at a screen point (with a little slack for
+   * fingers), or null. Compass points are not objects.
+   */
+  hit(x: number, y: number, slack = 6): string | null {
+    for (let i = this.boxes.length - 1; i >= 0; i--) {
+      const b = this.boxes[i];
+      if (x >= b.left - slack && x <= b.right + slack && y >= b.top - slack && y <= b.bottom + slack) return b.key;
+    }
+    return null;
+  }
+
+  update(items: (LabelItem & { left: number; top: number; width?: number })[]): void {
     const seen = new Set<string>();
+    this.boxes = [];
     for (const it of items) {
       seen.add(it.key);
       let entry = this.live.get(it.key);
@@ -169,6 +184,10 @@ export class LabelLayer {
       if (entry.text !== it.text) { entry.el.textContent = it.text; entry.text = it.text; }
       if (entry.kind !== kind) { entry.el.className = `sky-label ${kind}`; entry.kind = kind; }
       entry.el.style.transform = `translate(${it.left.toFixed(1)}px, ${it.top.toFixed(1)}px)`;
+      if (!it.key.startsWith('card:')) {
+        const width = it.width ?? entry.el.offsetWidth;
+        this.boxes.push({ key: it.key.replace(/^space:/, ''), left: it.left, top: it.top, right: it.left + width, bottom: it.top + 16 });
+      }
     }
     for (const [key, entry] of this.live) {
       if (!seen.has(key)) {

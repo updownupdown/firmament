@@ -51,6 +51,9 @@ const ICONS: Record<string, string> = {
   trash: '<path d="M4 6h12M8 6V4h4v2M6 6l.7 10h6.6L14 6"/>',
   orbit: '<circle cx="10" cy="10" r="2.6"/><ellipse cx="10" cy="10" rx="8" ry="3.4" transform="rotate(-24 10 10)"/>',
   horizon: '<path d="M2 14h16"/><path d="M5.5 14a4.5 4.5 0 0 1 9 0"/><path d="M10 5v1.5M4.3 7.8l1 1M15.7 7.8l-1 1"/>',
+  download: '<path d="M10 3v10M6.5 9.5L10 13l3.5-3.5M4 16h12"/>',
+  up: '<path d="M5 12.5l5-5 5 5"/>',
+  calendar: '<rect x="3" y="4.5" width="14" height="12.5" rx="2.5"/><path d="M3 8.5h14M7 2.5v4M13 2.5v4"/>',
   phone: '<rect x="6" y="2.5" width="8" height="15" rx="2"/><path d="M9 15h2"/>',
 };
 

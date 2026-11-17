@@ -110,10 +110,40 @@ export function settingsPanel(shell: Shell): Panel {
       h('section', { class: 'card actions' },
         h('button', { class: 'pill-button', type: 'button', onclick: () => share(shell) }, icon('share', 18), 'Copy a link to this view'),
         h('button', { class: 'pill-button', type: 'button', onclick: () => { shell.closeSheet(); app.setStill(true); } }, icon('eye', 18), 'Just the sky'),
+        installButton(shell),
         h('button', { class: 'pill-button', type: 'button', 'aria-expanded': String(!credits.hidden), onclick: loadCredits }, icon('info', 18), 'Credits and data sources')),
       credits);
   };
   return { title: 'View', el, refresh };
+}
+
+// Installing as an app: Chrome and Edge offer a prompt we can trigger; Safari
+// needs the Share menu. Nothing is shown once the app is installed.
+interface InstallPrompt extends Event { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> }
+let installPrompt: InstallPrompt | null = null;
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e as InstallPrompt; });
+addEventListener('appinstalled', () => { installPrompt = null; });
+
+function installButton(shell: Shell): HTMLElement | null {
+  const standalone = matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
+  if (standalone) return null;
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (!installPrompt && !ios) return null;
+  return h('button', {
+    class: 'pill-button', type: 'button',
+    onclick: async () => {
+      if (installPrompt) {
+        const p = installPrompt;
+        installPrompt = null;
+        await p.prompt();
+        const choice = await p.userChoice;
+        if (choice.outcome === 'accepted') shell.toast('Firmament is installed. It works offline too.');
+        shell.panels.settings.refresh();
+      } else {
+        shell.toast('In Safari, tap Share, then “Add to Home Screen”.');
+      }
+    },
+  }, icon('download', 18), 'Install as an app');
 }
 
 function share(shell: Shell): void {

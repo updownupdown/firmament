@@ -3,7 +3,6 @@
 
 import type { App, Section } from '../app.ts';
 import { Pointing } from '../render/pointing.ts';
-import { RATE_STEPS, describeRate } from '../sim/clock.ts';
 import { jdNow } from '../astro/time.ts';
 import { calendarNote, formatDate, formatDistanceAU, formatTime, localTime } from '../sim/format.ts';
 import { h, fill, icon, iconButton } from './dom.ts';
@@ -12,6 +11,7 @@ import { type JourneyPlayer, journeyPlayer, journeysPanel } from './journeys.ts'
 import { logPanel, logSighting } from './log.ts';
 import { placeTimePanel, searchPanel, settingsPanel } from './panels.ts';
 import { tonightPanel } from './tonight.ts';
+import { timeBar } from './timebar.ts';
 
 export type SheetId = 'search' | 'settings' | 'place' | 'tonight' | 'journeys' | 'log' | null;
 
@@ -28,7 +28,7 @@ export class Shell {
   readonly app: App;
   readonly root: HTMLElement;
   private sheet: SheetId = null;
-  private readonly panels: Record<Exclude<SheetId, null>, Panel>;
+  readonly panels: Record<Exclude<SheetId, null>, Panel>;
   private readonly sheetEl: HTMLElement;
   private readonly sheetTitle: HTMLElement;
   private readonly sheetBody: HTMLElement;
@@ -213,59 +213,7 @@ export class Shell {
   // ---------------------------------------------------------------- time bar
 
   private timeBar(): HTMLElement {
-    const app = this.app;
-    const playPause = iconButton('pause', 'Pause time', () => app.setRate(app.clock.rate, !app.clock.paused), 'glass');
-    const rateLabel = h('span', { class: 'rate-label' });
-    const step = (dir: number) => {
-      const clock = app.clock;
-      // Walk along …, −1 d/s, −1 h/s, real time, 1 min/s, 1 h/s, …
-      const ladder = [...RATE_STEPS.slice(1).map((r) => -r).reverse(), ...RATE_STEPS];
-      let i = ladder.findIndex((r) => r >= clock.rate - 1e-9);
-      if (i < 0) i = ladder.length - 1;
-      if (ladder[i] !== clock.rate && dir > 0) i -= 1;
-      app.setRate(ladder[Math.min(ladder.length - 1, Math.max(0, i + dir))], false);
-    };
-    const slower = iconButton('slower', 'Slower, or backwards', () => step(-1));
-    const faster = iconButton('faster', 'Faster', () => step(1));
-    const now = h('button', { class: 'pill-button', type: 'button', onclick: () => app.goToNow() }, 'Now');
-
-    // The jog: push it either way to run time, further is faster; let go and time settles.
-    const jog = h('input', {
-      class: 'jog', type: 'range', min: '-100', max: '100', value: '0', step: '1',
-      'aria-label': 'Scrub time: drag right for the future, left for the past',
-    });
-    let before: { rate: number; paused: boolean } | null = null;
-    const jogRate = (v: number) => Math.sign(v) * 30 * Math.pow(10, (Math.abs(v) / 100) * 6.2);
-    jog.addEventListener('input', () => {
-      const v = Number(jog.value);
-      before ??= { rate: app.clock.rate, paused: app.clock.paused };
-      if (v === 0) app.setRate(before.rate, before.paused);
-      else app.setRate(jogRate(v), false);
-    });
-    const release = () => {
-      if (!before) return;
-      // Return to where time was running before: paused stays paused, live stays ticking.
-      app.setRate(before.rate, before.paused);
-      before = null;
-      jog.value = '0';
-    };
-    jog.addEventListener('change', release);
-    jog.addEventListener('pointerup', release);
-    jog.addEventListener('blur', release);
-
-    const update = () => {
-      const c = app.clock;
-      fill(playPause, icon(c.paused ? 'play' : 'pause'));
-      playPause.setAttribute('aria-label', c.paused ? 'Run time' : 'Pause time');
-      playPause.title = c.paused ? 'Run time' : 'Pause time';
-      rateLabel.textContent = c.paused ? 'Paused' : describeRate(c.rate);
-      now.hidden = c.live;
-    };
-    app.on('time', update);
-    app.on('second', update);
-    update();
-    return h('div', { class: 'time-bar chrome' }, playPause,
-      h('div', { class: 'time-track glass' }, slower, h('div', { class: 'jog-wrap' }, jog, rateLabel), faster), now);
+    return timeBar(this.app, () => this.openSheet('place'));
   }
 
   // ---------------------------------------------------------------- object card

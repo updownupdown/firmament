@@ -20,7 +20,7 @@ import { Mesh, Program, loadTexture } from './gl.ts';
 import { type Projected, SkyProjection, refractVector } from './projection.ts';
 import {
   BODY_FRAG, BODY_VERT, GROUND_FRAG, LINE_ATTRIBUTES, LINE_FRAG, LINE_VERT, MARKER_ATTRIBUTES, MARKER_FRAG,
-  MARKER_VERT, SKY_FRAG, SKY_VERT, STAR_ATTRIBUTES, STAR_FRAG, STAR_VERT,
+  MARKER_VERT, MILKY_STAR_FRAG, MILKY_STAR_VERT, SKY_FRAG, SKY_VERT, STAR_ATTRIBUTES, STAR_FRAG, STAR_VERT,
 } from './shaders.ts';
 
 export interface SkyOptions {
@@ -171,6 +171,8 @@ export class SkyRenderer {
   private readonly circle: Mesh;
   private readonly markers: Mesh;
   readonly milkyWay: WebGLTexture;
+  private readonly milkyStars: Mesh;
+  private readonly milkyStarProgram: Program;
   private highlighted: string | null = null;
   private figureCulture = '';
   private figureStars = 0;
@@ -206,7 +208,15 @@ export class SkyRenderer {
     this.graticule = lineMesh();
     this.circle = lineMesh();
     this.markers = new Mesh(gl, 6, [{ index: 0, size: 3, offset: 0 }, { index: 1, size: 3, offset: 3 }]);
-    this.milkyWay = loadTexture(gl, milkyWayUrl, () => { this.dirty = true; });
+    this.milkyStarProgram = new Program(gl, MILKY_STAR_VERT, MILKY_STAR_FRAG, ['aStar']);
+    this.milkyStars = new Mesh(gl, 4, [{ index: 0, size: 4, offset: 0 }]);
+    this.milkyWay = loadTexture(gl, milkyWayUrl, (img) => {
+      // Phones get fewer points; the band still reads as stars at a phone's resolution.
+      const small = Math.min(screen.width, screen.height) < 700;
+      const points = milkyWayStars(img, small ? 140000 : 320000);
+      if (points) this.milkyStars.set(points);
+      this.dirty = true;
+    });
 
     this.buildGraticule();
     this.setStars();
@@ -402,9 +412,20 @@ export class SkyRenderer {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.milkyWay);
     const mwGain = opts.layers.milkyWay ? Math.pow(clamp((c.nakedEyeLimit - 4.4) / 2.4, 0, 1), 1.4) : 0;
+    // With the star field drawn, the smooth glow only fills in what lies between its points.
+    const starred = this.milkyStars.count > 0;
     this.skyUniforms(this.skyProgram, c, opts)
-      .m3('uHorizonToJ2000', transpose(f.j2000ToHorizon)).i('uMilkyWay', 0).f('uMilkyWayGain', mwGain);
+      .m3('uHorizonToJ2000', transpose(f.j2000ToHorizon)).i('uMilkyWay', 0).f('uMilkyWayGain', mwGain * (starred ? 0.7 : 1));
     this.quad.drawQuads(1);
+    if (starred && mwGain > 0.01) {
+      gl.blendFunc(gl.ONE, gl.ONE);
+      // Zoomed in, each point covers more of the band it stands for, so it shines a little brighter.
+      const zoom = clamp(Math.pow((90 * DEG) / pr.fov, 0.75), 1, 5);
+      this.common(this.milkyStarProgram)
+        .m3('uJ2000ToHorizon', f.j2000ToHorizon).v3('uAberration', aberration)
+        .f('uGain', mwGain * 0.2 * zoom).f('uPixelRatio', dpr).f('uAtmosphere', opts.layers.atmosphere ? 1 : 0);
+      this.milkyStars.drawPoints();
+    }
 
     // 2. Lines.
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -603,4 +624,58 @@ export class SkyRenderer {
       this.quad.drawQuads(1);
     }
   }
+}
+
+/**
+ * Directions scattered over the sky with the Milky Way map's brightness as
+ * their density (J2000, plus a relative brightness in w). Deterministic, so
+ * the same points appear every time. Null if the image cannot be read.
+ */
+export function milkyWayStars(img: HTMLImageElement, count: number): Float32Array | null {
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(img, 0, 0);
+  let pixels: Uint8ClampedArray;
+  try { pixels = ctx.getImageData(0, 0, w, h).data; } catch { return null; }
+  // Cumulative weight per pixel: brightness (as the glow shader shapes it) times the pixel's area on the sphere.
+  const cdf = new Float64Array(w * h);
+  let total = 0;
+  for (let y = 0; y < h; y++) {
+    const area = Math.cos(((y + 0.5) / h - 0.5) * Math.PI);
+    for (let x = 0; x < w; x++) {
+      const v = pixels[(y * w + x) * 4] / 255;
+      total += Math.pow(v, 1.3) * area;
+      cdf[y * w + x] = total;
+    }
+  }
+  let seed = 0x9e3779b9;
+  const rand = () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const out = new Float32Array(count * 4);
+  for (let i = 0; i < count; i++) {
+    const target = rand() * total;
+    let lo = 0, hi = cdf.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (cdf[mid] < target) lo = mid + 1; else hi = mid;
+    }
+    const px = lo % w, py = Math.floor(lo / w);
+    // Same mapping as the glow shader: u = RA / 2π, v = 0.5 − Dec / π.
+    const ra = ((px + rand()) / w) * 2 * Math.PI;
+    const dec = (0.5 - (py + rand()) / h) * Math.PI;
+    const cd = Math.cos(dec);
+    out[i * 4] = cd * Math.cos(ra);
+    out[i * 4 + 1] = cd * Math.sin(ra);
+    out[i * 4 + 2] = Math.sin(dec);
+    // Many faint, a few brighter: like counts of real stars.
+    out[i * 4 + 3] = 0.15 + 0.85 * Math.pow(rand(), 3);
+  }
+  return out;
 }

@@ -58,6 +58,8 @@ export class App {
   selected: string | null = null;
   /** Objects a scene asked to point out. */
   highlight: string[] = [];
+  /** Objects a tap should lean toward, such as the target of a journey task. */
+  pickPreference: ReadonlySet<string> = new Set();
   section: Section = 'sky';
   /** Still mode: chrome hidden, the sky drifting. */
   still = false;
@@ -96,12 +98,16 @@ export class App {
         if (this.still) { this.setStill(false); return; }
         if (this.mode === 'space') {
           // In space a tap both picks a body and swings the camera round to circle it.
-          const id = this.space.pick(x, y);
+          const named = this.labels.hit(x, y);
+          const id = named && this.space.position(named) ? named : this.space.pick(x, y);
           if (id) this.space.setFocus(id);
           this.select(id && this.universe.resolve(id) ? id : null);
           return;
         }
-        this.select(pick(this.renderer, this.layers, x, y));
+        // A tap on a name picks what it names; otherwise the nearest object, leaning toward the journey's target.
+        const named = this.labels.hit(x, y);
+        if (named && this.universe.resolve(named)) { this.select(named); return; }
+        this.select(pick(this.renderer, this.layers, x, y, 36, this.pickPreference));
       },
       onChange: () => this.invalidate(),
     });

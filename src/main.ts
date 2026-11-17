@@ -15,7 +15,7 @@ async function boot(): Promise<void> {
   const ui = h('div', { id: 'ui' });
   const bar = h('span', { class: 'loading-bar' }, h('span'));
   const message = h('p', { class: 'loading-text', role: 'status' }, 'Gathering the stars…');
-  const loading = h('div', { class: 'loading' }, h('h1', null, 'Firmament'), bar, message);
+  const loading = h('div', { class: 'loading' }, h('img', { class: 'loading-logo', src: 'icon.svg', alt: '', width: '72', height: '72' }), h('h1', null, 'Firmament'), bar, message);
   document.body.append(canvas, labels, ui, loading);
 
   const fail = (text: string, retry: boolean) => {

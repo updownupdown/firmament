@@ -61,19 +61,53 @@ export function searchPanel(shell: Shell): Panel {
 
 // ------------------------------------------------------------------ view and settings
 
-const LAYER_GROUPS: { title: string; items: [keyof LayerFlags, string, string?][] }[] = [
-  { title: 'Constellations', items: [['lines', 'Figures'], ['constellationLabels', 'Names'], ['boundaries', 'Boundaries', 'The official borders between constellations']] },
-  { title: 'Labels', items: [['starLabels', 'Stars'], ['planetLabels', 'Planets and Moon'], ['dsos', 'Deep sky objects', 'Galaxies, clusters and nebulae']] },
-  { title: 'Sky', items: [['milkyWay', 'Milky Way'], ['atmosphere', 'Atmosphere', 'Daylight, twilight and haze near the horizon'], ['ground', 'Ground'], ['cardinals', 'Compass points']] },
-  { title: 'Guides', items: [['gridAltAz', 'Altitude grid'], ['gridEquatorial', 'Equatorial grid'], ['ecliptic', 'Ecliptic', 'The path the Sun follows through the year'], ['gridGalactic', 'Galactic grid', 'Latitude and longitude on the Milky Way, centred on its core']] },
-  { title: 'Space view', items: [['orbits', 'Orbits']] },
+/** A layer as a tile: [layer, label, icon, what it is]. */
+type LayerTile = [keyof LayerFlags, string, string, string];
+
+const LAYER_GROUPS: { title: string; note?: string; items: LayerTile[] }[] = [
+  { title: 'On the sky', items: [
+    ['lines', 'Figures', 'figures', 'Constellation figures'],
+    ['constellationLabels', 'Constellations', 'names', 'Constellation names'],
+    ['starLabels', 'Star names', 'starname', 'Names of bright stars'],
+    ['planetLabels', 'Planets', 'planet', 'Names of the planets and the Moon'],
+    ['dsos', 'Deep sky', 'galaxy', 'Galaxies, clusters and nebulae'],
+    ['milkyWay', 'Milky Way', 'milkyway', 'The glow of our galaxy'],
+    ['skyOrbits', 'Orbits', 'skyorbit', 'The planets\' and the Moon\'s orbits, as seen from where you stand'],
+    ['boundaries', 'Borders', 'bounds', 'The official borders between constellations'],
+  ] },
+  { title: 'Guides', items: [
+    ['gridAltAz', 'Altitude', 'dome', 'Altitude and direction grid'],
+    ['gridEquatorial', 'Equator', 'globe', 'Equatorial grid: right ascension and declination'],
+    ['ecliptic', 'Ecliptic', 'ecliptic', 'The path the Sun follows through the year'],
+    ['gridGalactic', 'Galactic', 'galactic', 'Galactic grid, centred on the Milky Way\'s core'],
+    ['cardinals', 'Compass', 'compass', 'North, east, south and west on the horizon'],
+  ] },
+  { title: 'Air and ground', items: [
+    ['atmosphere', 'Atmosphere', 'air', 'Daylight, twilight and haze near the horizon'],
+    ['ground', 'Ground', 'ground', 'The ground below the horizon'],
+  ] },
+  { title: 'Space view', items: [
+    ['orbits', 'Orbits', 'orbit', 'Orbit lines in Space view'],
+    ['compressed', 'Compressed', 'squeeze', 'Squeeze distances and sizes so planets show as discs'],
+  ] },
 ];
+
+/** A grid of on/off tiles, one per layer. */
+function layerTiles(app: Shell['app'], items: LayerTile[]): HTMLElement {
+  return h('div', { class: 'tile-grid' }, items.map(([key, label, glyph, hint]) => {
+    const tile = h('button', {
+      class: 'layer-tile', type: 'button', title: hint, 'aria-pressed': String(app.layers[key]),
+      onclick: () => { app.setLayer(key, !app.layers[key]); tile.setAttribute('aria-pressed', String(app.layers[key])); },
+    }, icon(glyph, 22), h('span', null, label));
+    return tile;
+  }));
+}
 
 const BORTLE = ['', 'Pristine dark site', 'Truly dark site', 'Rural sky', 'Rural edge', 'Suburban sky', 'Bright suburb', 'Suburb to city', 'City sky', 'Inner city'];
 
 export function settingsPanel(shell: Shell): Panel {
   const app = shell.app;
-  const el = h('div', { class: 'panel' });
+  const el = h('div', { class: 'panel view-panel' });
   const credits = h('div', { class: 'credits', hidden: true });
   let creditsLoaded = false;
 
@@ -86,33 +120,45 @@ export function settingsPanel(shell: Shell): Panel {
       .catch(() => { credits.textContent = 'The credits could not be loaded. They are in data/ATTRIBUTION.md.'; creditsLoaded = false; });
   };
 
+  const section = (title: string, ...body: (HTMLElement | null)[]) =>
+    h('section', { class: 'view-section' }, h('h3', { class: 'section-title' }, title), ...body);
+  const action = (glyph: string, label: string, onclick: () => void, extra: Record<string, string> = {}) =>
+    h('button', { class: 'action-row', type: 'button', onclick, ...extra }, icon(glyph, 18), h('span', null, label), icon('forward', 16));
+
   const refresh = () => {
+    // Rebuilding the panel must not lose the keyboard's place.
+    const focused = (document.activeElement as HTMLElement | null)?.closest?.('.layer-tile')?.getAttribute('title');
+    queueMicrotask(() => { if (focused) (el.querySelector(`.layer-tile[title="${CSS.escape(focused)}"]`) as HTMLElement | null)?.focus(); });
     const s = app.store.data.settings;
     const culture = app.universe.culture;
     const select = h('select', { class: 'field', 'aria-label': 'Sky culture', onchange: () => app.setCulture(select.value) },
       app.universe.cultureIndex.map((c) => h('option', { value: c.id, selected: c.id === s.culture }, `${c.name} (${c.region})`)));
     const slider = h('input', {
-      type: 'range', min: '1', max: '9', step: '1', value: String(s.bortle), class: 'slider', 'aria-label': 'Light pollution',
+      type: 'range', min: '1', max: '9', step: '1', value: String(s.bortle), class: 'slider bortle-slider', 'aria-label': 'Light pollution',
       oninput: () => { app.setBortle(Number(slider.value)); bortleText.textContent = BORTLE[app.store.data.settings.bortle]; },
     });
-    const bortleText = h('span', { class: 'hint' }, BORTLE[s.bortle]);
+    const bortleText = h('span', { class: 'value' }, BORTLE[s.bortle]);
+    const install = installButton(shell);
     fill(el,
-      LAYER_GROUPS.map((g) => h('section', { class: 'card' }, h('h3', { class: 'card-label' }, g.title),
-        g.items.map(([key, label, hint]) => toggle(label, s.layers[key], (on) => app.setLayer(key, on), hint)))),
-      h('section', { class: 'card' }, h('h3', { class: 'card-label' }, 'Whose sky'),
-        select, culture && culture.id === s.culture ? h('p', { class: 'hint' }, culture.intro) : null),
-      h('section', { class: 'card' }, h('h3', { class: 'card-label' }, 'Light pollution'),
-        h('div', { class: 'slider-row' }, h('span', { class: 'hint' }, 'Dark'), slider, h('span', { class: 'hint' }, 'City')), bortleText),
-      h('section', { class: 'card' }, h('h3', { class: 'card-label' }, 'Comfort'),
-        toggle('Night vision', s.nightVision, (on) => app.updateSettings((x) => { x.nightVision = on; }), 'Dim red screen that keeps your eyes dark-adapted'),
-        toggle('12-hour clock', s.hour12, (on) => app.updateSettings((x) => { x.hour12 = on; })),
-        toggle('Reduce motion', s.reducedMotion, (on) => app.updateSettings((x) => { x.reducedMotion = on; }), 'Jump between views instead of gliding')),
-      h('section', { class: 'card actions' },
-        h('button', { class: 'pill-button', type: 'button', onclick: () => share(shell) }, icon('share', 18), 'Copy a link to this view'),
-        h('button', { class: 'pill-button', type: 'button', onclick: () => { shell.closeSheet(); app.setStill(true); } }, icon('eye', 18), 'Just the sky'),
-        installButton(shell),
-        h('button', { class: 'pill-button', type: 'button', 'aria-expanded': String(!credits.hidden), onclick: loadCredits }, icon('info', 18), 'Credits and data sources')),
-      credits);
+      LAYER_GROUPS.map((g) => section(g.title, layerTiles(app, g.items))),
+      section('Light pollution',
+        h('div', { class: 'control-card' },
+          h('div', { class: 'control-head' }, h('span', null, 'How bright your sky is'), bortleText),
+          h('div', { class: 'slider-row' }, h('span', { class: 'hint' }, 'Dark'), slider, h('span', { class: 'hint' }, 'City')))),
+      section('Whose sky',
+        h('div', { class: 'control-card' }, select, culture && culture.id === s.culture ? h('p', { class: 'hint' }, culture.intro) : null)),
+      section('Comfort',
+        h('div', { class: 'control-card' },
+          toggle('Night vision', s.nightVision, (on) => app.updateSettings((x) => { x.nightVision = on; }), 'A dim red screen that keeps your eyes dark-adapted'),
+          toggle('12-hour clock', s.hour12, (on) => app.updateSettings((x) => { x.hour12 = on; })),
+          toggle('Reduce motion', s.reducedMotion, (on) => app.updateSettings((x) => { x.reducedMotion = on; }), 'Jump between views instead of gliding'))),
+      section('More',
+        h('div', { class: 'control-card rows' },
+          action('share', 'Copy a link to this view', () => share(shell)),
+          action('eye', 'Just the sky', () => { shell.closeSheet(); app.setStill(true); }),
+          install,
+          action('info', 'Credits and data sources', loadCredits, { 'aria-expanded': String(!credits.hidden) })),
+        credits));
   };
   return { title: 'View', el, refresh };
 }
@@ -130,7 +176,7 @@ function installButton(shell: Shell): HTMLElement | null {
   const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   if (!installPrompt && !ios) return null;
   return h('button', {
-    class: 'pill-button', type: 'button',
+    class: 'action-row', type: 'button',
     onclick: async () => {
       if (installPrompt) {
         const p = installPrompt;
@@ -143,7 +189,7 @@ function installButton(shell: Shell): HTMLElement | null {
         shell.toast('In Safari, tap Share, then “Add to Home Screen”.');
       }
     },
-  }, icon('download', 18), 'Install as an app');
+  }, icon('download', 18), h('span', null, 'Install as an app'), icon('forward', 16));
 }
 
 function share(shell: Shell): void {

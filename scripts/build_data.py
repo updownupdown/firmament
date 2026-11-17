@@ -7,6 +7,10 @@ Sources are expected as shallow git clones in ../vendor (next to the repo):
   git clone --depth 1 https://github.com/ofrohn/d3-celestial             ../vendor/d3-celestial
   git clone --depth 1 https://github.com/Stellarium/stellarium-skycultures ../vendor/skycultures
   git clone --depth 1 https://github.com/commenthol/astronomia           ../vendor/astronomia
+  git clone --depth 1 https://github.com/lkangas/python-tycho2           ../vendor/python-tycho2
+
+The last is the Tycho-2 catalogue (Høg et al. 2000) as NumPy arrays of
+right ascension, declination (radians, J2000) and VT magnitude.
 
 Nothing from the sources is executed; JavaScript data files are parsed as text.
 Outputs are committed, so the site builds without the sources.
@@ -242,6 +246,73 @@ def build_cultures(hip_index):
     write_json('cultures/index.json', listing)
 
 
+# --------------------------------------------------------------------- Tycho-2
+
+TYCHO_LIMIT = 12.0      # faintest Tycho-2 star kept
+TYCHO_BAND = 4.0        # declination band per file, degrees
+TYCHO_MATCH = 10.0      # arcseconds: a Tycho-2 star this close to a HYG star is the same star
+
+
+def read_fst(path):
+    """Right ascension, declination (radians) and magnitude from a stars-*.bin file."""
+    with open(path, 'rb') as f:
+        buf = f.read()
+    n, _, size = struct.unpack_from('<III', buf, 4)
+    out = []
+    for k in range(n):
+        ra, dec, _, mag = struct.unpack_from('<fffh', buf, 16 + k * size)
+        out.append((ra, dec, mag / 100))
+    return out
+
+
+def build_tycho():
+    """Tycho-2 stars missing from HYG, in declination bands loaded only when zoomed in.
+
+    File tycho/NN.bin (band NN from the south pole): 'TYC1', count u32, then
+    count × ra u24 (fraction of 360°), then count × dec u16 (fraction of the
+    band), then count × mag u8 ((mag − 6) × 40), each array little-endian and
+    padded to 4 bytes.
+    """
+    import numpy as np
+    cat = np.vstack([np.load(src('python-tycho2', 'tyc2.npy')), np.load(src('python-tycho2', 'tyc2sup.npy'))]).astype(np.float64)
+    cat[:, :2] = np.degrees(cat[:, :2])   # the arrays hold radians
+    cat = cat[(cat[:, 2] <= TYCHO_LIMIT) & np.isfinite(cat[:, 2])]
+    # Drop the stars HYG already has: hash HYG positions into cells, with each cell's neighbours.
+    cell = TYCHO_MATCH / 3600
+    hyg = np.array(read_fst(os.path.join(OUT, 'stars-bright.bin')) + read_fst(os.path.join(OUT, 'stars-faint.bin')))
+    def keys(ra_deg, dec_deg, dx=0, dy=0):
+        y = np.floor(dec_deg / cell).astype(np.int64) + dy
+        x = np.floor(ra_deg * np.cos(np.radians(dec_deg)) / cell).astype(np.int64) + dx
+        return y * 100_000_000 + x
+    hra, hdec = np.degrees(hyg[:, 0]) % 360, np.degrees(hyg[:, 1])
+    taken = np.unique(np.concatenate([keys(hra, hdec, dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)]))
+    dup = np.isin(keys(cat[:, 0] % 360, cat[:, 1]), taken)
+    cat = cat[~dup]
+    print(f'  {dup.sum()} Tycho-2 stars already in HYG; {len(cat)} new')
+    os.makedirs(os.path.join(OUT, 'tycho'), exist_ok=True)
+    bands = int(round(180 / TYCHO_BAND))
+    band = np.clip(((cat[:, 1] + 90) / TYCHO_BAND).astype(int), 0, bands - 1)
+    total = 0
+    counts = []
+    for b in range(bands):
+        part = cat[band == b]
+        part = part[np.argsort(part[:, 2])]   # brightest first, so a partial draw shows the right stars
+        n = len(part)
+        ra = np.round((part[:, 0] % 360) / 360 * (1 << 24)).astype(np.uint32) % (1 << 24)
+        dec = np.clip(np.round((part[:, 1] + 90 - b * TYCHO_BAND) / TYCHO_BAND * 65535), 0, 65535).astype('<u2')
+        mag = np.clip(np.round((part[:, 2] - 6) * 40), 0, 255).astype(np.uint8)
+        ra_bytes = np.stack([(ra & 255), (ra >> 8) & 255, (ra >> 16) & 255], axis=1).astype(np.uint8).tobytes()
+        pad = lambda bts: bts + b'\0' * (-len(bts) % 4)
+        data = b'TYC1' + struct.pack('<I', n) + pad(ra_bytes) + pad(dec.tobytes()) + pad(mag.tobytes())
+        path = os.path.join(OUT, 'tycho', f'{b:02d}.bin')
+        with open(path, 'wb') as f:
+            f.write(data)
+        total += len(data)
+        counts.append(n)
+    write_json('tycho/index.json', {'band': TYCHO_BAND, 'limit': TYCHO_LIMIT, 'counts': counts})
+    print(f'  tycho: {len(cat)} stars in {bands} bands, {total / 1e6:.1f} MB')
+
+
 # --------------------------------------------------------- d3-celestial datasets
 
 def build_boundaries():
@@ -299,18 +370,34 @@ EQ_TO_GAL = [
 
 
 def build_milkyway():
-    """Rasterise the Milky Way brightness contours into an equirectangular (RA/Dec) texture.
+    """An equirectangular (RA/Dec) brightness map of the Milky Way, smooth like a photograph.
 
-    The contours are bands that wrap all the way around the sky, so they can't be
-    filled in RA/Dec directly. They are filled in an azimuthal projection centred on
-    the north galactic pole (where the band is an annulus), with even-odd rings,
-    then resampled.
+    Two sources, combined in galactic coordinates (where the band lies flat and a
+    blur is the same in every direction along it):
+    - d3-celestial's brightness contours give the broad glow, including the bright
+      Sagittarius and Scutum clouds that are made of stars too faint to count. The
+      contours are steps, so they are blurred by a degree.
+    - Tycho-2 star counts (magnitude 9.5 to 12.5) give the fine structure: the
+      Great Rift, the Coalsack and the other dark clouds show up as holes in them.
     """
     import numpy as np
-    from PIL import Image, ImageChops, ImageDraw, ImageFilter
+    from PIL import Image, ImageChops, ImageDraw
     M = np.array(EQ_TO_GAL)
-    S = 4096  # projection canvas; radius S/2 covers 180 degrees from the pole
+    GW, GH = 2048, 1024
+    px_deg = GW / 360
+    gl = math.pi - (np.arange(GW) + 0.5) / GW * 2 * math.pi
+    gb = math.pi / 2 - (np.arange(GH) + 0.5) / GH * math.pi
+    L, B = np.meshgrid(gl, gb)
 
+    def blur(a, sigma):
+        # Gaussian by FFT: wraps around in longitude, mirrored at the poles.
+        pad = int(sigma * 4) + 1
+        a = np.pad(a, ((pad, pad), (0, 0)), mode='reflect')
+        g = lambda n: np.exp(-2 * (math.pi * np.fft.fftfreq(n) * sigma) ** 2)
+        return np.real(np.fft.ifft2(np.fft.fft2(a) * g(a.shape[0])[:, None] * g(a.shape[1])[None, :]))[pad:-pad]
+
+    # Contours, filled in an azimuthal projection about the galactic pole where each band is a ring.
+    S = 4096
     def to_proj(lon, lat):
         ra, de = math.radians(lon), math.radians(lat)
         v = M @ np.array([math.cos(de) * math.cos(ra), math.cos(de) * math.sin(ra), math.sin(de)])
@@ -318,7 +405,6 @@ def build_milkyway():
         l = math.atan2(v[1], v[0])
         r = (math.pi / 2 - b) / math.pi * (S / 2)
         return (S / 2 + r * math.cos(l), S / 2 + r * math.sin(l))
-
     d = json.load(open(src('d3-celestial', 'data', 'mw.json'), encoding='utf-8'))
     proj = np.zeros((S, S), dtype=np.float32)
     for feat in d['features']:
@@ -331,7 +417,31 @@ def build_milkyway():
                 ImageDraw.Draw(ring_img).polygon([to_proj(lon, lat) for lon, lat in ring], fill=1)
                 mask = ImageChops.logical_xor(mask, ring_img)
         proj += np.asarray(mask, dtype=np.float32) * 0.2
+    r = (math.pi / 2 - B) / math.pi * (S / 2)
+    env = proj[np.clip((S / 2 + r * np.sin(L)).astype(int), 0, S - 1), np.clip((S / 2 + r * np.cos(L)).astype(int), 0, S - 1)]
+    glow = blur(env, 1.0 * px_deg)
+    glow /= glow.max()
 
+    # Star counts per unit of sky.
+    cat = np.vstack([np.load(src('python-tycho2', 'tyc2.npy')), np.load(src('python-tycho2', 'tyc2sup.npy'))]).astype(np.float64)
+    cat = cat[(cat[:, 2] > 9.5) & (cat[:, 2] <= 12.5)]
+    ra, de = cat[:, 0], cat[:, 1]
+    v = np.stack([np.cos(de) * np.cos(ra), np.cos(de) * np.sin(ra), np.sin(de)], 1) @ M.T
+    sb = np.arcsin(np.clip(v[:, 2], -1, 1))
+    sl = np.arctan2(v[:, 1], v[:, 0])
+    x = ((math.pi - sl) / (2 * math.pi) * GW).astype(int) % GW
+    y = np.clip(((math.pi / 2 - sb) / math.pi * GH).astype(int), 0, GH - 1)
+    counts = np.bincount(y * GW + x, minlength=GW * GH).reshape(GH, GW) / np.maximum(np.cos(B), 0.02)
+    fine = blur(counts, 0.45 * px_deg)
+    broad = blur(counts, 5 * px_deg)
+    # Dark clouds: where the counts fall below their surroundings, dim the glow too.
+    structure = (np.clip(fine / np.maximum(broad, 1e-6), 0.25, 1.8) - 0.25) / 1.55
+    floor = np.percentile(fine, 25)
+    stars = np.clip((fine - floor) / (np.percentile(fine, 99.8) - floor), 0, 1)
+    shaped = glow * (0.25 + 0.75 * structure)
+    gal = np.clip(0.6 * shaped / np.percentile(shaped, 99.9) + 0.4 * stars, 0, 1) ** 0.9
+
+    # Resample to right ascension and declination.
     W, H = 2048, 1024
     ra = (np.arange(W) + 0.5) / W * 2 * math.pi
     de = math.pi / 2 - (np.arange(H) + 0.5) / H * math.pi
@@ -339,15 +449,14 @@ def build_milkyway():
     v = np.stack([np.cos(DE) * np.cos(RA), np.cos(DE) * np.sin(RA), np.sin(DE)], axis=-1) @ M.T
     b = np.arcsin(np.clip(v[..., 2], -1, 1))
     l = np.arctan2(v[..., 1], v[..., 0])
-    r = (math.pi / 2 - b) / math.pi * (S / 2)
-    px = np.clip((S / 2 + r * np.cos(l)).astype(int), 0, S - 1)
-    py = np.clip((S / 2 + r * np.sin(l)).astype(int), 0, S - 1)
-    eq = proj[py, px]
-    img = Image.fromarray(np.clip(eq * 255, 0, 255).astype('uint8'), 'L')
-    img = img.filter(ImageFilter.GaussianBlur(2.5))
-    a = np.asarray(img, dtype=np.float32) / 255.0
-    a = np.power(a, 0.85)
-    img = Image.fromarray(np.clip(a * 255, 0, 255).astype('uint8'), 'L')
+    fx = (math.pi - l) / (2 * math.pi) * GW - 0.5
+    fy = (math.pi / 2 - b) / math.pi * GH - 0.5
+    x0 = np.floor(fx).astype(int); y0 = np.clip(np.floor(fy).astype(int), 0, GH - 2)
+    tx = fx - x0; ty = np.clip(fy - y0, 0, 1)
+    x0 %= GW; x1 = (x0 + 1) % GW
+    eq = (gal[y0, x0] * (1 - tx) * (1 - ty) + gal[y0, x1] * tx * (1 - ty)
+          + gal[y0 + 1, x0] * (1 - tx) * ty + gal[y0 + 1, x1] * tx * ty)
+    img = Image.fromarray(np.clip(eq * 255 + 0.5, 0, 255).astype('uint8'), 'L')
     path = os.path.join(OUT, 'milkyway.png')
     img.save(path, optimize=True)
     print(f'  milkyway.png: {os.path.getsize(path) / 1024:.0f} KB')

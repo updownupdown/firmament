@@ -81,7 +81,7 @@ export function tonightPanel(shell: Shell): Panel {
   /** The one-time offer to turn Lumen on. Until then, and if declined, Tonight is a plain almanac. */
   const invite = () => h('section', { class: 'card lumen-card lumen-invite', 'aria-label': 'Meet Lumen' },
     h('div', { class: 'lumen-head' }, lumenGlyph(), h('span', { class: 'lumen-name' }, 'Meet Lumen')),
-    h('p', null, 'Lumen is an optional guide. Each night it adds a fact and a story, from myth to history, about what to look at, and a note about the light when you log a sighting.'),
+    h('p', null, 'Lumen is an optional guide. Each night it adds a fact and a story, from myth to history, about what to look at, and tells you how old the light is when you tap something in the sky.'),
     h('div', { class: 'lumen-actions' },
       h('button', { class: 'pill-button primary', type: 'button', onclick: () => setGuide('on') }, 'Turn on Lumen'),
       h('button', { class: 'pill-button', type: 'button', onclick: () => setGuide('off') }, 'No thanks')),

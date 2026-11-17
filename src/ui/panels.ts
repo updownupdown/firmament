@@ -149,7 +149,7 @@ export function settingsPanel(shell: Shell): Panel {
         h('div', { class: 'control-card' }, select, culture && culture.id === s.culture ? h('p', { class: 'hint' }, culture.intro) : null)),
       section('Guide',
         h('div', { class: 'control-card' },
-          toggle('Lumen', s.guide === 'on', (on) => app.updateSettings((x) => { x.guide = on ? 'on' : 'off'; }), 'Science and stories in Tonight, and a note about the light when you log a sighting'))),
+          toggle('Lumen', s.guide === 'on', (on) => app.updateSettings((x) => { x.guide = on ? 'on' : 'off'; }), 'Science and stories in Tonight, and how old the light is on each object\'s card'))),
       section('Comfort',
         h('div', { class: 'control-card' },
           toggle('Night vision', s.nightVision, (on) => app.updateSettings((x) => { x.nightVision = on; }), 'A dim red screen that keeps your eyes dark-adapted'),

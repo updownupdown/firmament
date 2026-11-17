@@ -1,6 +1,6 @@
 // What Lumen, the optional guide, has to say: one line of science and one of
 // story (myth, history or how other peoples saw it) for the things Tonight
-// points at, and a note about the light when you log a sighting.
+// points at, and how long the light from what you tapped has been travelling.
 
 import { AU_KM } from '../astro/math.ts';
 import type { SkyObject, Universe } from './universe.ts';
@@ -122,7 +122,7 @@ export function lightNote(u: Universe, obj: SkyObject): string | null {
   if (obj.body) {
     const seconds = (obj.body.dist * AU_KM) / C_KM_S;
     const when = seconds < 90 ? `${seconds.toFixed(1)} seconds` : seconds < 5400 ? `${Math.round(seconds / 60)} minutes` : `${(seconds / 3600).toFixed(1)} hours`;
-    return `The light you just saw left ${obj.name} ${when} ago.`;
+    return `The light you see now left ${obj.name} ${when} ago.`;
   }
   if (obj.starIndex !== undefined && u.stars.dist[obj.starIndex] > 0) {
     const ly = u.stars.dist[obj.starIndex] * LY_PER_PC;

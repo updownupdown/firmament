@@ -8,6 +8,7 @@ import { decodeScene } from './sim/scene.ts';
 import { Store, browserStorage } from './sim/store.ts';
 import { h } from './ui/dom.ts';
 import { Shell } from './ui/shell.ts';
+import { watchForUpdates } from './ui/update.ts';
 
 async function boot(): Promise<void> {
   const canvas = h('canvas', { id: 'sky', tabindex: '0', role: 'img', 'aria-label': 'The sky. Drag to look around, pinch or scroll to zoom, tap an object to learn about it.' });
@@ -43,6 +44,7 @@ async function boot(): Promise<void> {
   }
 
   const shell = new Shell(app, ui);
+  ui.append(watchForUpdates());
   const fromHash = () => {
     const scene = decodeScene(location.hash);
     if (Object.keys(scene).length) app.apply(scene);

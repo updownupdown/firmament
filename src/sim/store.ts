@@ -1,5 +1,5 @@
 // Persistence: one versioned JSON document in localStorage holding settings,
-// the observer's place, the observing log and journey progress.
+// the observer's place and journey progress.
 
 import { DEFAULT_LAYERS, type LayerFlags } from './scene.ts';
 import { type Site } from './universe.ts';
@@ -21,21 +21,6 @@ export interface Settings {
   guide: 'unset' | 'on' | 'off';
 }
 
-export interface LogEntry {
-  id: string;
-  /** Object reference, or an event key such as "event:lunar-eclipse:2461234". */
-  ref: string;
-  name: string;
-  /** When it was seen (UT Julian date) and from where. */
-  jdUT: number;
-  site: Site;
-  note?: string;
-  /** Result of checking the entry against the simulated sky. */
-  verified: boolean;
-  /** Altitude at that moment, degrees. */
-  alt?: number;
-}
-
 export interface JourneyProgress {
   /** Index of the furthest step reached. */
   step: number;
@@ -50,7 +35,6 @@ export interface StoreData {
   site: Site | null;
   /** Places the player has used, most recent first. */
   recentSites: Site[];
-  log: LogEntry[];
   journeys: Record<string, JourneyProgress>;
   /** First-run hints already shown. */
   seen: string[];
@@ -63,7 +47,7 @@ export function defaultData(): StoreData {
       layers: { ...DEFAULT_LAYERS }, culture: 'western', bortle: 4, hour12: false,
       nightVision: false, reducedMotion: false, theme: 'default', guide: 'unset',
     },
-    site: null, recentSites: [], log: [], journeys: {}, seen: [],
+    site: null, recentSites: [], journeys: {}, seen: [],
   };
 }
 
@@ -92,7 +76,6 @@ export function migrate(raw: unknown): StoreData {
     },
     site: validSite(r.site) ? r.site : null,
     recentSites: Array.isArray(r.recentSites) ? r.recentSites.filter(validSite).slice(0, 8) : [],
-    log: Array.isArray(r.log) ? r.log.filter((e) => e && typeof e.ref === 'string' && Number.isFinite(e.jdUT) && validSite(e.site)) : [],
     journeys: r.journeys && typeof r.journeys === 'object' ? r.journeys : {},
     seen: Array.isArray(r.seen) ? r.seen.filter((s) => typeof s === 'string') : [],
   };
@@ -148,20 +131,6 @@ export class Store {
       d.site = site;
       d.recentSites = [site, ...d.recentSites.filter((s) => s.name !== site.name || s.lat !== site.lat || s.lon !== site.lon)].slice(0, 8);
     });
-  }
-
-  addLog(entry: Omit<LogEntry, 'id'>): LogEntry {
-    const full: LogEntry = { ...entry, id: `${Math.round(entry.jdUT * 1440)}-${Math.random().toString(36).slice(2, 8)}` };
-    this.update((d) => { d.log.unshift(full); });
-    return full;
-  }
-
-  removeLog(id: string): void {
-    this.update((d) => { d.log = d.log.filter((e) => e.id !== id); });
-  }
-
-  hasLogged(ref: string): boolean {
-    return this.data.log.some((e) => e.ref === ref);
   }
 
   setJourney(id: string, progress: JourneyProgress): void {

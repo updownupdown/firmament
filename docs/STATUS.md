@@ -9,7 +9,7 @@ the build stands against that plan and what to do next, in order.
 - esbuild build (`scripts/build.mjs`), `tsc --noEmit` typecheck, `node --test`.
 - GitHub Actions (`.github/workflows/deploy.yml`) tests, builds and deploys
   `main` to https://updownupdown.github.io/firmament/. This is confirmed working.
-- The live site runs the app: Sky view, Tonight and Log.
+- The live site runs the app: Sky view, Tonight and Journeys.
 
 **Data** (`scripts/build_data.py` → `public/data/`, committed)
 - `stars-bright.bin` (8,920 stars ≤ mag 6.5) and `stars-faint.bin` (101k stars to
@@ -69,7 +69,7 @@ the build stands against that plan and what to do next, in order.
   Takes about 110 ms, so call it when the Tonight panel opens and cache per night.
 - `scene.ts`: `Scene`, `LayerFlags`, `encodeScene`/`decodeScene` for the URL hash
   (format documented in the file; layer order is append-only).
-- `store.ts`: versioned localStorage document (settings, site, log, journey
+- `store.ts`: versioned localStorage document (settings, site, journey
   progress, seen hints) with `migrate` for repair; works in memory if storage
   is blocked.
 - `format.ts`: local time through the site's IANA zone for 1900–2500 and local
@@ -133,10 +133,10 @@ chosen by the owner on 2026-11-16)
   `toggle`). No framework.
 - `shell.ts`: top chip (place, date, time, accuracy note), search and view
   buttons, time bar (pause, slower/faster along `RATE_STEPS` in both directions,
-  a spring-back jog slider, Now), object card (quick facts, "I saw it", centre,
+  a spring-back jog slider, Now), object card (quick facts, centre,
   zoom, details with rise/transit/set), selection reticle, the lift-off / land
   button, dock (Sky, Tonight,
-  Log) and one sheet at a time: full screen above the dock on phones, a left
+  Journeys) and one sheet at a time: full screen above the dock on phones, a left
   column from 900 px. `Esc` closes, `/` searches, space pauses.
 - `panels.ts`: search; view settings (layer toggles, sky culture, Bortle slider,
   night vision, 12-hour clock, reduced motion, share link, Still mode, credits
@@ -146,9 +146,6 @@ chosen by the owner on 2026-11-16)
   the bright planets, the Moon or the best-placed constellation, chosen by day
   number), dark-sky and Moon tiles, planets, constellations overhead and the
   next seven weeks of events from the worker.
-- `log.ts`: `logSighting` marks entries unconfirmed when the object could not
-  have been seen (see Sky events below); checklists for planets,
-  Moon phases, the 88 constellations and the Messier objects.
 - `facts.ts`: the words and numbers on the object card.
 - Visual checks: build, serve `dist/` and screenshot with Playwright (Chromium
   needs `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`);
@@ -213,9 +210,15 @@ Tonight shows a "Meet Lumen" offer, and the View panel's Guide section
 toggles it. Off, the Tonight prompt is a plain almanac line. On, the prompt
 card adds "What it is" (the object card blurb, or `sim/lore.ts`) and "The
 story" (myth, history, other cultures) for planets, the Moon, about 25 bright
-stars and 45 Western constellations, and logging a sighting adds when its
+stars and 45 Western constellations, and the object card says when the
 light left (`lightNote`). Look: a soft breathing point of light in the accent
 colour (`.lumen-glyph`), still under reduced motion.
+
+**New version prompt** (`ui/update.ts`): the page carries its build hash in a
+`firmament-build` meta tag; 20 s after start, every 15 minutes and when the
+tab comes back, it fetches `version.json` (no-store) and, if the build
+differs, shows a "Reload" banner (top on wide screens, above the time bar on
+phones).
 
 **Faint stars can be tapped**: `Universe.faint` keeps the same Tycho-2 bands
 as the renderer (`TYCHO_KEEP`, oldest dropped first); refs are `tyc:<band>:<i>`
@@ -295,16 +298,9 @@ more.
 cache-first and everything else network-first, and is registered from
 `main.ts`. Checked by reloading with the network off.
 
-**Sky events in the Log** (`src/sim/sightings.ts`; tests in `sightings.test.ts`)
-- `checkSighting` (objects) and `checkEvent` (calendar events) decide whether
-  something could be seen from the player's place at the clock's instant.
-  `checkEvent` also gives the best moment from here: the local maximum of a
-  solar eclipse, the darkest hour with the radiant high for a meteor shower.
-- `EVENT_GOALS` is the Log's "Sky events" checklist: lunar and solar eclipses,
-  a close conjunction and ten meteor showers. Tapping one searches month by
-  month (up to six years) for the next that counts from the player's place.
-- The Log shows a "Happening now" card when an event is within reach of the
-  clock, with its own "I saw it".
+**Observing log removed** (2026-11-17, at the owner's request): the "I saw it"
+button, the Log section, sighting checks (`sim/sightings.ts`) and stored log
+entries are gone; old saved logs are dropped on load.
 
 **Lunar eclipses in the sky**: `earthShadowAt` (`astro/events.ts`, tested
 against the published contact times of 14 March 2025) gives the umbra and

@@ -5,16 +5,16 @@ import type { App, Section } from '../app.ts';
 import { Pointing } from '../render/pointing.ts';
 import { jdNow } from '../astro/time.ts';
 import { calendarNote, formatDate, formatDistanceAU, formatTime, localTime } from '../sim/format.ts';
-import { h, fill, icon, iconButton } from './dom.ts';
+import { lightNote } from '../sim/lore.ts';
+import { h, fill, icon, iconButton, lumenGlyph } from './dom.ts';
 import { blurb, detailFacts, quickFacts, riseSetFacts, whereNow } from './facts.ts';
 import { type JourneyPlayer, journeyPlayer, journeysPanel } from './journeys.ts';
-import { logPanel, logSighting } from './log.ts';
 import { measureTool } from './measure.ts';
 import { placeTimePanel, searchPanel, settingsPanel } from './panels.ts';
 import { tonightPanel } from './tonight.ts';
 import { timeBar } from './timebar.ts';
 
-export type SheetId = 'search' | 'settings' | 'place' | 'tonight' | 'journeys' | 'log' | null;
+export type SheetId = 'search' | 'settings' | 'place' | 'tonight' | 'journeys' | null;
 
 export interface Panel {
   title: string;
@@ -47,7 +47,6 @@ export class Shell {
       place: placeTimePanel(this),
       tonight: tonightPanel(this),
       journeys: journeysPanel(this),
-      log: logPanel(this),
     };
     this.sheetTitle = h('h2', { class: 'sheet-title', tabindex: '-1' });
     this.sheetBody = h('div', { class: 'sheet-body' });
@@ -112,7 +111,7 @@ export class Shell {
     panel.refresh();
     this.sheetBody.scrollTop = 0;
     (panel.focus ?? this.sheetTitle).focus({ preventScroll: true });
-    this.app.setSection(id === 'tonight' || id === 'log' || id === 'journeys' ? id : 'sky');
+    this.app.setSection(id === 'tonight' || id === 'journeys' ? id : 'sky');
     this.syncDock();
   }
 
@@ -266,7 +265,7 @@ export class Shell {
     const subtitle = h('p', { class: 'card-subtitle' });
     const quick = h('dl', { class: 'facts quick' });
     const more = h('div', { class: 'card-more', hidden: true });
-    const saw = h('button', { class: 'pill-button primary', type: 'button' });
+    const lumen = h('p', { class: 'card-lumen', hidden: true });
     const detailsLabel = h('span', null, 'More details');
     const detailsButton = h('button', { class: 'card-disclosure', type: 'button', 'aria-expanded': 'false' }, detailsLabel, icon('up', 16));
     const measureButton = iconButton('ruler', 'Measure the angle to another object', () => {
@@ -284,14 +283,14 @@ export class Shell {
         h('div', { class: 'card-heading' }, title, subtitle),
         iconButton('close', 'Close', () => app.select(null))),
       quick,
+      lumen,
       h('div', { class: 'card-actions' },
-        saw,
+        h('button', { class: 'pill-button primary', type: 'button', onclick: () => {
+          if (app.selected) app.centre(app.selected, app.framingFov(app.selected));
+        } }, 'Zoom in'),
         iconButton('target', 'Centre and follow', () => {
           if (app.selected) app.centre(app.selected);
         }, 'outlined'),
-        h('button', { class: 'pill-button', type: 'button', onclick: () => {
-          if (app.selected) app.centre(app.selected, app.framingFov(app.selected));
-        } }, 'Zoom in'),
         measureButton),
       detailsButton,
       more);
@@ -321,11 +320,10 @@ export class Shell {
         : `${obj.subtitle} · ${whereNow(app.universe, obj, app.layers.atmosphere)}`;
       const space = app.mode === 'space';
       fill(quick, factList(quickFacts(app.universe, obj).filter((f) => !space || f.label !== 'Altitude')));
-      const logged = app.store.hasLogged(obj.ref);
-      fill(saw, icon('check', 18), logged ? 'Seen' : 'I saw it');
-      saw.classList.toggle('done', logged);
-      // Tycho-2 stars are far too faint to log by eye.
-      saw.hidden = obj.kind === 'sun' || space || obj.ref.startsWith('tyc:');
+      // Lumen, when it is on, says how old the light is.
+      const note = app.store.data.settings.guide === 'on' && !space ? lightNote(app.universe, obj) : null;
+      lumen.hidden = !note;
+      if (note) fill(lumen, lumenGlyph(), h('span', null, note));
       measureButton.hidden = space || obj.kind === 'constellation';
       renderMore();
     };
@@ -335,12 +333,6 @@ export class Shell {
       detailsButton.setAttribute('aria-expanded', String(expanded));
       detailsLabel.textContent = expanded ? 'Fewer details' : 'More details';
       renderMore();
-    });
-    saw.addEventListener('click', () => {
-      const obj = app.selectedObject;
-      if (!obj) return;
-      this.toast(logSighting(app, obj));
-      update();
     });
     app.on('select', () => { riseSetFor = ''; update(); });
     app.on('second', update);
@@ -363,14 +355,13 @@ export class Shell {
     const el = h('nav', { class: 'dock glass chrome', 'aria-label': 'Sections' },
       make('sky', 'Sky', () => this.closeSheet()),
       make('tonight', 'Tonight', () => this.openSheet('tonight')),
-      make('journeys', 'Journeys', () => this.openSheet('journeys')),
-      make('log', 'Log', () => this.openSheet('log')));
+      make('journeys', 'Journeys', () => this.openSheet('journeys')));
     this.syncDock();
     return el;
   }
 
   private syncDock(): void {
-    const current: Section = this.sheet === 'tonight' || this.sheet === 'log' || this.sheet === 'journeys' ? this.sheet : 'sky';
+    const current: Section = this.sheet === 'tonight' || this.sheet === 'journeys' ? this.sheet : 'sky';
     for (const [section, button] of Object.entries(this.dockButtons)) {
       if (section === current) button.setAttribute('aria-current', 'page');
       else button.removeAttribute('aria-current');

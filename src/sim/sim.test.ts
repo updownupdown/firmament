@@ -162,7 +162,6 @@ test('store: saves, reloads and repairs damaged data', () => {
   assert.equal(a.data.site, null);
   a.setSite(TORONTO);
   a.update((d) => { d.settings.bortle = 7; d.settings.layers.boundaries = true; });
-  const entry = a.addLog({ ref: 'jupiter', name: 'Jupiter', jdUT: J2000, site: TORONTO, verified: true });
   assert.equal(a.markSeen('welcome'), true);
   assert.equal(a.markSeen('welcome'), false);
 
@@ -171,16 +170,14 @@ test('store: saves, reloads and repairs damaged data', () => {
   assert.equal(b.data.settings.bortle, 7);
   assert.equal(b.data.settings.layers.boundaries, true);
   assert.equal(b.data.settings.layers.lines, true);
-  assert.equal(b.hasLogged('jupiter'), true);
-  b.removeLog(entry.id);
-  assert.equal(b.hasLogged('jupiter'), false);
 
   storage.setItem(STORE_KEY, '{not json');
   assert.equal(new Store(storage).data.settings.culture, 'western');
   const repaired = migrate({ version: 1, settings: { bortle: 40 }, site: { name: 'x', lat: 500 }, log: [{ ref: 3 }], seen: 'no' });
   assert.equal(repaired.settings.bortle, 9);
   assert.equal(repaired.site, null);
-  assert.deepEqual(repaired.log, []);
+  // An observing log from older versions is dropped.
+  assert.equal('log' in repaired, false);
   assert.equal(migrate({ version: 99 }).version, 1);
   // Storage that throws must not break the app.
   const broken = new Store({ getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); }, removeItem() {} });

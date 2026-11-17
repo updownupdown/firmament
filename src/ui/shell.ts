@@ -12,9 +12,11 @@ import { type JourneyPlayer, journeyPlayer, journeysPanel } from './journeys.ts'
 import { measureTool } from './measure.ts';
 import { placeTimePanel, searchPanel, settingsPanel } from './panels.ts';
 import { tonightPanel } from './tonight.ts';
+import { type StarLabPanel, starLabPanel } from './starlab.ts';
+import { type StarSeed, starSeed } from '../sim/starlink.ts';
 import { timeBar } from './timebar.ts';
 
-export type SheetId = 'search' | 'settings' | 'place' | 'tonight' | 'journeys' | null;
+export type SheetId = 'search' | 'settings' | 'place' | 'tonight' | 'journeys' | 'stars' | null;
 
 export interface Panel {
   title: string;
@@ -37,6 +39,7 @@ export class Shell {
   private toastTimer = 0;
   private lastFocus: HTMLElement | null = null;
   private readonly journey: JourneyPlayer;
+  private readonly starLab: StarLabPanel;
 
   constructor(app: App, root: HTMLElement) {
     this.app = app;
@@ -47,6 +50,7 @@ export class Shell {
       place: placeTimePanel(this),
       tonight: tonightPanel(this),
       journeys: journeysPanel(this),
+      stars: (this.starLab = starLabPanel(this)),
     };
     this.sheetTitle = h('h2', { class: 'sheet-title', tabindex: '-1' });
     this.sheetBody = h('div', { class: 'sheet-body' });
@@ -123,6 +127,12 @@ export class Shell {
     this.app.setSection('sky');
     this.syncDock();
     (this.lastFocus?.isConnected ? this.lastFocus : this.app.canvas).focus({ preventScroll: true });
+  }
+
+  /** Open the Star lab, optionally starting from a real star. */
+  openStarLab(seed?: StarSeed | null): void {
+    if (seed !== undefined) this.starLab.seed(seed);
+    this.openSheet('stars');
   }
 
   /** Begin or resume a journey, with the sky in view. */
@@ -271,6 +281,11 @@ export class Shell {
     const measureButton = iconButton('ruler', 'Measure the angle to another object', () => {
       if (app.selected) app.startMeasure(app.selected);
     }, 'outlined');
+    const lifeButton = h('button', { class: 'pill-button', type: 'button', onclick: () => {
+      const obj = app.selectedObject;
+      const seed = obj ? starSeed(app.universe, obj) : null;
+      if (seed) this.openStarLab(seed);
+    } }, icon('star', 16), 'Life story');
     let expanded = false;
     let riseSetFor = '';
     let riseSet: ReturnType<typeof riseSetFacts> = [];
@@ -291,7 +306,8 @@ export class Shell {
         iconButton('target', 'Centre and follow', () => {
           if (app.selected) app.centre(app.selected);
         }, 'outlined'),
-        measureButton),
+        measureButton,
+        lifeButton),
       detailsButton,
       more);
 
@@ -325,6 +341,7 @@ export class Shell {
       lumen.hidden = !note;
       if (note) fill(lumen, lumenGlyph(), h('span', null, note));
       measureButton.hidden = space || obj.kind === 'constellation';
+      lifeButton.hidden = !(obj.kind === 'sun' || (obj.starIndex !== undefined && (app.universe.stars.dist[obj.starIndex] > 0 || !!app.universe.stars.meta.get(obj.starIndex)?.n)));
       renderMore();
     };
     detailsButton.addEventListener('click', () => {

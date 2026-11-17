@@ -57,6 +57,7 @@ const ICONS: Record<string, string> = {
   phone: '<rect x="6" y="2.5" width="8" height="15" rx="2"/><path d="M9 15h2"/>',
   figures: '<path d="M3 15l4-6 5 3 5-7" /><circle cx="3" cy="15" r="1.3" fill="currentColor"/><circle cx="7" cy="9" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="17" cy="5" r="1.3" fill="currentColor"/>',
   names: '<path d="M3 15l4-10 4 10M4.5 11.5h5M13 9.5c1-1 4-1 4 1.5V15m0-2.5c-3 0-4.5.5-4.5 1.6 0 1.6 3 1.6 4.5-.3"/>',
+  star: '<path d="M10 2.8l2.1 4.6 5 .5-3.8 3.4 1.1 4.9L10 13.7l-4.4 2.5 1.1-4.9L2.9 7.9l5-.5z"/>',
   starname: '<path d="M7 3.5l1.2 2.7 2.8.3-2.1 1.9.6 2.8L7 9.8 4.5 11.2l.6-2.8L3 6.5l2.8-.3z" fill="currentColor" stroke="none"/><path d="M11 14h6M3 17h14"/>',
   planet: '<circle cx="10" cy="10" r="4.5"/><path d="M3.5 13.5c-1.5 1.6.5 2.4 4 1.6 3.4-.8 7.6-3.1 9-5 1.2-1.6.4-2.4-1.4-2.2"/>',
   galaxy: '<ellipse cx="10" cy="10" rx="7.5" ry="3.2" transform="rotate(-25 10 10)"/><circle cx="10" cy="10" r="1.6" fill="currentColor" stroke="none"/>',

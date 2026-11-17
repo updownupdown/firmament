@@ -1,0 +1,70 @@
+/* The Star lab sheet. */
+
+.star-lab .card { gap: var(--space-3); }
+.lab-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.lab-value { font-size: var(--text-md); font-weight: var(--weight-medium); font-variant-numeric: tabular-nums; }
+.lab-controls input[type='range'] { margin-top: calc(var(--space-2) * -1); }
+.lab-seed { border-color: var(--color-accent-edge); }
+
+.lab-view, .lab-hr { width: 100%; display: block; border-radius: var(--radius-sm); background: var(--color-surface-solid); }
+.lab-view { height: 220px; }
+@media (max-width: 480px) { .lab-view { height: 180px; } }
+.lab-heading { display: flex; flex-direction: column; gap: 2px; }
+.lab-stage { font-size: var(--text-xl); font-weight: var(--weight-medium); letter-spacing: var(--tracking-tight); }
+.lab-age { color: var(--color-text-muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.lab-text { font-size: var(--text-md); line-height: 1.5; }
+.lab-facts dd { font-size: var(--text-sm); }
+
+.lab-timeline { display: flex; align-items: center; gap: var(--space-3); }
+.lab-timeline .icon-button { flex: none; }
+.lab-track { position: relative; flex: 1; min-width: 0; }
+.lab-strip {
+  position: absolute; left: 0; right: 0; top: 50%; height: 8px; margin-top: -4px;
+  display: flex; gap: 2px; border-radius: var(--radius-pill); overflow: hidden; pointer-events: none;
+}
+.lab-seg { flex-basis: 0; min-width: 2px; opacity: 0.75; }
+.lab-seg.remnant { background: var(--color-border-strong); }
+.lab-time { position: relative; }
+.lab-time::-webkit-slider-runnable-track { background: transparent !important; }
+.lab-time::-moz-range-track { background: transparent !important; }
+.lab-time::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--color-surface-solid); }
+
+.lab-hr { height: 260px; }
+
+.lab-axis { display: flex; justify-content: space-between; color: var(--color-text-faint); font-size: var(--text-xs); }
+.lab-bar { display: flex; height: 16px; gap: 2px; border-radius: var(--radius-pill); overflow: hidden; }
+.lab-bar-seg { flex-basis: 0; min-width: 3px; }
+.lab-bar-seg.burning, .lab-swatch.burning { box-shadow: inset 0 0 0 2px var(--color-text); }
+.lab-legend, .lab-yields { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--text-sm); }
+.lab-legend li { display: flex; align-items: flex-start; gap: var(--space-2); }
+.lab-legend li > span:nth-child(2) { flex: 1; color: var(--color-text-muted); }
+.lab-legend strong { color: var(--color-text); font-weight: var(--weight-medium); }
+.lab-swatch { flex: none; width: 12px; height: 12px; margin-top: 3px; border-radius: 4px; }
+.lab-ending-title { font-size: var(--text-lg); font-weight: var(--weight-medium); }
+
+.lab-yields li { display: grid; grid-template-columns: 12px 7.5em 1fr auto; align-items: center; gap: var(--space-2); }
+.lab-yields .lab-swatch { margin-top: 0; }
+.lab-yield-bar { height: 6px; border-radius: var(--radius-pill); background: var(--color-surface-raised); overflow: hidden; }
+.lab-yield-bar > span { display: block; height: 100%; border-radius: inherit; }
+.lab-yield-mass { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lab-sources { font-size: var(--text-xs); color: var(--color-text-faint); padding: 0 var(--space-1); }
+
+.el-H { background: var(--el-h); }
+.el-He { background: var(--el-he); }
+.el-C { background: var(--el-c); }
+.el-N { background: var(--el-n); }
+.el-O { background: var(--el-o); }
+.el-Ne { background: var(--el-ne); }
+.el-Mg { background: var(--el-mg); }
+.el-Si { background: var(--el-si); }
+.el-S { background: var(--el-s); }
+.el-Fe { background: var(--el-fe); }
+.el-other { background: var(--el-other); }
+
+/* The lab needs a little more room than other sheets on wide screens. */
+@media (min-width: 900px) {
+  .sheet[data-sheet='stars'] { width: 460px; }
+}
+
+/* A way into the lab from the Journeys list and from a star's card. */
+.lab-entry { border-color: var(--color-accent-edge); }

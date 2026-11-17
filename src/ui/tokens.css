@@ -47,6 +47,22 @@
   --plot-sight: rgba(157, 180, 255, 0.75);
   --plot-height: 280px;
 
+  /* Star lab: element colours (read as classes .el-H etc.) and nebula tints. */
+  --el-h: #7fb2ff;
+  --el-he: #f0c27a;
+  --el-c: #9aa3b5;
+  --el-n: #8fd6b0;
+  --el-o: #6fd3e8;
+  --el-ne: #ff8fb1;
+  --el-mg: #c7a6ff;
+  --el-si: #e8d47a;
+  --el-s: #f5ec6a;
+  --el-fe: #ff8a65;
+  --el-other: #b4bbcb;
+  --lab-nebula: #6fd3c4;
+  --lab-nebula-edge: #ff8a8a;
+  --lab-void: #000000;
+
   --font: Outfit, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   --text-xs: 0.75rem;
   --text-sm: 0.84375rem;

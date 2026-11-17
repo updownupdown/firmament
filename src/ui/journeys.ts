@@ -23,6 +23,9 @@ export function journeysPanel(shell: Shell): Panel {
     const done = JOURNEYS.filter((j) => app.store.data.journeys[j.id]?.done).length;
     fill(el,
       h('p', { class: 'lede' }, `Short investigations that use the real sky. Each takes a few minutes.${done ? ` You have finished ${done} of ${JOURNEYS.length}.` : ''}`),
+      h('button', { class: 'card journey-item lab-entry', type: 'button', onclick: () => shell.openStarLab() },
+        h('span', { class: 'journey-head' }, h('span', { class: 'row-name' }, 'Star lab'), h('span', { class: 'tag' }, 'Sandbox')),
+        h('span', { class: 'hint' }, 'Build a star from its mass and metals and watch it live and die: how long it lasts, what it becomes, and the elements it makes.')),
       JOURNEY_THEMES.map((theme) => h('section', { class: 'view-section' },
         h('h3', { class: 'section-title' }, theme),
         JOURNEYS.filter((j) => j.theme === theme).map(item))));

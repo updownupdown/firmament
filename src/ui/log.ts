@@ -152,7 +152,7 @@ export function logPanel(shell: Shell): Panel {
         return h('li', { class: 'event-row' },
           h('button', { class: 'row', type: 'button', title: 'Show its best moment from here', onclick: () => shell.show(eventScene(e, check)) },
             h('span', { class: 'row-text' }, check.name),
-            h('span', { class: 'row-detail' }, check.ok ? 'Visible now' : check.reason)),
+            h('span', { class: 'row-detail' }, check.ok ? 'Visible now' : `Not from here right now. Best around ${formatTime(check.best, app.site, { hour12: app.store.data.settings.hour12 })}, ${formatDate(check.best, app.site)}.`)),
           h('button', {
             class: `pill-button primary${logged ? ' done' : ''}`, type: 'button', disabled: logged,
             onclick: () => { shell.toast(logEvent(app, check)); refresh(); },

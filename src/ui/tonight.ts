@@ -53,6 +53,7 @@ export function tonightPanel(shell: Shell): Panel {
       const whenText = p.when === 'evening' ? 'after dark' : p.when === 'morning' ? 'before dawn' : `around ${time(p.best)}`;
       const lead = p === seen[0]
         ? `${name(p.id)} is the brightest planet in the sky tonight. Look to the ${compassWord(p.bestAz)} ${whenText}.`
+        : p.when === 'morning' ? `${name(p.id)} is up before dawn: look to the ${compassWord(p.bestAz)}.`
         : `${name(p.id)} is up tonight: look to the ${compassWord(p.bestAz)} ${whenText}.`;
       const extra = blurb(app.universe.resolve(p.id)!) ?? '';
       out.push({ text: `${lead} ${extra}`.trim(), scene: lookAt(p.id, p.best) });

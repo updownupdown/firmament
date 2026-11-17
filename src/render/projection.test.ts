@@ -68,3 +68,21 @@ test('the view matrix is a rotation', () => {
     assert.ok(Math.abs(dot(rows[i], rows[j]) - (i === j ? 1 : 0)) < 1e-12);
   }
 });
+
+test('sky conditions: eclipse geometry and the faintest stars on a dark night', async () => {
+  const { uncoveredFraction, skyConditions } = await import('./conditions.ts');
+  assert.equal(uncoveredFraction(1, 1, 3), 1);
+  assert.equal(uncoveredFraction(1, 1.05, 0), 0);
+  // An annular eclipse: a smaller disc in the middle leaves a ring.
+  assert.ok(Math.abs(uncoveredFraction(1, 0.9, 0) - 0.19) < 1e-9);
+  // Two equal discs a radius apart overlap by 2π/3 − √3/2 (the lens area).
+  assert.ok(Math.abs(uncoveredFraction(1, 1, 1) - (1 - (2 * Math.PI / 3 - Math.sqrt(3) / 2) / Math.PI)) < 1e-9);
+  const { testEphemeris, testStars } = await import('../astro/testdata.ts');
+  const { Universe } = await import('../sim/universe.ts');
+  // New Moon, midnight, a dark site: the classic naked-eye limit of about 6.5 to 7.6.
+  const u = new Universe({ eph: testEphemeris(), stars: testStars(), dsos: [], cultures: [], site: { name: 'Dark', lat: 31, lon: -105, height: 0, tz: '' }, jdUT: 2461383.79 });
+  const dark = skyConditions(u, { bortle: 1, atmosphere: true, fov: 70 * Math.PI / 180 });
+  assert.ok(dark.nakedEyeLimit > 6.5 && dark.nakedEyeLimit <= 7.6, String(dark.nakedEyeLimit));
+  const city = skyConditions(u, { bortle: 8, atmosphere: true, fov: 70 * Math.PI / 180 });
+  assert.ok(city.nakedEyeLimit < dark.nakedEyeLimit - 3, String(city.nakedEyeLimit));
+});

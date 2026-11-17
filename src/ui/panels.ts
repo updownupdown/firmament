@@ -267,8 +267,8 @@ export function placeTimePanel(shell: Shell): Panel {
     fill(placeList, list.map(placeRow));
     placeStatus.textContent = q && !list.length ? 'No city by that name here. You can enter coordinates below.' : '';
     if (document.activeElement !== lat && document.activeElement !== lon) {
-      lat.value = String(site.lat);
-      lon.value = String(site.lon);
+      lat.value = String(Number(site.lat.toFixed(4)));
+      lon.value = String(Number(site.lon.toFixed(4)));
     }
   };
   placeInput.addEventListener('input', renderPlaces);

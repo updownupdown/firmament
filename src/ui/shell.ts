@@ -266,7 +266,8 @@ export class Shell {
     const quick = h('dl', { class: 'facts quick' });
     const more = h('div', { class: 'card-more', hidden: true });
     const saw = h('button', { class: 'pill-button primary', type: 'button' });
-    const detailsButton = h('button', { class: 'pill-button', type: 'button', 'aria-expanded': 'false' }, 'Details');
+    const detailsLabel = h('span', null, 'More details');
+    const detailsButton = h('button', { class: 'card-disclosure', type: 'button', 'aria-expanded': 'false' }, detailsLabel, icon('up', 16));
     const measureButton = iconButton('ruler', 'Measure the angle to another object', () => {
       if (app.selected) app.startMeasure(app.selected);
     }, 'outlined');
@@ -290,8 +291,8 @@ export class Shell {
         h('button', { class: 'pill-button', type: 'button', onclick: () => {
           if (app.selected) app.centre(app.selected, app.framingFov(app.selected));
         } }, 'Zoom in'),
-        measureButton,
-        detailsButton),
+        measureButton),
+      detailsButton,
       more);
 
     const style = () => ({ hour12: app.store.data.settings.hour12 });
@@ -330,7 +331,7 @@ export class Shell {
       expanded = !expanded;
       more.hidden = !expanded;
       detailsButton.setAttribute('aria-expanded', String(expanded));
-      detailsButton.textContent = expanded ? 'Less' : 'Details';
+      detailsLabel.textContent = expanded ? 'Fewer details' : 'More details';
       renderMore();
     });
     saw.addEventListener('click', () => {

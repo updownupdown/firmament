@@ -8,7 +8,8 @@ import { DEG, type Vec3, apply, clamp } from '../astro/math.ts';
 import { fromAzAlt } from '../astro/frames.ts';
 import type { LayerFlags } from '../sim/scene.ts';
 import { type Universe, dsoId, dsoName, starRef } from '../sim/universe.ts';
-import { type SkyRenderer, dsoLimit } from './sky.ts';
+import { dsoLimit } from './conditions.ts';
+import type { SkyRenderer } from './sky.ts';
 
 export interface LabelItem {
   key: string;

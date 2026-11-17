@@ -618,7 +618,8 @@ export class SpaceRenderer {
       const parent = parentOf.get(d.id);
       const host = parent ? this.drawn.find((x) => x.id === parent) : undefined;
       if (host && !sel && Math.hypot(d.x - host.x, d.y - host.y) < host.radiusPx + 28) continue;
-      const rank = d.id === 'sun' ? 900 : d.id === this.camera.focus ? 880 : parent || d.id === 'pluto' ? 500 : 800;
+      // Home first: the Sun needs no name to be found, the Earth does.
+      const rank = d.id === 'earth' ? 910 : d.id === 'sun' ? 900 : d.id === this.camera.focus ? 880 : parent || d.id === 'pluto' ? 500 : 800;
       items.push({ key: `space:${d.id}`, text: d.name, x: d.x, y: d.y, kind: 'body', priority: rank - d.depth * 0.01, offset: d.radiusPx * (d.id === 'saturn' && d.radiusPx > 6 ? 2.3 : 1) + 5, selected: sel });
     }
     return items;

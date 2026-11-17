@@ -252,6 +252,10 @@ button.tile:hover, button.row:hover, .result:hover, .check-item:hover, .chip-but
   color: var(--color-text-muted); font-size: var(--text-sm);
 }
 .check-item.done { background: var(--color-accent); border-color: transparent; color: var(--color-on-accent); font-weight: var(--weight-bold); }
+.event-row { display: flex; align-items: center; gap: var(--space-2); }
+.event-row .row { flex: 1; min-width: 0; width: auto; margin-right: 0; flex-direction: column; align-items: flex-start; gap: 0; }
+.event-row .row-detail { text-align: left; }
+.event-row .pill-button { flex: none; }
 .log-entry { display: flex; align-items: center; gap: var(--space-1); }
 .log-entry + .log-entry { border-top: 1px solid var(--color-border); }
 .log-main {
@@ -345,3 +349,12 @@ button.tile:hover, button.row:hover, .result:hover, .check-item:hover, .chip-but
   .toast { top: calc(var(--safe-top) + var(--space-4)); }
   :root[data-sheet] .dock, :root[data-sheet] .time-bar { left: calc(50% + 208px); }
 }
+
+/* Phone pointing */
+.point-button {
+  position: fixed; z-index: 2;
+  top: calc(var(--safe-top) + var(--space-4) + 48px + var(--space-2)); right: calc(var(--safe-right) + var(--space-4));
+  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+}
+:root[data-sheet] .point-button { display: none; }
+.icon-button[aria-pressed="true"] { background: var(--color-accent); border-color: transparent; color: var(--color-on-accent); }

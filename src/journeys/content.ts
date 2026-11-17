@@ -15,6 +15,10 @@ export const THUBAN = 'star:68756';
 export const VEGA = 'star:91262';
 export const ACRUX = 'star:60718';
 export const ANTARES = 'star:80763';
+export const FOMALHAUT = 'star:113368';
+export const DUBHE = 'star:54061';
+export const ALKAID = 'star:67301';
+export const MERAK = 'star:53910';
 
 const GIZA = site('Giza', 29.98, 31.13, 'Africa/Cairo', 'Egypt');
 const AT_SEA = site('Somewhere in the Atlantic', 36.5, -25);
@@ -24,6 +28,8 @@ const ALEXANDRIA = site('Alexandria', 31.2, 29.92, 'Africa/Cairo', 'Egypt');
 const PADUA = site('Padua', 45.41, 11.88, 'Europe/Rome', 'Italy');
 const HILO = site('Hilo', 19.72, -155.08, 'Pacific/Honolulu', 'United States');
 const PRAGUE = site('Prague', 50.09, 14.42, 'Europe/Prague', 'Czechia');
+export const SHIP = site('Somewhere in the North Atlantic', 40, -35);
+export const STONEHENGE = site('Stonehenge', 51.1789, -1.8262, 'Europe/London', 'United Kingdom');
 const CAPE_CANAVERAL = site('Cape Canaveral', 28.39, -80.6, 'America/New_York', 'United States');
 
 const POLE_LAYERS = { gridEquatorial: true, atmosphere: false, lines: true, constellationLabels: true, starLabels: true };
@@ -40,6 +46,15 @@ export const KEPLER_TRACK = { jd0: jdFromCalendar(1590, 1, 1, 0, 0), count: 12 }
 /** The 2026 Mars launch window, and arrival on the Hohmann transfer from it (orbits.test.ts checks both). */
 export const MARS_WINDOW_2026 = jdFromCalendar(2026, 11, 4, 0, 0);
 export const MARS_ARRIVAL_2027 = jdFromCalendar(2027, 7, 27, 0, 0);
+/** Two stars at dusk from the ship (UT). */
+export const NAV_TIME = jdFromCalendar(2026, 11, 16, 21, 0);
+/** Midsummer sunrise at Stonehenge in 2500 BC and in 2026 (UT, upper limb on a level horizon), from the season and rise searches. */
+export const STONEHENGE_RISE_2500BC = 808492.6526;
+export const STONEHENGE_RISE_2026 = 2461212.6609;
+/** The Big Dipper on an April night, now and 50,000 years on. */
+export const DIPPER_NOW = jdFromCalendar(2026, 4, 15, 21, 0);
+export const DIPPER_LATER = DIPPER_NOW + 50000 * 365.25;
+const altOf = (ref: string) => (u: Universe): number => u.horizontal(u.resolve(ref)!.dir).altApparent / DEG;
 const farthestMars = (u: Universe): number =>
   Math.max(...marsTrack(u.eph, KEPLER_TRACK.jd0, KEPLER_TRACK.count).map((f) => Math.hypot(f.mars[0], f.mars[1])));
 
@@ -161,6 +176,12 @@ export const JOURNEYS: Journey[] = [
         task: { kind: 'find', refs: ['callisto'], prompt: 'Tap Callisto, the one that strays furthest from Jupiter.', hint: 'Callisto is labelled. It swings out to about 13 Jupiter-widths on either side.' },
       },
       {
+        title: 'Time Io',
+        text: 'Io is the innermost of the four, never more than about three Jupiter-widths from the planet. Time is running at an hour a second. Watch Io swing out to one side, across to the other and back again.',
+        scene: { time: { jd: galileoNight(13) }, rate: 3600, camera: { look: 'jupiter', fov: 0.6 }, select: 'io' },
+        task: { kind: 'number', prompt: 'How long does Io take to go round once, in days? Use the date and time at the top.', answer: 1.769, tolerance: 0.2, unit: 'days', hint: 'Note the time when Io is furthest to one side, then wait until it is back there.', explain: '1.77 days. Callisto, about 4.5 times further out, takes 16.7 days: 9.4 times as long. That is Kepler\'s third law, the same rule the planets follow round the Sun.' },
+      },
+      {
         title: 'What it meant',
         text: 'Run time with the controls at the bottom and watch them swing back and forth: Io in under two days, Callisto in nearly seventeen. They are moons circling Jupiter, seen edge on.',
         scene: { time: { jd: galileoNight(13) }, rate: 3600, camera: { look: 'jupiter', fov: 0.6 }, select: 'jupiter' },
@@ -258,6 +279,104 @@ export const JOURNEYS: Journey[] = [
         title: 'Arrival',
         text: 'July 2027: the spacecraft would be arriving at Mars now, nearly opposite where the Earth was at launch. Run time backwards to watch the trip in reverse, or tap Mars to fly in closer.',
         scene: { time: { jd: MARS_ARRIVAL_2027 }, rate: 0, select: 'mars', camera: { look: 'sun', mode: 'space', dist: 5.5, orbit: { yaw: -90, pitch: 80 } } },
+      },
+    ],
+  },
+
+  {
+    id: 'navigation',
+    title: 'Fix your position at sea',
+    summary: 'Two stars, a clock and a chart: find where your ship is, the way navigators did for two hundred years.',
+    minutes: 6,
+    steps: [
+      {
+        title: 'Dusk in mid-ocean',
+        text: 'Polaris gives your latitude, but only that: one line across the ocean. A navigator wants a point. At dusk, when the brightest stars are out and the horizon can still be seen, they measure two stars far apart in the sky and note the exact time on the ship\'s chronometer.',
+        scene: { time: { jd: NAV_TIME }, rate: 0, site: SHIP, camera: { look: { az: 285, alt: 45 }, fov: 90 }, layers: { ...PLAIN_LAYERS, lines: true, starLabels: true } },
+        task: { kind: 'find', refs: [VEGA], prompt: 'Find Vega, the bright star high in the west, and tap it.', hint: 'Vega is the brightest star in the west, about halfway up.' },
+      },
+      {
+        title: 'Measure the first star',
+        text: 'With a sextant the navigator brings Vega down to the horizon and reads off its altitude. Here the card does the measuring.',
+        task: { kind: 'number', prompt: 'How high is Vega, in degrees?', answer: altOf(VEGA), tolerance: 1, unit: '°', hint: 'Its altitude is on Vega\'s card.', explain: 'Right. That one number already says a lot about where you are.' },
+      },
+      {
+        title: 'A circle on the globe',
+        text: 'At this instant Vega is straight overhead at one spot on the Earth, its ground point, which the almanac gives from the time. Anyone who sees Vega at your altitude is the same distance from that spot: somewhere on a circle around it. A second star gives a second circle. Fomalhaut is low in the south.',
+        scene: { camera: { look: FOMALHAUT, fov: 90, track: false } },
+        task: { kind: 'find', refs: [FOMALHAUT], prompt: 'Tap Fomalhaut, alone and low in the south.', hint: 'Fomalhaut is the only bright star low in the south.' },
+      },
+      {
+        title: 'Where the circles cross',
+        text: 'This is the chart on the navigator\'s table, with both circles of position drawn from the two altitudes and the time. The ship is on both circles, so it is where they cross.',
+        plot: { kind: 'star-fix', stars: [VEGA, FOMALHAUT] },
+        task: { kind: 'plot', prompt: 'Tap where the two circles cross.', tolerance: 0.8, hint: 'Not quite on the crossing. Follow both curves to where they meet.', explain: 'That is the ship, a fix good to a few nautical miles, from two stars and a clock.' },
+      },
+      {
+        title: 'Two crossings',
+        text: 'Two circles on a globe cross in two places. The second crossing here is thousands of kilometres away.',
+        task: { kind: 'choice', prompt: 'How does the navigator know which crossing is right?', options: ['They cannot tell', 'The other one is far from anywhere the ship could be', 'The other one is always on land'], answer: 1, explain: 'A ship knows roughly where it is from its course and speed, so the far crossing is easy to rule out. Navigators usually take a third star too, as a check.' },
+      },
+    ],
+  },
+  {
+    id: 'stonehenge',
+    title: 'Stonehenge and the drifting Dipper',
+    summary: 'Travel back to midsummer morning in 2500 BC, then 50,000 years forward to watch a famous shape come apart.',
+    minutes: 6,
+    steps: [
+      {
+        title: 'Midsummer, 2500 BC',
+        text: 'Salisbury Plain, shortly before dawn on the longest day, around the time the great stones were raised. The monument\'s avenue points northeast, toward where the Sun comes up on this one morning of the year. Time is running.',
+        scene: { time: { jd: STONEHENGE_RISE_2500BC - 0.03 }, rate: 120, site: STONEHENGE, camera: { look: { az: 50, alt: 4 }, fov: 60 }, layers: { ...PLAIN_LAYERS, cardinals: true } },
+        task: { kind: 'number', prompt: 'When the Sun has risen, tap it and open Details: in which direction does it rise, in degrees from north?', answer: 48.5, tolerance: 2, unit: '°', hint: 'Look under Direction in the Sun\'s details. Read it soon after the Sun clears the horizon.', explain: 'About 48°. The avenue points at about 50°, where the whole disc stands clear of the slightly raised horizon there.' },
+      },
+      {
+        title: 'The same morning now',
+        text: 'Midsummer morning in 2026, from the same spot.',
+        scene: { time: { jd: STONEHENGE_RISE_2026 - 0.03 }, rate: 120, camera: { look: { az: 50, alt: 4 }, fov: 60 } },
+        task: { kind: 'choice', prompt: 'Watch it rise. Compared with 2500 BC, where does the Sun come up?', options: ['About a degree further south', 'Ten degrees further north', 'In exactly the same place'], answer: 0, explain: 'A degree further south. The Earth\'s tilt has eased from 24.0° to 23.4°, so the midsummer Sun no longer swings quite as far north. The monument still works.' },
+      },
+      {
+        title: 'The Big Dipper today',
+        text: 'Now look north on a spring night. Seven stars make the Big Dipper, part of the Great Bear. They look like a family, and most of them are.',
+        scene: { time: { jd: DIPPER_NOW }, rate: 0, camera: { look: 'con:western:UMa', fov: 55 }, layers: { ...PLAIN_LAYERS, atmosphere: false, ground: false, lines: true, starLabels: true }, highlight: ['con:western:UMa'] },
+        task: { kind: 'find', refs: [DUBHE], prompt: 'Tap Dubhe, the star at the lip of the bowl.', hint: 'Dubhe is the bright star at the top corner of the bowl, furthest from the handle.' },
+      },
+      {
+        title: 'AD 52,000',
+        text: 'Fifty thousand years on. Every star is moving through space, and over this long they visibly shift. Five of the Dipper\'s stars travel together as a group, born in the same cloud. Two are strangers passing through in other directions.',
+        scene: { time: { jd: DIPPER_LATER }, rate: 0, camera: { look: 'con:western:UMa', fov: 55 }, highlight: ['con:western:UMa'] },
+        task: { kind: 'find', refs: [DUBHE, ALKAID], prompt: 'Tap one of the two stars that have gone their own way.', hint: 'Look for the two ends of the Dipper: the lip of the bowl and the tip of the handle.', explain: 'Dubhe and Alkaid. The other five, from Merak to Mizar, are the Ursa Major moving group, about 80 light-years away and drifting together.' },
+      },
+    ],
+  },
+  {
+    id: 'slingshot',
+    title: 'A slingshot past Jupiter',
+    summary: 'Voyager 2 reached the edge of the solar system by borrowing speed from the planets. Steer a flyby that does the same.',
+    minutes: 5,
+    steps: [
+      {
+        title: 'Voyager 2 at Jupiter',
+        text: 'July 1979. Voyager 2 left the Earth two years ago, and its rocket burned for only minutes. Ever since, it has coasted, slowing as it climbs away from the Sun. On its own it would fall back. Jupiter is about to change that.',
+        scene: { time: { jd: jdFromCalendar(1979, 7, 9, 22, 0) }, rate: 0, camera: { look: 'jupiter', mode: 'space', dist: 0.08, orbit: { yaw: -80, pitch: 60 } }, layers: { orbits: true, planetLabels: true, compressed: false } },
+      },
+      {
+        title: 'Steer the flyby',
+        text: 'Left, the path past Jupiter as Jupiter sees it: in, round and out again at the same speed. Right, the same flyby seen from the Sun, where Jupiter\'s own motion is added back. The green arc is the speed needed to escape the Sun from here.',
+        plot: { kind: 'flyby' },
+        task: { kind: 'plot', prompt: 'Choose a side and a closest approach that send the spacecraft out of the solar system.', tolerance: 0, hint: 'Not enough yet. Try the other side, or a closer pass.', explain: 'Passing behind Jupiter, the spacecraft is pulled along after it and flung forward in the direction Jupiter is moving.' },
+      },
+      {
+        title: 'Free speed?',
+        text: 'Seen from Jupiter, nothing was gained: the spacecraft left as fast as it came. Seen from the Sun, it gained about 10 km/s.',
+        task: { kind: 'choice', prompt: 'Where did the extra speed come from?', options: ['From the spacecraft\'s engine', 'From Jupiter, which slowed down by a tiny amount', 'From the Sun'], answer: 1, explain: 'From Jupiter. It is about 2,600 billion billion times heavier than Voyager, so it slowed by far too little to ever measure.' },
+      },
+      {
+        title: 'The grand tour',
+        text: 'A rare line-up let Voyager 2 do this again at Saturn in 1981, Uranus in 1986 and Neptune in 1989, the only visit either of those two worlds has had. It is still travelling, more than 130 AU from the Sun.',
+        scene: { time: { jd: jdFromCalendar(1989, 8, 25, 0, 0) }, rate: 0, camera: { look: 'sun', mode: 'space', dist: 60, orbit: { yaw: -90, pitch: 55 } } },
       },
     ],
   },

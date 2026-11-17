@@ -158,7 +158,7 @@ chosen by the owner on 2026-11-16)
 - `engine.ts`: a `Journey` is steps; a `Step` has text, an optional `Scene` and
   an optional task: `find` (tap an object), `choice`, or `number` (the answer
   may be read off the simulation when checked). `JourneyRun` tracks position.
-- `content.ts`: five journeys: the wandering pole (Polaris, Thuban in 2800 BC,
+- `content.ts`: the first five journeys: the wandering pole (Polaris, Thuban in 2800 BC,
   Vega in AD 14,000), find your latitude (Polaris, then the Southern Cross),
   measure the Earth (Eratosthenes, solstice noon 240 BC), Galileo's moons
   (Padua, January 1610) and one sky, many stories (Scorpius and Manaiakalani).
@@ -178,6 +178,22 @@ chosen by the owner on 2026-11-16)
   4 November 2026, arriving 27 July 2027, and the tests check with `lambert`
   (`departureDv`) that a real trajectory costs least near that date
   (about 3.1 km/s).
+- Three more from the original plan, plus a step:
+  - Galileo gains "Time Io" (1.77 days, with Kepler's third law against
+    Callisto).
+  - Fix your position at sea (40°N 35°W, 16 Nov 2026 21:00 UT): Vega and
+    Fomalhaut give two circles of position (`journeys/navigation.ts`:
+    `groundPoint`, `circleOfPosition`, `fixFromTwo`), drawn by the `star-fix`
+    plot (`ui/plot-fix.ts`); the miss is degrees from the ship.
+  - Stonehenge and the drifting Dipper: midsummer sunrise in 2500 BC
+    (azimuth about 48°) and 2026 (about a degree further south, as the tilt
+    shrinks), then Ursa Major now and in AD 52,000, where Dubhe and Alkaid
+    leave the moving group. Tests check the bowl's corner angle changes.
+  - A slingshot past Jupiter: Voyager 2 in 1979, and the `flyby` plot
+    (`journeys/flyby.ts`, `ui/plot-flyby.ts`): pick a side and periapsis;
+    passing behind at under about 10 Jupiter radii beats solar escape speed.
+  - Shared canvas helpers are in `ui/plot-kit.ts`. `find` tasks can carry an
+    `explain`.
 
 **Time bar** (`src/ui/timebar.ts`): play/pause, a speed menu that opens
 upward (direction plus the `RATE_STEPS`), and a "go to" menu with date and time

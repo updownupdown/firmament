@@ -6,7 +6,7 @@ import { jdNow } from '../astro/time.ts';
 import type { Culture, Dso } from '../data/types.ts';
 import { sceneJd } from '../sim/scene.ts';
 import { type Site, Universe } from '../sim/universe.ts';
-import { ACRUX, ANTARES, JOURNEYS, KEPLER_FIX, KEPLER_TRACK, MARS_ARRIVAL_2027, MARS_WINDOW_2026, POLARIS, THUBAN, VEGA, findJourney } from './content.ts';
+import { ACRUX, ALKAID, ANTARES, DUBHE, FOMALHAUT, JOURNEYS, MERAK, STONEHENGE_RISE_2026, STONEHENGE_RISE_2500BC, KEPLER_FIX, KEPLER_TRACK, MARS_ARRIVAL_2027, MARS_WINDOW_2026, POLARIS, THUBAN, VEGA, findJourney } from './content.ts';
 import { MARS_YEAR, departureDv, eclipticXY, hohmann, marsFix, marsTrack, nextWindow } from './orbits.ts';
 import { JourneyRun, checkTask } from './engine.ts';
 
@@ -176,4 +176,57 @@ test('mars mission: the 2026 window, its flight time and arrival, checked with L
   // The task accepts launch dates within two degrees.
   assert.equal(checkTask(j.steps[1].task!, hohmann(eph, window + 1).missDeg, at('pole', 0)).ok, true);
   assert.equal(checkTask(j.steps[1].task!, hohmann(eph, window + 20).missDeg, at('pole', 0)).ok, false);
+});
+
+test('galileo: Io goes round in 1.77 days, timed with Jupiter up', () => {
+  const j = findJourney('galileo')!;
+  const i = j.steps.findIndex((s) => s.title === 'Time Io');
+  const u = at('galileo', i);
+  assert.ok(alt(u, 'jupiter') > 20);
+  const task = j.steps[i].task!;
+  assert.ok(checkTask(task, 1.77, u).ok);
+  assert.ok(!checkTask(task, 3.5, u).ok);
+});
+
+test('navigation: Vega and Fomalhaut are both up at dusk mid-Atlantic, far apart', () => {
+  const u = at('navigation', 0);
+  assert.ok(alt(u, 'sun') < -6, `Sun ${alt(u, 'sun')}`);
+  const v = alt(u, VEGA), f = alt(u, FOMALHAUT);
+  assert.ok(v > 35 && v < 60, `Vega ${v}`);
+  assert.ok(f > 10 && f < 30, `Fomalhaut ${f}`);
+  // The number task reads Vega's own altitude.
+  assert.ok(checkTask(findJourney('navigation')!.steps[1].task!, v + 0.5, u).ok);
+});
+
+test('stonehenge: the 2500 BC midsummer Sun rises near azimuth 48°, a degree north of today\'s', () => {
+  const az = (u: Universe) => {
+    const hz = u.horizontal(u.resolve('sun')!.dir);
+    return hz.az / DEG;
+  };
+  const then = at('stonehenge', 0), now = at('stonehenge', 1);
+  // Scenes start just before rise: the Sun is a little below the horizon in the northeast.
+  for (const u of [then, now]) assert.ok(alt(u, 'sun') < 0 && alt(u, 'sun') > -6, `Sun ${alt(u, 'sun')}`);
+  then.update(STONEHENGE_RISE_2500BC); now.update(STONEHENGE_RISE_2026);
+  assert.ok(Math.abs(alt(then, 'sun')) < 1 && Math.abs(alt(now, 'sun')) < 1);
+  assert.ok(checkTask(findJourney('stonehenge')!.steps[0].task!, az(then), then).ok, `rise az ${az(then)}`);
+  const shift = az(now) - az(then);
+  assert.ok(shift > 0.5 && shift < 2, `shift ${shift}`);
+});
+
+test('stonehenge: in AD 52,000 Dubhe and Alkaid have left the Dipper\'s shape', () => {
+  const now = at('stonehenge', 2), later = at('stonehenge', 3);
+  assert.ok(alt(now, DUBHE) > 30 && alt(now, 'sun') < -12);
+  // The angle the bowl makes at a corner star: unchanged by turning the sky, so it shows only the stars' own motion.
+  const corner = (u: Universe, at: string, a: string, b: string) => {
+    const p = u.resolve(at)!.dir, x = u.resolve(a)!.dir, y = u.resolve(b)!.dir;
+    const tangent = (q: number[]) => { const k = q[0] * p[0] + q[1] * p[1] + q[2] * p[2]; return [q[0] - k * p[0], q[1] - k * p[1], q[2] - k * p[2]] as [number, number, number]; };
+    return angleBetween(tangent(x), tangent(y)) / DEG;
+  };
+  const turn = (at: string, a: string, b: string) => Math.abs(corner(later, at, a, b) - corner(now, at, a, b));
+  const PHECDA = 'star:58001', MEGREZ = 'star:59774', MIZAR = 'star:65378', ALIOTH = 'star:62956';
+  // Dubhe and Alkaid drift one way, the five moving-group stars the other: the bowl's lip and the handle's tip bend.
+  assert.ok(turn(MERAK, DUBHE, PHECDA) > 15, `bowl corner turned ${turn(MERAK, DUBHE, PHECDA)}`);
+  assert.ok(turn(MIZAR, ALKAID, ALIOTH) > 15, `handle bend turned ${turn(MIZAR, ALKAID, ALIOTH)}`);
+  // Within the group, the shape barely changes.
+  assert.ok(turn(PHECDA, MERAK, MEGREZ) < 5, `group corner turned ${turn(PHECDA, MERAK, MEGREZ)}`);
 });

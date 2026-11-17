@@ -192,6 +192,14 @@ input[type='range']::-moz-range-thumb { width: 20px; height: 20px; border-radius
 .card-more { display: flex; flex-direction: column; gap: var(--space-3); }
 .card-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .card-actions .pill-button { padding: 0 var(--space-3); }
+.card-disclosure {
+  display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 36px; padding: 0;
+  background: none; border: none; border-top: 1px solid var(--color-border); padding-top: var(--space-2);
+  color: var(--color-text-muted); font-size: var(--text-sm);
+}
+.card-disclosure:hover { color: var(--color-text); }
+.card-disclosure svg { transform: rotate(180deg); transition: transform var(--duration) var(--ease); }
+.card-disclosure[aria-expanded='true'] svg { transform: none; }
 .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3) var(--space-5); margin: 0; }
 .facts.quick { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); }
 .fact { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -343,7 +351,7 @@ button.tile:hover, button.row:hover, .result:hover, .check-item:hover, .chip-but
 .pill-button:disabled { opacity: 0.45; cursor: default; }
 /* While a journey runs on a phone, the object card shrinks to its essentials. */
 @media (max-width: 899px) {
-  :root[data-journey] .object-card .card-actions, :root[data-journey] .object-card .card-more { display: none; }
+  :root[data-journey] .object-card .card-actions, :root[data-journey] .object-card .card-disclosure, :root[data-journey] .object-card .card-more { display: none; }
   .journey-card { padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4); max-height: 46vh; }
   .journey-text { font-size: var(--text-sm); }
   .journey-nav .pill-button { min-height: 40px; }
@@ -423,6 +431,12 @@ button.tile:hover, button.row:hover, .result:hover, .check-item:hover, .chip-but
 .plot-slider { width: 100%; accent-color: var(--color-accent); min-height: var(--tap); }
 .plot-readout { font-size: var(--text-sm); color: var(--color-text-muted); min-height: 2.6em; }
 :root[data-plot] .journey-card { max-height: calc(100vh - 200px); }
+/* On a phone the diagram card stops above the time bar and dock, which a diagram step may still need. */
+@media (max-width: 899px) {
+  :root[data-plot] .journey-card {
+    max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 48px - var(--space-4) - var(--space-6) - 60px - 48px - var(--space-4) - var(--space-3) * 3);
+  }
+}
 
 /* On a phone, menus above the time bar centre on the screen rather than on their button. */
 @media (max-width: 899px) {
@@ -459,7 +473,7 @@ button.tile:hover, button.row:hover, .result:hover, .check-item:hover, .chip-but
   top: calc(var(--safe-top) + var(--space-4) + 48px + var(--space-2)); left: calc(var(--safe-left) + var(--space-4));
   -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
 }
-:root[data-sheet] .scale-button { display: none; }
+:root[data-sheet] .scale-button, :root[data-journey] .scale-button { display: none; }
 @media (max-width: 899px) {
   .measure-banner { left: calc(var(--safe-left) + var(--space-4)); right: calc(var(--safe-right) + var(--space-4) + 56px); width: auto; transform: none; }
   :root:not([data-measuring='true']) .measure-banner { display: none; }

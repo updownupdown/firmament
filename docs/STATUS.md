@@ -202,6 +202,15 @@ chosen by the owner on 2026-11-16)
   - Shared canvas helpers are in `ui/plot-kit.ts`. `find` tasks can carry an
     `explain`.
 
+**Journey list**: grouped by `Journey.theme` (`JOURNEY_THEMES`: Find your
+way, Through time, Great discoveries, Into space). Diagrams: `ui/plot.ts`
+only dispatches; each kind is its own module (`plot-orbits`, `plot-fix`,
+`plot-flyby`, `plot-sandbox`).
+
+**Sky conditions** (`render/conditions.ts`): sky brightness, limiting
+magnitude, eclipse dimming and the deep-sky limit, split out of `sky.ts` so
+labels, picking and tests use it without the renderer.
+
 **Time bar** (`src/ui/timebar.ts`): play/pause, a speed menu that opens
 upward (direction plus the `RATE_STEPS`), and a "go to" menu with date and time
 fields in the place's local time plus quick jumps. The old spring-back jog

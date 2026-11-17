@@ -41,8 +41,13 @@ export interface Step {
   task?: Task;
 }
 
+/** How the list groups journeys, in this order. */
+export const JOURNEY_THEMES = ['Find your way', 'Through time', 'Great discoveries', 'Into space'] as const;
+export type JourneyTheme = (typeof JOURNEY_THEMES)[number];
+
 export interface Journey {
   id: string;
+  theme: JourneyTheme;
   title: string;
   summary: string;
   minutes: number;

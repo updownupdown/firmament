@@ -2,7 +2,7 @@
 // through one while the sky stays in view.
 
 import { JOURNEYS, findJourney } from '../journeys/content.ts';
-import { JourneyRun, type Verdict } from '../journeys/engine.ts';
+import { JOURNEY_THEMES, JourneyRun, type Verdict } from '../journeys/engine.ts';
 import type { Scene } from '../sim/scene.ts';
 import { h, fill, icon, iconButton } from './dom.ts';
 import { type PlotView, plotView } from './plot.ts';
@@ -12,16 +12,20 @@ export function journeysPanel(shell: Shell): Panel {
   const app = shell.app;
   const el = h('div', { class: 'panel' });
   const refresh = () => {
+    const item = (j: (typeof JOURNEYS)[number]) => {
+      const p = app.store.data.journeys[j.id];
+      const state = p?.done ? 'Done' : p && p.step > 0 ? `Step ${p.step + 1} of ${j.steps.length}` : `${j.minutes} min`;
+      return h('button', { class: 'card journey-item', type: 'button', onclick: () => shell.startJourney(j.id) },
+        h('span', { class: 'journey-head' }, h('span', { class: 'row-name' }, j.title),
+          h('span', { class: `tag${p?.done ? ' up' : ''}` }, p?.done ? [icon('check', 12), ' Done'] : state)),
+        h('span', { class: 'hint' }, j.summary));
+    };
+    const done = JOURNEYS.filter((j) => app.store.data.journeys[j.id]?.done).length;
     fill(el,
-      h('p', { class: 'lede' }, 'Short investigations that use the real sky. Each takes a few minutes.'),
-      JOURNEYS.map((j) => {
-        const p = app.store.data.journeys[j.id];
-        const state = p?.done ? 'Done' : p && p.step > 0 ? `Step ${p.step + 1} of ${j.steps.length}` : `${j.minutes} min`;
-        return h('button', { class: 'card journey-item', type: 'button', onclick: () => shell.startJourney(j.id) },
-          h('span', { class: 'journey-head' }, h('span', { class: 'row-name' }, j.title),
-            h('span', { class: `tag${p?.done ? ' up' : ''}` }, p?.done ? [icon('check', 12), ' Done'] : state)),
-          h('span', { class: 'hint' }, j.summary));
-      }));
+      h('p', { class: 'lede' }, `Short investigations that use the real sky. Each takes a few minutes.${done ? ` You have finished ${done} of ${JOURNEYS.length}.` : ''}`),
+      JOURNEY_THEMES.map((theme) => h('section', { class: 'view-section' },
+        h('h3', { class: 'section-title' }, theme),
+        JOURNEYS.filter((j) => j.theme === theme).map(item))));
   };
   return { title: 'Journeys', el, refresh };
 }

@@ -65,6 +65,7 @@ const sunFromOverhead = (u: Universe): number => 90 - u.horizontal(u.bodies.get(
 export const JOURNEYS: Journey[] = [
   {
     id: 'pole',
+    theme: 'Through time',
     title: 'The wandering pole',
     summary: 'The North Star has not always been the north star. Travel 16,000 years to see why.',
     minutes: 5,
@@ -100,6 +101,7 @@ export const JOURNEYS: Journey[] = [
   },
   {
     id: 'latitude',
+    theme: 'Find your way',
     title: 'Find your latitude',
     summary: 'You are on a ship with no instruments but your eyes. Work out where you are from the stars.',
     minutes: 5,
@@ -130,6 +132,7 @@ export const JOURNEYS: Journey[] = [
   },
   {
     id: 'eratosthenes',
+    theme: 'Great discoveries',
     title: 'Measure the Earth',
     summary: 'Around 240 BC, Eratosthenes worked out the size of the Earth from shadows in two cities. Repeat his measurement.',
     minutes: 6,
@@ -155,6 +158,7 @@ export const JOURNEYS: Journey[] = [
   },
   {
     id: 'galileo',
+    theme: 'Great discoveries',
     title: 'Galileo\'s moons',
     summary: 'In January 1610 Galileo turned a telescope on Jupiter and found something that changed astronomy. See what he saw, night by night.',
     minutes: 5,
@@ -193,6 +197,7 @@ export const JOURNEYS: Journey[] = [
   },
   {
     id: 'cultures',
+    theme: 'Through time',
     title: 'One sky, many stories',
     summary: 'The same stars have been drawn into different pictures all over the world. Find a scorpion that is also a fishhook.',
     minutes: 4,
@@ -218,6 +223,7 @@ export const JOURNEYS: Journey[] = [
   },
   {
     id: 'kepler',
+    theme: 'Great discoveries',
     title: 'Kepler\'s Mars',
     summary: 'Nobody can see how far away Mars is. Kepler found its orbit anyway, with two sightings and a triangle.',
     minutes: 6,
@@ -255,6 +261,7 @@ export const JOURNEYS: Journey[] = [
   },
   {
     id: 'mars-mission',
+    theme: 'Into space',
     title: 'Plan a trip to Mars',
     summary: 'You cannot fly straight at Mars. Find the day to launch so that Mars is waiting when you arrive.',
     minutes: 5,
@@ -287,6 +294,7 @@ export const JOURNEYS: Journey[] = [
 
   {
     id: 'navigation',
+    theme: 'Find your way',
     title: 'Fix your position at sea',
     summary: 'Two stars, a clock and a chart: find where your ship is, the way navigators did for two hundred years.',
     minutes: 6,
@@ -323,6 +331,7 @@ export const JOURNEYS: Journey[] = [
   },
   {
     id: 'stonehenge',
+    theme: 'Through time',
     title: 'Stonehenge and the drifting Dipper',
     summary: 'Travel back to midsummer morning in 2500 BC, then 50,000 years forward to watch a famous shape come apart.',
     minutes: 6,
@@ -355,6 +364,7 @@ export const JOURNEYS: Journey[] = [
   },
   {
     id: 'slingshot',
+    theme: 'Into space',
     title: 'A slingshot past Jupiter',
     summary: 'Voyager 2 reached the edge of the solar system by borrowing speed from the planets. Steer a flyby that does the same.',
     minutes: 5,
@@ -384,6 +394,7 @@ export const JOURNEYS: Journey[] = [
   },
   {
     id: 'what-if',
+    theme: 'Into space',
     title: 'What if?',
     summary: 'Make Jupiter heavier or send a star through the solar system, and watch what gravity alone does to the planets.',
     minutes: 5,

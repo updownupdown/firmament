@@ -6,8 +6,10 @@ import { jdNow } from '../astro/time.ts';
 import type { Culture, Dso } from '../data/types.ts';
 import { sceneJd } from '../sim/scene.ts';
 import { type Site, Universe } from '../sim/universe.ts';
-import { ACRUX, ANTARES, JOURNEYS, POLARIS, THUBAN, VEGA, findJourney } from './content.ts';
+import { ACRUX, ANTARES, JOURNEYS, LAUNCH_BUDGET, LAUNCH_FROM, LAUNCH_WINDOW, MARS_NIGHTS, POLARIS, THUBAN, VEGA, findJourney } from './content.ts';
 import { JourneyRun, checkTask } from './engine.ts';
+import { MARS_YEAR, crossing, crossingAngle, helioEcliptic, marsFix, planTransfer } from './orbits.ts';
+import { jdFromCalendar } from '../astro/time.ts';
 
 const HOME: Site = { name: 'Toronto', lat: 43.653, lon: -79.383, height: 76, tz: 'America/Toronto' };
 
@@ -117,4 +119,64 @@ test('a run only moves on once the task is done', () => {
   assert.equal(run.go(1), true);
   assert.equal(run.index, 1);
   assert.equal(run.go(-1), true);
+});
+
+test('kepler: two sightings a Mars year apart cross where Mars is', () => {
+  const eph = testEphemeris();
+  // Published: sidereal period 686.98 days; perihelion 1.381 AU, aphelion 1.666 AU.
+  const t = MARS_NIGHTS[0];
+  const a = helioEcliptic(eph, 'mars', t), b = helioEcliptic(eph, 'mars', t + MARS_YEAR);
+  assert.ok(Math.hypot(a[0] - b[0], a[1] - b[1]) < 0.002, 'Mars returns to the same place');
+  const radii: number[] = [];
+  for (const jd of MARS_NIGHTS) {
+    const fix = marsFix(eph, jd);
+    assert.ok(crossingAngle(fix) > 12 * DEG, `lines of sight cross clearly (${crossingAngle(fix) / DEG})`);
+    const meet = crossing(fix.a, fix.b)!;
+    assert.ok(Math.hypot(meet[0] - fix.mars[0], meet[1] - fix.mars[1]) < 0.003, 'crossing is Mars');
+    const r = Math.hypot(fix.mars[0], fix.mars[1]);
+    assert.ok(r > 1.381 - 0.002 && r < 1.666 + 0.002, `distance ${r}`);
+    radii.push(r);
+    // The chart shows ±1.95 AU and the task accepts the crossing but not a point 0.15 AU away.
+    const task = { kind: 'mars-fix' as const, prompt: '', jd, tolerance: 0.07 };
+    const u = at('kepler', 0);
+    assert.equal(checkTask(task, `${meet[0]},${meet[1]}`, u).ok, true);
+    assert.equal(checkTask(task, `${meet[0] + 0.15},${meet[1]}`, u).ok, false);
+    assert.equal(checkTask(task, '', u).ok, false);
+  }
+  // The text says the four points lie between 1.38 and 1.66.
+  assert.equal(Math.min(...radii).toFixed(2), '1.38');
+  assert.equal(Math.max(...radii).toFixed(2), '1.66');
+  // Mars is up in a dark sky for the opening scene.
+  const hven = at('kepler', 0);
+  assert.ok(alt(hven, 'mars') > 20, `Mars ${alt(hven, 'mars')}`);
+  assert.ok(alt(hven, 'sun') < -10);
+});
+
+test('mission: the 2026 window fits the budget, a bad day does not', () => {
+  const eph = testEphemeris();
+  // Published: Perseverance left on 30 July 2020 with C3 = 14.49 km²/s² (3.81 km/s) and landed 203 days later.
+  const p = planTransfer(eph, jdFromCalendar(2020, 7, 30, 12), 203.4)!;
+  assert.ok(Math.abs(p.departV - 3.81) < 0.05, `Perseverance departure ${p.departV}`);
+  // The cheapest flight the planner offers leaves in autumn 2026 and takes most of a year.
+  let best = { total: Infinity, day: 0, days: 0 };
+  for (let day = 0; day <= LAUNCH_WINDOW; day += 2) {
+    for (let days = 120; days <= 400; days += 4) {
+      const t = planTransfer(eph, LAUNCH_FROM + day, days);
+      if (t && t.departV + t.arriveV < best.total) best = { total: t.departV + t.arriveV, day, days };
+    }
+  }
+  assert.ok(best.total < LAUNCH_BUDGET - 0.3, `best ${best.total}`);
+  const launch = LAUNCH_FROM + best.day;
+  assert.ok(launch > jdFromCalendar(2026, 10, 1) && launch < jdFromCalendar(2026, 12, 15), 'launch in the 2026 window');
+  assert.ok(best.days > 180 && best.days < 330, `flight ${best.days} days`);
+  const task = findJourney('mission')!.steps[1].task!;
+  const u = at('mission', 0);
+  assert.equal(checkTask(task, `${launch},${best.days}`, u).ok, true);
+  // The chart's starting choice, and a launch at the wrong time of the cycle, are out of reach.
+  assert.equal(checkTask(task, `${LAUNCH_FROM + 40},180`, u).ok, false);
+  assert.equal(checkTask(task, `${LAUNCH_FROM + 300},200`, u).ok, false);
+  assert.equal(checkTask(task, '', u).ok, false);
+  // Mars is up before dawn at the Cape for the opening scene.
+  assert.ok(alt(u, 'mars') > 20, `Mars ${alt(u, 'mars')}`);
+  assert.ok(alt(u, 'sun') < -6, `Sun ${alt(u, 'sun')}`);
 });

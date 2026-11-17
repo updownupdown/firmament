@@ -6,6 +6,7 @@ import { JourneyRun, type Verdict } from '../journeys/engine.ts';
 import type { Scene } from '../sim/scene.ts';
 import { h, fill, icon, iconButton } from './dom.ts';
 import type { Panel, Shell } from './shell.ts';
+import { marsFixWidget, marsOrbitFigure, transferWidget } from './workshop.ts';
 
 export function journeysPanel(shell: Shell): Panel {
   const app = shell.app;
@@ -63,7 +64,9 @@ export function journeyPlayer(shell: Shell): JourneyPlayer {
     run = null;
     el.hidden = true;
     delete document.documentElement.dataset.journey;
+    delete document.documentElement.dataset.workshop;
     app.select(null);
+    if (app.mode === 'space') app.setMode('sky');
     if (home) app.apply({ ...home, highlight: [] });
     home = null;
     if (finished) shell.toast(`You finished “${j.title}”.`);
@@ -76,21 +79,36 @@ export function journeyPlayer(shell: Shell): JourneyPlayer {
     next.disabled = !run?.solved;
   };
 
+  /** The answer that solved the current step, so a workshop chart can keep showing it. */
+  let accepted = '';
   const answer = (value: string | number) => {
     if (!run) return;
     verdict = run.answer(value, app.universe);
+    if (verdict.ok) accepted = String(value);
     if (verdict.ok) renderTask();
     showVerdict();
   };
 
   const renderTask = () => {
     const t = run?.step.task;
-    if (!run || !t) { fill(task); return; }
+    const figure = run?.step.figure;
+    const chart = run && figure ? marsOrbitFigure(app, figure.nights, figure.orbit) : null;
+    const workshop = !!chart || t?.kind === 'mars-fix' || t?.kind === 'transfer';
+    el.dataset.workshop = String(workshop);
+    // A chart needs the room the time bar takes.
+    if (workshop && run) document.documentElement.dataset.workshop = 'true'; else delete document.documentElement.dataset.workshop;
+    if (!run || !t) { fill(task, chart); return; }
     const prompt = h('p', { class: 'journey-prompt' }, t.prompt);
     if (t.kind === 'find') {
-      fill(task, prompt);
+      fill(task, chart, prompt);
+    } else if (t.kind === 'mars-fix') {
+      // Points found in earlier steps stay on the chart.
+      const earlier = run.journey.steps.slice(0, run.index).flatMap((s) => (s.task?.kind === 'mars-fix' ? [s.task.jd] : []));
+      fill(task, prompt, marsFixWidget(app, t.jd, earlier, run.solved, answer));
+    } else if (t.kind === 'transfer') {
+      fill(task, prompt, transferWidget(app, t.from, t.window, t.budget, run.solved ? accepted : '', answer));
     } else if (t.kind === 'choice') {
-      fill(task, prompt, h('div', { class: 'journey-options' }, t.options.map((label, i) => h('button', {
+      fill(task, chart, prompt, h('div', { class: 'journey-options' }, t.options.map((label, i) => h('button', {
         class: `pill-button option${run!.solved && i === t.answer ? ' correct' : ''}`, type: 'button', disabled: run!.solved,
         onclick: () => answer(i),
       }, label))));
@@ -106,6 +124,7 @@ export function journeyPlayer(shell: Shell): JourneyPlayer {
     if (!run) return;
     const step = run.step;
     verdict = null;
+    accepted = '';
     progress.textContent = `${run.journey.title} · ${run.index + 1} of ${run.journey.steps.length}`;
     title.textContent = step.title;
     text.textContent = step.text;

@@ -296,6 +296,18 @@ button.tile:hover, button.row:hover, .result:hover, .check-item:hover, .chip-but
 .journey-nav { display: flex; justify-content: space-between; gap: var(--space-2); }
 .journey-nav .primary { margin-left: auto; }
 .pill-button:disabled { opacity: 0.45; cursor: default; }
+.journey-card[data-workshop='true'] { max-height: calc(100vh - var(--safe-top) - var(--safe-bottom) - 176px); }
+:root[data-workshop] .time-bar, :root[data-workshop] .object-card { display: none; }
+.workshop { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); }
+.workshop > .hint, .workshop-cost { align-self: stretch; }
+.workshop-chart { display: block; touch-action: none; border-radius: var(--radius-sm); background: var(--color-surface-raised); border: 1px solid var(--color-border); }
+.workshop-chart:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.workshop-slider { align-self: stretch; display: grid; grid-template-columns: 3.5rem 1fr 6.5rem; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-text-muted); }
+.workshop-value { color: var(--color-text); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.workshop-cost { font-size: var(--text-sm); color: var(--color-text-muted); }
+.workshop-cost.good { color: var(--color-good); }
+.workshop-cost.bad { color: var(--color-warn); }
+.workshop .pill-button { align-self: flex-end; }
 /* While a journey runs on a phone, the object card shrinks to its essentials. */
 @media (max-width: 899px) {
   :root[data-journey] .object-card .card-actions, :root[data-journey] .object-card .card-more { display: none; }

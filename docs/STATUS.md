@@ -151,16 +151,26 @@ chosen by the owner on 2026-11-16)
 - `engine.ts`: a `Journey` is steps; a `Step` has text, an optional `Scene` and
   an optional task: `find` (tap an object), `choice`, or `number` (the answer
   may be read off the simulation when checked). `JourneyRun` tracks position.
-- `content.ts`: five journeys: the wandering pole (Polaris, Thuban in 2800 BC,
+- `content.ts`: seven journeys: the wandering pole (Polaris, Thuban in 2800 BC,
   Vega in AD 14,000), find your latitude (Polaris, then the Southern Cross),
   measure the Earth (Eratosthenes, solstice noon 240 BC), Galileo's moons
-  (Padua, January 1610) and one sky, many stories (Scorpius and Manaiakalani).
+  (Padua, January 1610), one sky, many stories (Scorpius and Manaiakalani),
+  Kepler's Mars and Fly to Mars.
   Every scene and answer is asserted against the simulation in the tests.
 - The player is a card over the sky. It saves progress in the store, and puts
   the player's own place, layers and culture back when a journey ends.
-- Planned but not written: Kepler's Mars (triangulating the orbit) and mission
-  planning (a Hohmann transfer checked with `lambert`). Both need a custom
-  canvas task, which the engine does not have yet.
+- Two workshop journeys work on a chart instead of the sky. `orbits.ts` holds
+  the geometry (no DOM): `marsFix` gives two sightings of Mars one Mars year
+  apart and `crossing` where they meet; `planTransfer` solves Lambert's
+  problem for a launch day and flight time and gives the speed to leave the
+  Earth and to stop at Mars. The task kinds `mars-fix` and `transfer` are
+  judged in `checkTask`, so tests cover them; `src/ui/workshop.ts` draws the
+  canvas charts (colours from the tokens) and takes taps, drags, arrow keys
+  and sliders.
+  - Kepler's Mars: four pairs of nights from Tycho's years give four points
+    between 1.38 and 1.66 AU, then the ellipse and Space view.
+  - Fly to Mars: the 2026 launch season with a 6.2 km/s budget. Checked
+    against Perseverance's published departure speed.
 
 **Offline**: `public/sw.js` precaches every file of a build, serves `data/`
 cache-first and everything else network-first, and is registered from
@@ -197,7 +207,6 @@ eclipses were already drawn (the Moon covers the Sun; corona in totality).
 
 ### 1. Remaining work
 - Try phone pointing on a real iPhone and Android phone.
-- Journeys with custom interactives: Kepler's Mars and mission planning.
 - Space view: Jupiter's moons, surface detail, Milky Way, distance in links.
 - The Tonight guide character is still unnamed; ask the owner.
 

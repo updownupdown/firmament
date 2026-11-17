@@ -31,6 +31,20 @@ export const ERATOSTHENES_NOON = jdFromLocal(SYENE, -239, 6, 26, 11, 57);
 /** Evenings in Padua, January 1610 (Gregorian dates, as Galileo wrote them), about an hour after sunset. */
 export const galileoNight = (day: number): number => jdFromCalendar(1610, 1, day, 17, 0);
 
+const HVEN = site('Hven', 55.908, 12.696, 'Europe/Copenhagen', 'Denmark');
+const CANAVERAL = site('Cape Canaveral', 28.39, -80.6, 'America/New_York', 'United States');
+
+/** Nights when Tycho could have measured Mars; each is paired with the night one Mars year later. */
+export const MARS_NIGHTS = [
+  jdFromCalendar(1583, 3, 2, 21, 0), jdFromCalendar(1584, 3, 26, 4, 0),
+  jdFromCalendar(1586, 6, 14, 2, 0), jdFromCalendar(1585, 9, 17, 4, 0),
+];
+/** The start of the 2026 launch season, and how many days of it the planner offers. */
+export const LAUNCH_FROM = jdFromCalendar(2026, 6, 1);
+export const LAUNCH_WINDOW = 420;
+/** Speed the journey's rocket can supply, km/s: enough for a good window, not for a bad one. */
+export const LAUNCH_BUDGET = 6.2;
+
 const sunFromOverhead = (u: Universe): number => 90 - u.horizontal(u.bodies.get('sun')!.dir).altApparent / DEG;
 
 export const JOURNEYS: Journey[] = [
@@ -178,6 +192,80 @@ export const JOURNEYS: Journey[] = [
         title: 'Whose sky',
         text: 'Neither picture is in the sky itself. People everywhere joined the dots their own way, for their own reasons: calendars, navigation, memory. Open the view settings and choose "Whose sky" to see Chinese, Norse, Māori and other traditions over the same stars.',
         scene: { culture: 'western', highlight: [] },
+      },
+    ],
+  },
+  {
+    id: 'kepler',
+    title: 'Kepler\'s Mars',
+    summary: 'Find the true shape of an orbit the way Kepler did, with nothing but directions in the sky.',
+    minutes: 8,
+    steps: [
+      {
+        title: 'Twenty years of Mars',
+        text: 'From his observatory on the island of Hven, Tycho Brahe measured where Mars stood among the stars, night after night for twenty years, more exactly than anyone before. But a direction is not a distance. When Tycho died in 1601, his assistant Johannes Kepler was left with the numbers and one question: what path does Mars really follow?',
+        scene: { time: { jd: MARS_NIGHTS[0] }, rate: 0, site: HVEN, camera: { look: 'mars', fov: 50 }, layers: PLAIN_LAYERS },
+        task: { kind: 'find', refs: ['mars'], prompt: 'Tap Mars, as Tycho saw it on 2 March 1583.', hint: 'Mars is the bright orange point in the centre.' },
+      },
+      {
+        title: 'Kepler\'s trick',
+        text: 'Mars takes 687 days to go once around the Sun. So 687 days after any sighting, Mars is back at exactly the same point, but the Earth is somewhere else on its own orbit. Two lines of sight from two places must cross where Mars is. The chart looks down on the Sun (centre) and the Earth\'s orbit, with the two sightings drawn in.',
+        task: { kind: 'mars-fix', prompt: 'Mark the place where Mars must be.', jd: MARS_NIGHTS[0], tolerance: 0.07, explain: 'That is where Mars was on both nights.' },
+      },
+      {
+        title: 'Around the orbit',
+        text: 'One point does not make an orbit. Kepler repeated the trick with other pairs of nights, each 687 days apart, catching Mars at a different part of its path every time.',
+        task: { kind: 'mars-fix', prompt: 'Mark Mars for this pair of sightings.', jd: MARS_NIGHTS[1], tolerance: 0.07 },
+      },
+      {
+        title: 'A third point',
+        text: 'Keep an eye on the distances as the points pile up. If Mars moved on a circle around the Sun, they would all come out the same.',
+        task: { kind: 'mars-fix', prompt: 'Mark Mars for this pair.', jd: MARS_NIGHTS[2], tolerance: 0.07 },
+      },
+      {
+        title: 'And a fourth',
+        text: 'One more pair, on the far side of the orbit from the first.',
+        task: { kind: 'mars-fix', prompt: 'Mark Mars for this pair.', jd: MARS_NIGHTS[3], tolerance: 0.07 },
+      },
+      {
+        title: 'Not a circle',
+        text: 'Your four points lie between 1.38 and 1.66 times the Earth\'s distance from the Sun. Kepler tried for years to make a circle fit Tycho\'s numbers and could not: it missed by eight minutes of arc, a quarter of the Moon\'s width, and he trusted Tycho too much to ignore it. The curve that fits is an ellipse.',
+        figure: { kind: 'mars-orbit', nights: MARS_NIGHTS, orbit: true },
+        task: { kind: 'choice', prompt: 'Where is the Sun in Mars\'s orbit?', options: ['At the centre of the ellipse', 'Off centre, at one focus', 'Outside the orbit'], answer: 1, explain: 'At a focus. Mars comes closest on one side and swings farthest on the other. This is Kepler\'s first law, and every planet, moon and comet obeys it.' },
+      },
+      {
+        title: 'See it from outside',
+        text: 'Kepler never saw what you can see now: the solar system from above, with Mars on its slightly lopsided orbit. Drag to look around, and run time forward to watch it speed up as it nears the Sun. That is his second law.',
+        scene: { time: 'now', rate: 86400 * 5, camera: { look: 'mars', mode: 'space' }, select: 'mars', layers: { orbits: true } },
+      },
+    ],
+  },
+  {
+    id: 'mission',
+    title: 'Fly to Mars',
+    summary: 'Pick a launch day and a flight time. Leave on the wrong day and no rocket can get you there.',
+    minutes: 6,
+    steps: [
+      {
+        title: 'A moving target',
+        text: 'Mars is in tonight\'s sky from Cape Canaveral in the autumn of 2026. It looks like somewhere to aim for, but a spacecraft that sets off toward that point will arrive months later to find Mars long gone. You have to aim at where Mars will be.',
+        scene: { time: { jd: jdFromCalendar(2026, 11, 1, 10, 0) }, rate: 0, site: CANAVERAL, camera: { look: 'mars', fov: 60 }, select: 'mars', layers: PLAIN_LAYERS },
+        task: { kind: 'choice', prompt: 'The Earth goes round the Sun faster than Mars. To arrive together, when should you launch?', options: ['When Mars is straight overhead', 'When Mars is well ahead of the Earth', 'When Mars is behind the Earth'], answer: 1, explain: 'Ahead. The spacecraft coasts outward along a long curve while Mars comes round more slowly to meet it.' },
+      },
+      {
+        title: 'Plan the flight',
+        text: 'The chart looks down on the Sun, the Earth\'s orbit and Mars\'s. Once the engine stops, the spacecraft coasts on an orbit of its own (the curve). Leaving the Earth takes speed, and so does stopping at Mars. Your rocket can supply 6.2 km/s in all.',
+        task: { kind: 'transfer', prompt: 'Find a launch day and flight time the rocket can manage.', from: LAUNCH_FROM, window: LAUNCH_WINDOW, budget: LAUNCH_BUDGET, explain: 'You are on your way.' },
+      },
+      {
+        title: 'The launch window',
+        text: 'Good days to leave come only when the two planets line up the right way, for a few weeks every 26 months. That is why Mars missions leave in clusters: several in July 2020, the next chances in late 2026 and late 2028. Miss the window and the flight waits two years.',
+        task: { kind: 'choice', prompt: 'A cheap flight to Mars takes about how long?', options: ['Three days, like Apollo to the Moon', 'Six to ten months', 'Five years'], answer: 1, explain: 'Six to ten months. Perseverance left on 30 July 2020 and landed on 18 February 2021.' },
+      },
+      {
+        title: 'Watch the planets turn',
+        text: 'Here is the solar system from above, running a week every second. Watch the Earth catch up with Mars and pass it on the inside track, again and again: each pass is a launch window just gone.',
+        scene: { time: { jd: jdFromCalendar(2026, 6, 1) }, rate: 86400 * 7, camera: { look: 'sun', mode: 'space' }, layers: { orbits: true } },
       },
     ],
   },

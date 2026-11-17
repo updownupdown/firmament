@@ -336,6 +336,10 @@ a published birth mass from `KNOWN_STARS` where there is one, else `fitStar`
 finds the mass and age whose track passes nearest the star's luminosity
 (from magnitude, distance and a bolometric correction) and temperature (from
 its spectral type). The lab also opens from the top of the Journeys list.
+On James's request (2026-11-17) the lab starts with a list of star types
+(`STAR_TYPES`, red dwarf to a first star), each with its lifetime and fate;
+picking one plays its life from birth. Mass and metals sit in a folded
+"Fine-tune" card; a real star from a card skips the list.
 
 ## Next steps, in order
 

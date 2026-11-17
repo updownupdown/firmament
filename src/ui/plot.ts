@@ -7,29 +7,22 @@ import { type MarsFix, type Transfer, type Vec2, MARS_YEAR, eclipticXY, hohmann,
 import { formatDate } from '../sim/format.ts';
 import type { App } from '../app.ts';
 import { h } from './dom.ts';
+import { flybyPlot } from './plot-flyby.ts';
+import { starFixPlot } from './plot-fix.ts';
+import { type PlotView, palette, prepare } from './plot-kit.ts';
 
-export interface PlotView {
-  el: HTMLElement;
-  /** Called with the miss whenever the user tries something. */
-  onAttempt: ((miss: number) => void) | null;
-  /** Show the answer (after the task is solved). */
-  reveal(): void;
-}
-
-interface Palette { sun: string; earth: string; mars: string; orbit: string; sight: string; text: string; faint: string; font: string }
-
-function palette(el: Element): Palette {
-  const cs = getComputedStyle(el);
-  const v = (name: string) => cs.getPropertyValue(name).trim();
-  return {
-    sun: v('--plot-sun'), earth: v('--plot-earth'), mars: v('--plot-mars'), orbit: v('--plot-orbit'),
-    sight: v('--plot-sight'), text: v('--color-text-muted'), faint: v('--color-text-faint'), font: v('--font'),
-  };
-}
+export type { PlotView };
 
 const AU_SPAN = 1.85;
 
 export function plotView(app: App, plot: Plot): PlotView {
+  if (plot.kind === 'star-fix') return starFixPlot(app, plot.stars);
+  if (plot.kind === 'flyby') return flybyPlot();
+  return orbitPlot(app, plot);
+}
+
+/** The solar system from above: Kepler's triangulation and the Mars transfer. */
+function orbitPlot(app: App, plot: Extract<Plot, { kind: 'triangulate' | 'mars-orbit' | 'transfer' }>): PlotView {
   const canvas = h('canvas', { class: 'plot-canvas', role: 'img' });
   const readout = h('p', { class: 'plot-readout', 'aria-live': 'polite' });
   const el = h('div', { class: 'plot' }, canvas, readout);
@@ -71,17 +64,10 @@ export function plotView(app: App, plot: Plot): PlotView {
   const fromPx = (x: number, y: number): Vec2 => [(x - cx) / scale, (cy - y) / scale];
 
   const draw = () => {
-    const rect = canvas.getBoundingClientRect();
-    const w = Math.max(1, rect.width), hgt = Math.max(1, rect.height);
-    const dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
-    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(hgt * dpr)) {
-      canvas.width = Math.round(w * dpr); canvas.height = Math.round(hgt * dpr);
-    }
-    const g = canvas.getContext('2d');
-    if (!g) return;
+    const ready = prepare(canvas);
+    if (!ready) return;
+    const { g, w, h: hgt } = ready;
     const c = palette(el);
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    g.clearRect(0, 0, w, hgt);
     scale = Math.min(w, hgt) / 2 / AU_SPAN;
     cx = w / 2; cy = hgt / 2;
 

@@ -192,6 +192,13 @@ chosen by the owner on 2026-11-16)
   - A slingshot past Jupiter: Voyager 2 in 1979, and the `flyby` plot
     (`journeys/flyby.ts`, `ui/plot-flyby.ts`): pick a side and periapsis;
     passing behind at under about 10 Jupiter radii beats solar escape speed.
+  - What if? (the sandbox): `journeys/sandbox.ts` starts the Sun and eight
+    planets from their real places (ecliptic, AU, days) and runs them in
+    `astro/nbody.ts` with a step sized to the tightest pairing. Options: Jupiter
+    ×1/10/100/1,000, or a Sun-like star at 20 km/s passing 100 to 1 AU out.
+    Drawn live by `ui/plot-sandbox.ts` (trails relative to the Sun, three
+    zooms, play/pause). Tests (`sandbox.test.ts`) check the real orbits'
+    perihelia and aphelia, energy, and each claim the journey makes.
   - Shared canvas helpers are in `ui/plot-kit.ts`. `find` tasks can carry an
     `explain`.
 

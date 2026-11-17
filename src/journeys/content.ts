@@ -51,6 +51,8 @@ export const NAV_TIME = jdFromCalendar(2026, 11, 16, 21, 0);
 /** Midsummer sunrise at Stonehenge in 2500 BC and in 2026 (UT, upper limb on a level horizon), from the season and rise searches. */
 export const STONEHENGE_RISE_2500BC = 808492.6526;
 export const STONEHENGE_RISE_2026 = 2461212.6609;
+/** The what-if sandbox starts from the planets' real places on this date. */
+export const WHAT_IF_TIME = jdFromCalendar(2026, 11, 17, 0, 0);
 /** The Big Dipper on an April night, now and 50,000 years on. */
 export const DIPPER_NOW = jdFromCalendar(2026, 4, 15, 21, 0);
 export const DIPPER_LATER = DIPPER_NOW + 50000 * 365.25;
@@ -377,6 +379,37 @@ export const JOURNEYS: Journey[] = [
         title: 'The grand tour',
         text: 'A rare line-up let Voyager 2 do this again at Saturn in 1981, Uranus in 1986 and Neptune in 1989, the only visit either of those two worlds has had. It is still travelling, more than 130 AU from the Sun.',
         scene: { time: { jd: jdFromCalendar(1989, 8, 25, 0, 0) }, rate: 0, camera: { look: 'sun', mode: 'space', dist: 60, orbit: { yaw: -90, pitch: 55 } } },
+      },
+    ],
+  },
+  {
+    id: 'what-if',
+    title: 'What if?',
+    summary: 'Make Jupiter heavier or send a star through the solar system, and watch what gravity alone does to the planets.',
+    minutes: 5,
+    steps: [
+      {
+        title: 'Gravity, and nothing else',
+        text: 'This is the solar system from above, starting from where the planets are today. From here on nothing is looked up: every body pulls on every other, and the diagram works out where they go next, thousands of times a second. Watch a few centuries go by.',
+        scene: { time: { jd: WHAT_IF_TIME }, rate: 0, camera: { look: 'sun', mode: 'space', dist: 60, orbit: { yaw: -90, pitch: 80 } }, layers: { orbits: true, planetLabels: true } },
+        plot: { kind: 'sandbox', controls: 'none' },
+        task: { kind: 'choice', prompt: 'What happens to the planets\' orbits over the centuries?', options: ['They slowly spiral into the Sun', 'They stay much as they are', 'They drift outward, away from the Sun'], answer: 1, explain: 'They stay put. The planets tug on each other, but those tugs are tiny next to the Sun\'s pull, so the orbits only wobble a little.' },
+      },
+      {
+        title: 'A heavier Jupiter',
+        text: 'Jupiter is already more than twice as heavy as all the other planets together. Make it heavier still. At 1,000 times its real mass it would be about as heavy as the Sun: a second star.',
+        plot: { kind: 'sandbox', controls: 'jupiter' },
+        task: { kind: 'choice', prompt: 'Try 100 times heavier. Which planets are shaken up first?', options: ['Mercury and Venus, closest to the Sun', 'The Earth and Mars', 'Saturn, Uranus and Neptune'], answer: 2, explain: 'The outer planets. Saturn is pulled out to 13 AU and Neptune\'s orbit stretches, while the Earth barely notices. At 1,000 times, the planets are thrown out of the system within a couple of centuries.' },
+      },
+      {
+        title: 'A passing star',
+        text: 'Now keep Jupiter as it is and send a star like the Sun through the plane of the planets at 20 km/s, a typical speed for stars near us. Choose how close it comes. Switch to Inner to keep an eye on the Earth.',
+        plot: { kind: 'sandbox', controls: 'star' },
+        task: { kind: 'choice', prompt: 'How close does the star have to come to throw the Earth out?', options: ['100 AU, beyond Neptune', '10 AU, about Saturn\'s distance', 'A few AU or less, inside Jupiter\'s orbit'], answer: 2, explain: 'Very close. At 10 AU the giant planets are flung away but the Earth keeps going round the Sun. At 2 or 3 AU it depends on where the Earth happens to be; at 1 AU it is always lost.' },
+      },
+      {
+        title: 'Should we worry?',
+        text: 'Stars are so far apart that close passes are vanishingly rare. The closest one known is coming: in about 1.3 million years the star Gliese 710 will pass roughly 10,000 AU from the Sun. That is through the cloud of icy comets at the edge of the solar system, but far outside the planets. It may send a few comets our way. The orbits of the planets will not notice.',
       },
     ],
   },

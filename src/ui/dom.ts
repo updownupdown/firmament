@@ -71,6 +71,7 @@ const ICONS: Record<string, string> = {
   ground: '<path d="M2 16l5-7 3.5 4 2.5-3 5 6z"/>',
   air: '<path d="M2 15h16"/><path d="M5.5 15a4.5 4.5 0 0 1 9 0"/><path d="M3 11.5c2-1 3 1 5 0M12 6.5c2-1 3 1 5 0"/>',
   squeeze: '<path d="M2.5 10h5M12.5 10h5M5.5 7l2.5 3-2.5 3M14.5 7L12 10l2.5 3"/>',
+  reset: '<path d="M4.5 9.5a5.5 5.5 0 1 0 1.7-4"/><path d="M5.5 2.5v3.5H9"/>',
   ruler: '<path d="M3 14.5L14.5 3l2.5 2.5L5.5 17z"/><path d="M6.5 11.5l1.5 1.5M9 9l1.5 1.5M11.5 6.5L13 8"/>',
 };
 

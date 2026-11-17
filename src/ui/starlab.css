@@ -68,3 +68,23 @@
 
 /* A way into the lab from the Journeys list and from a star's card. */
 .lab-entry { border-color: var(--color-accent-edge); }
+
+/* Step one: pick a kind of star. */
+.lab-picker { display: flex; flex-direction: column; gap: var(--space-2); }
+.lab-type { flex-direction: row; align-items: center; gap: var(--space-4); padding: var(--space-3) var(--space-4); cursor: pointer; transition: background var(--duration) var(--ease); }
+.lab-type:hover { background: var(--color-surface-hover); }
+.lab-type-dot-wrap { flex: none; width: 44px; display: flex; align-items: center; justify-content: center; }
+.lab-type-dot { display: block; border-radius: 50%; }
+.lab-type-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lab-type-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.lab-type-fate { color: var(--color-text-faint); font-size: var(--text-xs); }
+.lab-chosen { align-items: center; padding: 0 var(--space-1); }
+.lab-type-title { font-size: var(--text-xl); font-weight: var(--weight-medium); letter-spacing: var(--tracking-tight); min-width: 0; }
+.lab-chosen .pill-button { flex: none; min-height: 36px; padding: 0 var(--space-3); font-size: var(--text-sm); }
+
+/* Fine-tune, folded away until wanted. */
+.lab-summary { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); cursor: pointer; list-style: none; }
+.lab-summary::-webkit-details-marker { display: none; }
+.lab-summary::after { content: '+'; color: var(--color-text-muted); font-size: var(--text-lg); }
+.lab-controls[open] .lab-summary::after { content: '−'; }
+.lab-controls-body { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-3); }

@@ -22,14 +22,17 @@ const REMNANT_SPAN = 1e10;
 const PLAY_SECONDS = 26;
 const MASS_STEPS = 1000;
 
-const PRESETS: { label: string; mass: number; feh: number }[] = [
-  { label: 'Red dwarf', mass: 0.15, feh: 0 },
-  { label: 'The Sun', mass: 1, feh: 0 },
-  { label: 'Sirius', mass: 2.06, feh: 0 },
-  { label: 'Blue giant', mass: 8, feh: 0 },
-  { label: 'Supergiant', mass: 18, feh: 0 },
-  { label: 'Monster', mass: 60, feh: 0 },
-  { label: 'A first star', mass: 200, feh: -2.5 },
+/** The kinds of star to start from, lightest first. */
+export const STAR_TYPES: { label: string; like: string; mass: number; feh: number }[] = [
+  { label: 'Red dwarf', like: 'Like Proxima Centauri. The commonest kind of star.', mass: 0.15, feh: 0 },
+  { label: 'Orange dwarf', like: 'Like Alpha Centauri B. Cooler and calmer than the Sun.', mass: 0.75, feh: 0 },
+  { label: 'Sun-like star', like: 'Like the Sun.', mass: 1, feh: 0 },
+  { label: 'White star', like: 'Like Sirius or Vega.', mass: 2.1, feh: 0 },
+  { label: 'Blue-white star', like: 'Like Regulus or Achernar.', mass: 5, feh: 0 },
+  { label: 'Massive blue star', like: 'Like Spica.', mass: 12, feh: 0 },
+  { label: 'Supergiant', like: 'Like Betelgeuse or Rigel.', mass: 20, feh: 0 },
+  { label: 'Monster', like: 'Like the stars of the Tarantula Nebula.', mass: 60, feh: 0 },
+  { label: 'A first star', like: 'Born from almost pure hydrogen and helium, in the early universe.', mass: 200, feh: -2.5 },
 ];
 
 const weight = (s: Stage) => s.id === 'ms' ? 4
@@ -120,7 +123,6 @@ function earthMasses(m: number): string {
 // ---------------------------------------------------------------- the panel
 
 export function starLabPanel(shell: Shell): StarLabPanel {
-  void shell;
   let mass = 1;
   let feh = 0;
   let track = evolve(mass, feh);
@@ -139,9 +141,27 @@ export function starLabPanel(shell: Shell): StarLabPanel {
   const massInput = h('input', { type: 'range', min: '0', max: String(MASS_STEPS), step: '1', 'aria-label': 'Birth mass' });
   const fehValue = h('span', { class: 'lab-value' });
   const fehInput = h('input', { type: 'range', min: String(FEH_MIN), max: String(FEH_MAX), step: '0.1', 'aria-label': 'Metals' });
-  const presets = h('div', { class: 'chips' }, PRESETS.map((p) => h('button', {
-    class: 'chip-button', type: 'button', onclick: () => { seed = null; setStar(p.mass, p.feh, 0); },
-  }, p.label)));
+  // Step one: pick a kind of star.
+  let picking = true;
+  let typeName = '';
+  const picker = h('div', { class: 'lab-picker' });
+  const renderPicker = () => fill(picker, STAR_TYPES.map((t) => {
+    const tr = evolve(t.mass, t.feh);
+    const st = stateAt(tr, 0);
+    const dot = h('span', { class: 'lab-type-dot', 'aria-hidden': 'true' });
+    const size = Math.round(10 + 5 * Math.log10(t.mass / 0.1));
+    dot.style.width = dot.style.height = `${size}px`;
+    dot.style.background = starColour(st.T);
+    dot.style.boxShadow = `0 0 ${Math.round(size * 0.8)}px ${starColour(st.T, 0.5)}`;
+    return h('button', { class: 'card lab-type', type: 'button', onclick: () => pickType(t) },
+      h('span', { class: 'lab-type-dot-wrap' }, dot),
+      h('span', { class: 'lab-type-text' },
+        h('span', { class: 'lab-type-head' }, h('span', { class: 'row-name' }, t.label), h('span', { class: 'tag' }, solarMasses(t.mass))),
+        h('span', { class: 'hint' }, t.like),
+        h('span', { class: 'lab-type-fate' }, `Lives ${formatYears(tr.lifetime)} · ${tr.ending.title.replace(/^An? /, 'becomes a ').replace(/^Nothing at all$/, 'leaves nothing behind')}`)));
+  }));
+  const typeTitle = h('h3', { class: 'lab-type-title' });
+  const changeButton = h('button', { class: 'pill-button', type: 'button', onclick: () => showPicker() }, 'Change star');
 
   // Seed (a real star).
   const seedCard = h('div', { class: 'card lab-seed', hidden: true });
@@ -165,8 +185,11 @@ export function starLabPanel(shell: Shell): StarLabPanel {
   const born = h('div', { class: 'lab-born' });
   const gives = h('div', { class: 'lab-gives' });
 
-  const el = h('div', { class: 'panel star-lab' },
-    h('p', { class: 'lede' }, 'Build a star and watch it live and die. Its birth mass decides almost everything; its metals change the details.'),
+  const pickView = h('div', { class: 'panel' },
+    h('p', { class: 'lede' }, 'Pick a star and watch it live and die. The heavier it is born, the brighter it burns, the sooner it dies and the more violent its end.'),
+    picker);
+  const lifeView = h('div', { class: 'panel' },
+    h('div', { class: 'lab-row lab-chosen' }, typeTitle, changeButton),
     seedCard,
     h('section', { class: 'card lab-star' },
       view,
@@ -175,13 +198,14 @@ export function starLabPanel(shell: Shell): StarLabPanel {
       stageText,
       sizeLine,
       facts),
-    h('section', { class: 'card lab-controls' },
-      h('label', { class: 'lab-row' }, h('span', { class: 'card-label' }, 'Birth mass'), massValue),
-      massInput,
-      h('label', { class: 'lab-row' }, h('span', { class: 'card-label' }, 'Metals'), fehValue),
-      fehInput,
-      h('p', { class: 'hint' }, 'Metals are every element heavier than helium. The first stars had none; stars born today have the most.'),
-      presets),
+    h('details', { class: 'card lab-controls' },
+      h('summary', { class: 'lab-summary' }, h('span', { class: 'card-label' }, 'Fine-tune'), h('span', { class: 'hint' }, 'Birth mass and metals')),
+      h('div', { class: 'lab-controls-body' },
+        h('label', { class: 'lab-row' }, h('span', { class: 'card-label' }, 'Birth mass'), massValue),
+        massInput,
+        h('label', { class: 'lab-row' }, h('span', { class: 'card-label' }, 'Metals'), fehValue),
+        fehInput,
+        h('p', { class: 'hint' }, 'Metals are every element heavier than helium. The first stars had none; stars born today have the most.'))),
     h('section', { class: 'card' }, h('span', { class: 'card-label' }, 'Its life on the Hertzsprung–Russell diagram'), hr,
       h('p', { class: 'hint' }, 'Brightness against surface temperature. Most stars spend their lives on the main sequence, then wander off to the right as giants.')),
     h('section', { class: 'card' }, h('span', { class: 'card-label' }, 'Inside, by mass'), inside),
@@ -190,6 +214,32 @@ export function starLabPanel(shell: Shell): StarLabPanel {
     h('section', { class: 'card' }, h('span', { class: 'card-label' }, 'What it gives back'), gives),
     h('p', { class: 'hint lab-sources' },
       'Main-sequence sizes and lifetimes from Tout et al. (1996) and Hurley, Pols & Tout (2000); giants from core-mass relations; white dwarf masses from Cummings et al. (2018); late burning times from Woosley, Heger & Weaver (2002); neutron stars and black holes from Fryer et al. (2012). Single stars only, without rotation or a companion. The stages after the main sequence are simplified.'));
+  const el = h('div', { class: 'star-lab' }, pickView, lifeView);
+
+  function showPicker() {
+    setPlaying(false);
+    picking = true;
+    syncMode();
+  }
+  function showLife() {
+    picking = false;
+    syncMode();
+  }
+  function syncMode() {
+    pickView.hidden = !picking;
+    lifeView.hidden = picking;
+    if (picking) renderPicker();
+    else { renderStatic(); renderTime(); }
+    el.closest('.sheet-body')?.scrollTo({ top: 0 });
+  }
+  function pickType(t: (typeof STAR_TYPES)[number]) {
+    seed = null;
+    typeName = t.label;
+    setStar(t.mass, t.feh, 0);
+    showLife();
+    // Start at birth and play through, unless the player prefers stillness.
+    if (!shell.app.reducedMotion) setPlaying(true);
+  }
 
   // ------------------------------------------------------------ state changes
 
@@ -206,8 +256,8 @@ export function starLabPanel(shell: Shell): StarLabPanel {
   }
 
   // The slider shares its length out by stage, so the same position stays in the same part of life.
-  massInput.addEventListener('input', () => setStar(toMass(Number(massInput.value)), feh, null));
-  fehInput.addEventListener('input', () => setStar(mass, Number(fehInput.value), null));
+  massInput.addEventListener('input', () => { typeName = ''; setStar(toMass(Number(massInput.value)), feh, null); });
+  fehInput.addEventListener('input', () => { typeName = ''; setStar(mass, Number(fehInput.value), null); });
   timeInput.addEventListener('input', () => {
     pos = Number(timeInput.value) / 1000;
     if (playing) setPlaying(false);
@@ -236,6 +286,7 @@ export function starLabPanel(shell: Shell): StarLabPanel {
   // ------------------------------------------------------------ rendering
 
   function renderStatic() {
+    typeTitle.textContent = seed && !typeName ? seed.name : typeName || `A star of ${solarMasses(mass)}`;
     massValue.textContent = massLabel(mass);
     massInput.setAttribute('aria-valuetext', `${solarMasses(mass)}`);
     fehValue.textContent = metalLabel(feh);
@@ -551,6 +602,8 @@ export function starLabPanel(shell: Shell): StarLabPanel {
 
   function applySeed(s: StarSeed) {
     seed = s;
+    typeName = '';
+    picking = false;
     const t = evolve(s.mass, s.feh);
     setStar(s.mass, s.feh, s.age !== undefined ? positionOfAge(t, s.age) : 0);
   }
@@ -561,11 +614,11 @@ export function starLabPanel(shell: Shell): StarLabPanel {
   return {
     title: 'Star lab',
     el,
-    refresh: () => { renderStatic(); renderTime(); },
+    refresh: () => syncMode(),
     seed(s) {
       setPlaying(false);
       if (s) applySeed(s);
-      else { seed = null; renderStatic(); renderTime(); }
+      else { seed = null; picking = true; }
     },
   };
 }

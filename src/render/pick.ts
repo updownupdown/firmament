@@ -3,6 +3,7 @@
 
 import { DEG, type Vec3, apply, clamp } from '../astro/math.ts';
 import type { LayerFlags } from '../sim/scene.ts';
+import { countBrighter } from '../astro/tycho.ts';
 import { dsoId, starRef } from '../sim/universe.ts';
 import { dsoLimit } from './conditions.ts';
 import type { SkyRenderer } from './sky.ts';
@@ -55,6 +56,26 @@ export function pick(r: SkyRenderer, layers: LayerFlags, x: number, y: number, r
     if (!s) continue;
     const named = u.stars.meta.get(i)?.n ? 6 : 0;
     consider(starRef(u.stars, i), s.x, s.y, clamp((c.limitMag - data[o + 7]) * 2.2, 0, 16) + named);
+  }
+
+  // Tycho-2 stars, once zoomed in far enough to draw them.
+  const index = r.tychoIndex;
+  if (index && c.limitMag > 8 && u.faint.size) {
+    const dec = Math.asin(clamp(centre[2], -1, 1)), reach = Math.acos(cosLimit);
+    for (const [b, band] of u.faint) {
+      const south = (-90 + b * index.band) * DEG, north = south + index.band * DEG;
+      if (dec + reach < south || dec - reach > north) continue;
+      // Only stars bright enough to see on screen, not the ones fading out at the limit.
+      const n = countBrighter(band.mag, c.limitMag - 1);
+      for (let i = 0; i < n; i++) {
+        const cd = Math.cos(band.dec[i]);
+        if (cd * Math.cos(band.ra[i]) * centre[0] + cd * Math.sin(band.ra[i]) * centre[1] + Math.sin(band.dec[i]) * centre[2] < cosLimit) continue;
+        const h = apply(m, u.faintDirection(band, i));
+        if (Math.asin(clamp(h[2], -1, 1)) < floor) continue;
+        const s = p.project(h);
+        if (s) consider(`tyc:${b}:${i}`, s.x, s.y, clamp((c.limitMag - band.mag[i]) * 2.2, 0, 16));
+      }
+    }
   }
 
   if (layers.dsos) {

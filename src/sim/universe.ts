@@ -13,6 +13,7 @@ import { GALILEAN, galileanMoons } from '../astro/galilean.ts';
 import { SMALL_BODIES } from '../astro/kepler.ts';
 import { AU_KM, DEG, type Vec3, add, apply, fromSpherical, norm, normalize, scale } from '../astro/math.ts';
 import { type StarCatalog, designation, genitive } from '../astro/stars.ts';
+import { TYCHO_KEEP, type TychoBand } from '../astro/tycho.ts';
 import { J2000 } from '../astro/time.ts';
 import { type Boundaries, type Constellation, type Culture, type CultureInfo, type Dso, DSO_TYPES } from '../data/types.ts';
 
@@ -104,6 +105,8 @@ export class Universe {
   readonly cultureIndex: CultureInfo[];
   readonly cultures = new Map<string, Culture>();
   boundaries: Boundaries | null = null;
+  /** Tycho-2 bands loaded so far, oldest first (the renderer keeps the same ones). */
+  readonly faint = new Map<number, TychoBand>();
 
   site: Site;
   cultureId = 'western';
@@ -195,6 +198,18 @@ export class Universe {
     return aberrate(this.stars.at(i, this.years).dir, this.frame.earthVel);
   }
 
+  /** Keep a Tycho-2 band so its stars can be picked and named. */
+  addFaintBand(band: number, data: TychoBand): void {
+    this.faint.delete(band);
+    this.faint.set(band, data);
+    while (this.faint.size > TYCHO_KEEP) this.faint.delete(this.faint.keys().next().value!);
+  }
+
+  /** Apparent direction (J2000 frame) of a Tycho-2 star. */
+  faintDirection(band: TychoBand, i: number): Vec3 {
+    return aberrate(fromSpherical(band.ra[i], band.dec[i]), this.frame.earthVel);
+  }
+
   /** Index of a star from its reference, or -1. */
   starIndex(ref: string): number {
     if (ref.startsWith('star:')) return this.stars.hipIndex.get(Number(ref.slice(5))) ?? -1;
@@ -246,6 +261,12 @@ export class Universe {
       const des = designation(meta);
       const subtitle = meta?.n && des ? des : meta?.c ? `Star in ${genitive(meta.c)}` : 'Star';
       return { ref: starRef(this.stars, i), kind: 'star', name, subtitle, dir: this.starDirection(i), mag: this.stars.at(i, this.years).mag, starIndex: i };
+    }
+    if (ref.startsWith('tyc:')) {
+      const [b, i] = ref.slice(4).split(':').map(Number);
+      const band = this.faint.get(b);
+      if (!band || !Number.isInteger(i) || i < 0 || i >= band.mag.length) return null;
+      return { ref, kind: 'star', name: 'Faint star', subtitle: 'Tycho-2 catalogue', dir: this.faintDirection(band, i), mag: band.mag[i] };
     }
     if (ref.startsWith('dso:')) {
       const d = this.dsoById.get(ref.slice(4).replace(/\s+/g, '').toLowerCase());

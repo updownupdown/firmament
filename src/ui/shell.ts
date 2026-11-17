@@ -323,7 +323,8 @@ export class Shell {
       const logged = app.store.hasLogged(obj.ref);
       fill(saw, icon('check', 18), logged ? 'Seen' : 'I saw it');
       saw.classList.toggle('done', logged);
-      saw.hidden = obj.kind === 'sun' || space;
+      // Tycho-2 stars are far too faint to log by eye.
+      saw.hidden = obj.kind === 'sun' || space || obj.ref.startsWith('tyc:');
       measureButton.hidden = space || obj.kind === 'constellation';
       renderMore();
     };

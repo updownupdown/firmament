@@ -17,7 +17,7 @@ import type { Boundaries, Constellation, Dso } from '../data/types.ts';
 import type { LayerFlags } from '../sim/scene.ts';
 import type { Universe } from '../sim/universe.ts';
 import { Mesh, Program, loadTexture } from './gl.ts';
-import { type TychoBand, type TychoIndex, bandsNear, countBrighter as countTycho } from '../astro/tycho.ts';
+import { TYCHO_KEEP, type TychoBand, type TychoIndex, bandsNear, countBrighter as countTycho } from '../astro/tycho.ts';
 import { type SkyConditions, airDimming, dsoLimit, skyConditions } from './conditions.ts';
 import { type Projected, SkyProjection, refractVector } from './projection.ts';
 import {
@@ -186,7 +186,7 @@ export class SkyRenderer {
     const mesh = new Mesh(this.gl, STAR_STRIDE, starLayout);
     mesh.set(out);
     this.tycho.set(band, { mesh, mag: data.mag });
-    while (this.tycho.size > 12) {
+    while (this.tycho.size > TYCHO_KEEP) {
       const [oldest, entry] = this.tycho.entries().next().value!;
       entry.mesh.dispose();
       this.tycho.delete(oldest);

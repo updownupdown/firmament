@@ -18,6 +18,9 @@ export interface TychoBand {
   mag: Float32Array;
 }
 
+/** How many bands to keep loaded at once. */
+export const TYCHO_KEEP = 12;
+
 const pad4 = (n: number) => (n + 3) & ~3;
 
 /** Decode one band file (radians, magnitudes). */

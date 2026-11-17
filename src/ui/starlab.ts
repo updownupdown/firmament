@@ -267,7 +267,7 @@ export function starLabPanel(shell: Shell): StarLabPanel {
     else {
       const st = stateAt(evolve(s.mass, s.feh), s.age);
       const how = s.source === 'published' ? `A published birth mass of ${solarMasses(s.mass)}.` : `Fitted from its brightness and colour: about ${solarMasses(s.mass)}.`;
-      text = `${how} On that track it is about ${formatYears(s.age)} old: ${article(st.stage.name)}.`;
+      text = `${how} On that track it is about ${formatYears(s.age)} old: ${article(st.stage)}.`;
       if (s.miss !== undefined && s.miss > 4) text += ' It does not sit cleanly on a single-star track (it may be a close pair or reddened by dust), so treat this as rough.';
     }
     fill(seedCard,
@@ -574,9 +574,14 @@ function token(el: Element, name: string): string {
   return getComputedStyle(el).getPropertyValue(name).trim();
 }
 
-function article(name: string): string {
-  const n = name.charAt(0).toLowerCase() + name.slice(1);
-  if (/^main sequence/.test(n)) return 'still on the main sequence';
-  if (/^white dwarf|^neutron|^black/.test(n)) return `already a ${n}`;
-  return `${/^[aeiou]/.test(n) ? 'an' : 'a'} ${n}`;
+const PHRASE: Partial<Record<Stage['id'], string>> = {
+  ms: 'still on the main sequence', blueDwarf: 'a blue dwarf', subgiant: 'a subgiant', rgb: 'a red giant',
+  heCore: 'a giant burning helium in its core', agb: 'a giant on the asymptotic giant branch', pn: 'shedding a planetary nebula',
+  crossing: 'a supergiant crossing from blue to red', redSupergiant: 'a supergiant burning helium', wolfRayet: 'a Wolf–Rayet star',
+  carbon: 'burning carbon in its core', neon: 'burning neon', oxygen: 'burning oxygen', silicon: 'days from collapse',
+  whiteDwarf: 'already a white dwarf', neutronStar: 'already a neutron star', blackHole: 'already a black hole',
+};
+
+function article(stage: Stage): string {
+  return PHRASE[stage.id] ?? stage.name.toLowerCase();
 }

@@ -26,12 +26,17 @@ export type AppEvent =
   | 'frame'
   /** About once a second of real time, for clocks and live readouts. */
   | 'second'
-  | 'select' | 'settings' | 'site' | 'section' | 'time' | 'data' | 'mode' | 'pointing';
+  | 'select' | 'settings' | 'site' | 'section' | 'time' | 'data' | 'mode' | 'pointing' | 'measure';
 
 const DEFAULT_SITE: Site = (() => {
   const p = PLACES[0];
   return { name: p.name, country: p.country, lat: p.lat, lon: p.lon, height: p.height ?? 0, tz: p.tz };
 })();
+
+/** Constellations have no single point to measure from. */
+function measurable(o: SkyObject | null): boolean {
+  return !!o && o.kind !== 'constellation';
+}
 
 function cssColor(name: string, fallback: [number, number, number]): [number, number, number] {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -63,6 +68,8 @@ export class App {
   section: Section = 'sky';
   /** Still mode: chrome hidden, the sky drifting. */
   still = false;
+  /** The measuring tool: the angle from one object to another (`to` is null until a second tap). */
+  measure: { from: string; to: string | null } | null = null;
 
   private readonly labels: LabelLayer;
   private readonly listeners = new Map<AppEvent, Set<() => void>>();
@@ -106,12 +113,24 @@ export class App {
         }
         // A tap on a name picks what it names; otherwise the nearest object, leaning toward the journey's target.
         const named = this.labels.hit(x, y);
-        if (named && this.universe.resolve(named)) { this.select(named); return; }
-        this.select(pick(this.renderer, this.layers, x, y, 36, this.pickPreference));
+        const hit = named && this.universe.resolve(named) ? named : pick(this.renderer, this.layers, x, y, 36, this.pickPreference);
+        if (this.measure && !this.measure.to) {
+          // Measuring: the second tap sets the far end; a tap on empty sky keeps waiting.
+          if (hit && hit !== this.measure.from && measurable(this.universe.resolve(hit))) {
+            this.measure = { from: this.measure.from, to: hit };
+            this.emit('measure');
+            this.select(hit);
+          }
+          return;
+        }
+        this.select(hit);
       },
       onChange: () => this.invalidate(),
     });
     new ResizeObserver(() => this.invalidate()).observe(canvas);
+    // Zoom out past the widest sky to lift off; zoom into the Earth from space to land.
+    this.camera.zoomPast.onPast = () => this.setMode('space');
+    this.space.camera.zoomPast.onPast = () => { if (this.space.camera.focus === 'earth') this.setMode('sky'); };
 
     // The rest of the data arrives after the first frame.
     loadFaintStars(core.stars).then(() => {
@@ -248,6 +267,21 @@ export class App {
     this.emit('time');
   }
 
+  // ---------------------------------------------------------------- measuring
+
+  /** Start measuring from an object; the next object tapped sets the other end. */
+  startMeasure(from: string): void {
+    if (!measurable(this.universe.resolve(from))) return;
+    this.measure = { from, to: null };
+    this.emit('measure');
+  }
+
+  stopMeasure(): void {
+    if (!this.measure) return;
+    this.measure = null;
+    this.emit('measure');
+  }
+
   // ---------------------------------------------------------------- selection and camera
 
   get selectedObject(): SkyObject | null {
@@ -324,12 +358,15 @@ export class App {
   /** Switch between the sky from the ground and the solar system from outside. */
   setMode(mode: ViewMode, target?: string): void {
     if (mode === this.mode) return;
-    if (mode === 'space') void this.setPointing(false);
+    if (mode === 'space') { void this.setPointing(false); this.stopMeasure(); }
     this.mode = mode;
     if (mode === 'space') {
       // Lift off: start just above the Earth and pull back until the inner planets are in view.
       this.universe.update(this.clock.jdUT);
       this.space.liftOff(target ?? this.selected ?? 'sun');
+    } else if (this.renderer.projection.fov > 120 * DEG) {
+      // Back on the ground from a zoomed-out lift-off: settle to a natural view.
+      this.camera.flyTo({ fov: 90 * DEG });
     }
     this.invalidate();
     this.emit('mode');

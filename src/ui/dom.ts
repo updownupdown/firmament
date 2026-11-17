@@ -55,6 +55,7 @@ const ICONS: Record<string, string> = {
   up: '<path d="M5 12.5l5-5 5 5"/>',
   calendar: '<rect x="3" y="4.5" width="14" height="12.5" rx="2.5"/><path d="M3 8.5h14M7 2.5v4M13 2.5v4"/>',
   phone: '<rect x="6" y="2.5" width="8" height="15" rx="2"/><path d="M9 15h2"/>',
+  ruler: '<path d="M3 14.5L14.5 3l2.5 2.5L5.5 17z"/><path d="M6.5 11.5l1.5 1.5M9 9l1.5 1.5M11.5 6.5L13 8"/>',
 };
 
 export function icon(name: string, size = 20): SVGSVGElement {

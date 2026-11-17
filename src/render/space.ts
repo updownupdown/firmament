@@ -10,7 +10,7 @@ import { J2000 } from '../astro/time.ts';
 import { AU_KM, DEG, type Mat3, type Vec3, add, apply, clamp, cross, fromSpherical, normalize, scale, sub } from '../astro/math.ts';
 import type { LayerFlags } from '../sim/scene.ts';
 import type { Universe } from '../sim/universe.ts';
-import type { Controllable } from './camera.ts';
+import { type Controllable, ZoomPast } from './camera.ts';
 import { Mesh, Program } from './gl.ts';
 import type { LabelItem } from './labels.ts';
 import {
@@ -50,6 +50,8 @@ export class SpaceCamera implements Controllable {
   reducedMotion = false;
   /** The closest the user may zoom in on the focus, AU (just clear of its surface). */
   floor = 0;
+  /** Zooming in past the floor. */
+  readonly zoomPast = new ZoomPast();
   /** What is left of the glide from the previous focus (AU, J2000). */
   offset: Vec3 = [0, 0, 0];
   /** J2000 → camera rotation (camera looks along −z). */
@@ -142,8 +144,10 @@ export class SpaceCamera implements Controllable {
   }
 
   zoom(factor: number): void {
-    if (this.flight?.glide) this.offset = [0, 0, 0];
+    // Let a lift-off finish: the wheel that started it is usually still turning.
+    if (this.flight?.glide) return;
     this.flight = null;
+    if (this.zoomPast.feed(factor > 1 && this.dist <= Math.max(MIN_DIST, this.floor) * 1.001, Math.log(factor))) return;
     this.dist = clamp(this.dist / factor, Math.max(MIN_DIST, Math.min(this.floor, this.dist)), MAX_DIST);
     this.update();
   }
@@ -154,7 +158,9 @@ export class SpaceCamera implements Controllable {
     else if (key === 'ArrowRight') this.yaw -= step;
     else if (key === 'ArrowUp') this.pitch += step;
     else if (key === 'ArrowDown') this.pitch -= step;
-    else if (key === '+' || key === '=') this.flyTo(this.dist / 1.5, 0.25);
+    else if (key === '+' || key === '=') {
+      if (!(this.dist <= Math.max(MIN_DIST, this.floor) * 1.001 && this.zoomPast.feed(true, 1))) this.flyTo(this.dist / 1.5, 0.25);
+    }
     else if (key === '-') this.flyTo(this.dist * 1.5, 0.25);
     else return false;
     this.update();
@@ -197,6 +203,30 @@ export class SpaceCamera implements Controllable {
     return changed;
   }
 }
+
+// ------------------------------------------------------------------ compressed scale
+
+/**
+ * The compressed scale: distances from the Sun go as the square root (the
+ * Earth stays at 1 AU, Neptune comes in to 5.5), sizes as the 0.6 power
+ * (the Earth 0.02 AU across, the Sun 0.34), and moons sit out from their
+ * planet by the square root of their distance in planet radii. The order of
+ * everything, and which is bigger, stays true.
+ */
+export const COMPRESS = {
+  size: (radiusAU: number) => 8.4 * Math.pow(radiusAU, 0.6),
+  helio: (p: Vec3): Vec3 => {
+    const r = Math.hypot(p[0], p[1], p[2]);
+    return r > 0 ? scale(p, 1 / Math.sqrt(r)) : p;
+  },
+  /** A moon's offset from its planet, given the planet's true radius. */
+  moon: (offset: Vec3, parentRadiusAU: number): Vec3 => {
+    const d = Math.hypot(offset[0], offset[1], offset[2]);
+    if (d === 0) return offset;
+    const out = COMPRESS.size(parentRadiusAU) * Math.sqrt(d / parentRadiusAU);
+    return scale(offset, out / d);
+  },
+};
 
 // ------------------------------------------------------------------ orbits
 
@@ -316,6 +346,9 @@ export class SpaceRenderer {
   private readonly quad: Mesh;
   private readonly orbits = new Map<string, OrbitCache>();
   private readonly positions = new Map<string, Vec3>();
+  private readonly byId = new Map(this.bodies.map((b) => [b.id, b]));
+  /** Distances and sizes squeezed so everything fits (see COMPRESS). */
+  private compressed = false;
 
   constructor(gl: WebGL2RenderingContext, universe: Universe, starMesh: Mesh, milkyWay: WebGLTexture) {
     this.gl = gl;
@@ -338,14 +371,51 @@ export class SpaceRenderer {
     return this.positions.get(id) ?? null;
   }
 
+  /** Radius as drawn, AU. */
+  radiusOf(b: SpaceBody): number {
+    return this.compressed ? COMPRESS.size(b.radiusAU) : b.radiusAU;
+  }
+
+  /** Switch between true and compressed scale, keeping the view on the same body. */
+  setCompressed(on: boolean): void {
+    if (on === this.compressed) return;
+    const cam = this.camera;
+    const before = cam.dist / this.framingDistance(cam.focus);
+    this.compressed = on;
+    this.orbits.clear();
+    this.updatePositions();
+    cam.floor = this.floorFor(cam.focus);
+    cam.offset = [0, 0, 0];
+    cam.flyTo(cam.focus === 'sun' ? cam.dist : this.framingDistance(cam.focus) * clamp(before, 1, 40), 0.8);
+  }
+
+  /** True orbit points (heliocentric, or a moon's offsets from its planet) as drawn at compressed scale. */
+  private squashAll(points: Float64Array, parent?: SpaceBody): Float64Array {
+    const out = new Float64Array(points.length);
+    for (let k = 0; k < points.length; k += 3) {
+      const p: Vec3 = [points[k], points[k + 1], points[k + 2]];
+      out.set(parent ? COMPRESS.moon(p, parent.radiusAU) : COMPRESS.helio(p), k);
+    }
+    return out;
+  }
+
   private updatePositions(): void {
     const eph = this.universe.eph, jd = this.universe.frame.jdTT;
+    const truth = new Map<string, Vec3>();
     for (const b of this.bodies) {
       if (b.parent === 'jupiter') continue;
-      this.positions.set(b.id, b.id === 'earth' ? eph.earth(jd) : eph.helio(b.id, jd));
+      truth.set(b.id, b.id === 'earth' ? eph.earth(jd) : eph.helio(b.id, jd));
     }
-    const jupiter = this.positions.get('jupiter')!;
-    galileanAround(jd, jupiter, this.positions.get('earth')!).forEach((p, k) => this.positions.set(GALILEAN[k].id, p));
+    const jupiter = truth.get('jupiter')!;
+    galileanAround(jd, jupiter, truth.get('earth')!).forEach((p, k) => truth.set(GALILEAN[k].id, p));
+    for (const b of this.bodies) {
+      const p = truth.get(b.id)!;
+      if (!this.compressed) { this.positions.set(b.id, p); continue; }
+      const parent = b.parent ? this.byId.get(b.parent)! : undefined;
+      this.positions.set(b.id, parent
+        ? add(COMPRESS.helio(truth.get(parent.id)!), COMPRESS.moon(sub(p, truth.get(parent.id)!), parent.radiusAU))
+        : COMPRESS.helio(p));
+    }
   }
 
   /** Begin above the Earth and pull back to a view centred on `target`. */
@@ -356,7 +426,8 @@ export class SpaceRenderer {
     cam.focus = id;
     cam.floor = this.floorFor(id);
     const to = id === 'sun' ? 4.2 : Math.max(0.03, this.framingDistance(id) * 6);
-    cam.liftOff(sub(this.positions.get('earth')!, this.positions.get(id)!), 3e-4, id === 'earth' ? 0.012 : to);
+    const earth = this.byId.get('earth')!;
+    cam.liftOff(sub(this.positions.get('earth')!, this.positions.get(id)!), Math.max(3e-4, this.radiusOf(earth) * 7), id === 'earth' ? Math.max(0.012, this.framingDistance('earth') * 3) : to);
     cam.update();
   }
 
@@ -383,16 +454,16 @@ export class SpaceRenderer {
   }
 
   private floorFor(id: string): number {
-    const b = this.bodies.find((x) => x.id === id);
-    return b ? b.radiusAU * (b.kind === 4 ? 2.6 : b.kind === 1 ? 2 : 1.6) : 0;
+    const b = this.byId.get(id);
+    return b ? this.radiusOf(b) * (b.kind === 4 ? 2.6 : b.kind === 1 ? 2 : 1.6) : 0;
   }
 
   /** A distance from which a body comfortably fills part of the view. */
   framingDistance(id: string): number {
-    const b = this.bodies.find((x) => x.id === id);
+    const b = this.byId.get(id);
     if (!b) return 4;
     if (id === 'sun') return 3.2;
-    return Math.max(MIN_DIST, b.radiusAU * (b.kind === 4 ? 16 : 9));
+    return Math.max(MIN_DIST, this.radiusOf(b) * (b.kind === 4 ? 16 : 9));
   }
 
   private orbitPoints(b: SpaceBody): Float64Array | null {
@@ -430,6 +501,7 @@ export class SpaceRenderer {
 
   render(opts: SpaceOptions, pixelRatio: number): void {
     const gl = this.gl, cam = this.camera, u = this.universe;
+    this.setCompressed(opts.layers.compressed);
     this.updatePositions();
     const focusPos = this.positions.get(cam.focus) ?? [0, 0, 0];
     const w = gl.canvas.width, h = gl.canvas.height;
@@ -455,8 +527,10 @@ export class SpaceRenderer {
     if (opts.layers.orbits) {
       this.orbitProgram.use().v2('uF', fx, fy).f('uNear', cam.dist * 1e-3);
       for (const b of this.bodies) {
-        const points = this.orbitPoints(b);
-        if (!points) continue;
+        const truePoints = this.orbitPoints(b);
+        if (!truePoints) continue;
+        const parent = b.parent ? this.byId.get(b.parent) : undefined;
+        const points = this.compressed ? this.squashAll(truePoints, parent) : truePoints;
         const origin = b.parent ? this.positions.get(b.parent)! : [0, 0, 0] as Vec3;
         const here = sub(this.positions.get(b.id)!, origin);
         const n = points.length / 3;
@@ -495,7 +569,7 @@ export class SpaceRenderer {
       const c = cam.toCamera(sub(this.positions.get(b.id)!, focusPos));
       const s = cam.projectCamera(c);
       if (!s) continue;
-      const radiusPx = Math.max(b.minPx, (cam.focal * b.radiusAU) / s.depth);
+      const radiusPx = Math.max(b.minPx, (cam.focal * this.radiusOf(b)) / s.depth);
       drawn.push({ id: b.id, name: b.name, x: s.x, y: s.y, radiusPx, depth: s.depth, onScreen: s.onScreen, body: b, cam: c });
     }
     drawn.sort((a, b) => b.depth - a.depth);

@@ -9,6 +9,7 @@ import { h, fill, icon, iconButton } from './dom.ts';
 import { blurb, detailFacts, quickFacts, riseSetFacts, whereNow } from './facts.ts';
 import { type JourneyPlayer, journeyPlayer, journeysPanel } from './journeys.ts';
 import { logPanel, logSighting } from './log.ts';
+import { measureTool } from './measure.ts';
 import { placeTimePanel, searchPanel, settingsPanel } from './panels.ts';
 import { tonightPanel } from './tonight.ts';
 import { timeBar } from './timebar.ts';
@@ -59,7 +60,9 @@ export class Shell {
     const nightVision = h('div', { class: 'night-vision', 'aria-hidden': 'true' });
     const point = this.pointButton();
     if (point) root.append(point);
-    root.append(this.topBar(), this.reticle(), this.objectCard(), this.journey.el, this.timeBar(), this.dock(), this.sheetEl, this.toastEl, this.stillHint(), nightVision);
+    root.append(this.scaleButton());
+    const measure = measureTool(app);
+    root.append(measure.layer, this.topBar(), measure.banner, this.reticle(), this.objectCard(), this.journey.el, this.timeBar(), this.dock(), this.sheetEl, this.toastEl, this.stillHint(), nightVision);
 
     const syncSettings = () => {
       const s = app.store.data.settings;
@@ -76,6 +79,7 @@ export class Shell {
       if (e.key === 'Escape') {
         if (app.still) app.setStill(false);
         else if (this.sheet) this.closeSheet();
+        else if (app.measure) app.stopMeasure();
         else if (app.selected) app.select(null);
       } else if (e.key === '/' && !isTyping(e)) {
         e.preventDefault();
@@ -210,6 +214,28 @@ export class Shell {
     return button;
   }
 
+  /** Space view: true or compressed distances and sizes. */
+  private scaleButton(): HTMLElement {
+    const app = this.app;
+    const button = h('button', { class: 'pill-button glass scale-button chrome', type: 'button', onclick: () => {
+      app.setLayer('compressed', !app.layers.compressed);
+      this.toast(app.layers.compressed
+        ? 'Compressed scale: distances and sizes are squeezed so planets show as discs.'
+        : 'True scale: the planets are specks, and most of the solar system is empty space.');
+    } });
+    const sync = () => {
+      const on = app.layers.compressed;
+      button.textContent = on ? 'Compressed scale' : 'True scale';
+      button.setAttribute('aria-pressed', String(on));
+      button.title = 'Switch between true and compressed scale';
+      button.hidden = app.mode !== 'space';
+    };
+    app.on('settings', sync);
+    app.on('mode', sync);
+    sync();
+    return button;
+  }
+
   // ---------------------------------------------------------------- time bar
 
   private timeBar(): HTMLElement {
@@ -241,6 +267,9 @@ export class Shell {
     const more = h('div', { class: 'card-more', hidden: true });
     const saw = h('button', { class: 'pill-button primary', type: 'button' });
     const detailsButton = h('button', { class: 'pill-button', type: 'button', 'aria-expanded': 'false' }, 'Details');
+    const measureButton = iconButton('ruler', 'Measure the angle to another object', () => {
+      if (app.selected) app.startMeasure(app.selected);
+    }, 'outlined');
     let expanded = false;
     let riseSetFor = '';
     let riseSet: ReturnType<typeof riseSetFacts> = [];
@@ -261,6 +290,7 @@ export class Shell {
         h('button', { class: 'pill-button', type: 'button', onclick: () => {
           if (app.selected) app.centre(app.selected, app.framingFov(app.selected));
         } }, 'Zoom in'),
+        measureButton,
         detailsButton),
       more);
 
@@ -293,6 +323,7 @@ export class Shell {
       fill(saw, icon('check', 18), logged ? 'Seen' : 'I saw it');
       saw.classList.toggle('done', logged);
       saw.hidden = obj.kind === 'sun' || space;
+      measureButton.hidden = space || obj.kind === 'constellation';
       renderMore();
     };
     detailsButton.addEventListener('click', () => {

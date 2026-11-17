@@ -120,7 +120,6 @@ the build stands against that plan and what to do next, in order.
   flight. Lifting off toward a far body first pulls back until the Earth and
   the target both fit, then closes in. The camera cannot zoom inside the
   focus body (`SpaceCamera.floor`).
-- Space view does not yet have a compressed-scale toggle.
 
 **App and UI** (`src/app.ts`, `src/ui`; design direction **"Quiet glass"**,
 chosen by the owner on 2026-11-16)
@@ -202,6 +201,22 @@ when the browser offers it (or a hint on iOS).
 phones) with the density of `milkyway.png`, drawn as faint points
 (`MILKY_STAR_*` shaders) over a weaker glow. They are statistical stand-ins for
 unresolved stars, not catalog stars, so they cannot be picked.
+
+**Sky tools** (from the original plan)
+- Galactic grid: layer `gridGalactic`, drawn with `EQ_TO_GAL` from `astro/frames.ts`.
+- Measuring tool (`src/ui/measure.ts`): the ruler button on the object card,
+  then a tap on a second object. A dashed great-circle arc with the angle,
+  and a banner with the angle in hands at arm's length (`handMeasure`).
+  `App.measure` holds the two ends; Escape or the banner's close stops it.
+- Zoom out past the widest sky (a few wheel notches, a firm pinch, or `-`)
+  lifts off into Space; zoom into the Earth past its floor lands again.
+  `ZoomPast` in `render/camera.ts` needs a deliberate push, so resting on a
+  limit never switches views. Zoom input is ignored while lifting off.
+- Compressed scale in Space view: layer `compressed`, switched by the pill
+  under the place chip. `COMPRESS` in `render/space.ts` squares-roots
+  distances from the Sun (Earth stays at 1 AU), takes sizes to the 0.6 power
+  and moons' distances in planet radii to the square root; tested to keep
+  every planet clear of its neighbours.
 
 **Offline**: `public/sw.js` precaches every file of a build, serves `data/`
 cache-first and everything else network-first, and is registered from

@@ -153,7 +153,7 @@ test('scene: survives a round trip through the URL hash', () => {
   // Junk never throws and never produces half-valid values.
   assert.deepEqual(decodeScene('s=abc,def&r=fast&b=99&zzz&c=,&%E0%A4%A=1'), { bortle: 9, camera: {} });
   near(sceneJd({ utc: '2000-01-01T12:00:00Z' }, 0)!, J2000, 1e-9);
-  assert.equal(Object.keys(DEFAULT_LAYERS).length, 17);
+  assert.equal(Object.keys(DEFAULT_LAYERS).length, 18);
 });
 
 test('store: saves, reloads and repairs damaged data', () => {

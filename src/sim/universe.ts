@@ -11,6 +11,7 @@ import { bodyRiseSet, starRiseSet, type RiseSet } from '../astro/events.ts';
 import { azAlt, refractionFromTrue } from '../astro/frames.ts';
 import { GALILEAN, galileanMoons } from '../astro/galilean.ts';
 import { SMALL_BODIES } from '../astro/kepler.ts';
+import { REGIONS, type Region, regionById } from '../astro/populations.ts';
 import { AU_KM, DEG, type Vec3, add, apply, fromSpherical, norm, normalize, scale } from '../astro/math.ts';
 import { type StarCatalog, designation, genitive } from '../astro/stars.ts';
 import { TYCHO_KEEP, type TychoBand } from '../astro/tycho.ts';
@@ -33,7 +34,7 @@ export function earthSite(site: Site): EarthSite {
   return { lat: site.lat * DEG, lon: site.lon * DEG, height: site.height };
 }
 
-export type ObjectKind = 'sun' | 'moon' | 'planet' | 'dwarf' | 'satellite' | 'comet' | 'star' | 'dso' | 'constellation';
+export type ObjectKind = 'sun' | 'moon' | 'planet' | 'dwarf' | 'satellite' | 'comet' | 'minor' | 'region' | 'star' | 'dso' | 'constellation';
 
 /** Anything you can point at, search for or select. */
 export interface SkyObject {
@@ -50,6 +51,8 @@ export interface SkyObject {
   starIndex?: number;
   dso?: Dso;
   constellation?: Constellation;
+  /** A belt or cloud of small bodies: seen from Space view, not a point on the sky. */
+  region?: Region;
 }
 
 export interface Horizontal {
@@ -251,7 +254,8 @@ export class Universe {
       const moon = GALILEAN.find((m) => m.id === ref);
       if (moon) return { ref, kind: 'satellite', name: moon.name, subtitle: 'Moon of Jupiter', dir: body.dir, mag: body.mag, body };
       const small = SMALL_BODIES.find((b) => b.id === ref)!;
-      return { ref, kind: 'comet', name: small.name, subtitle: small.kind === 'comet' ? 'Comet' : 'Small body', dir: body.dir, mag: body.mag, body };
+      const kind: ObjectKind = small.kind === 'comet' ? 'comet' : small.kind === 'dwarf' ? 'dwarf' : 'minor';
+      return { ref, kind, name: small.name, subtitle: small.group, dir: body.dir, mag: body.mag, body };
     }
     if (ref.startsWith('star')) {
       const i = this.starIndex(ref);
@@ -277,6 +281,12 @@ export class Universe {
         ref: `dso:${dsoId(d)}`, kind: 'dso', name: dsoName(d) ?? id, subtitle: d.n ? `${id} · ${type}` : type,
         dir: fromSpherical(d.ra * DEG, d.de * DEG), mag: d.m, dso: d,
       };
+    }
+    if (ref.startsWith('region:')) {
+      const region = regionById(ref);
+      const sun = this.bodies.get('sun');
+      if (!region || !sun) return null;
+      return { ref: `region:${region.id}`, kind: 'region', name: region.name, subtitle: region.subtitle, dir: sun.dir, mag: null, region };
     }
     if (ref.startsWith('con:')) {
       const c = this.findConstellation(ref);
@@ -332,6 +342,7 @@ export class Universe {
     for (const id of SOLAR_BODIES) push(id, 100);
     for (const m of GALILEAN) push(m.id, 60);
     for (const b of SMALL_BODIES) push(b.id, 50, [b.id]);
+    for (const r of REGIONS) push(`region:${r.id}`, 55, r.aka);
     for (const c of this.culture?.constellations ?? []) {
       push(`con:${this.cultureId}:${c.id}`, c.asterism ? 30 : 70, [c.name, c.native ?? '', c.iau ?? '']);
     }

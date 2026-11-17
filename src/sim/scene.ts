@@ -28,18 +28,21 @@ export interface LayerFlags {
   compressed: boolean;
   /** Sky view: the planets' and the Moon's orbits, as seen from where you stand. */
   skyOrbits: boolean;
+  /** Space view: the asteroid belt, trojans, Kuiper belt, scattered disc and Oort cloud. */
+  smallBodies: boolean;
 }
 
 export const DEFAULT_LAYERS: LayerFlags = {
   lines: true, constellationLabels: true, boundaries: false, starLabels: true, planetLabels: true,
   dsos: true, milkyWay: true, atmosphere: true, ground: true, cardinals: true,
   gridAltAz: false, gridEquatorial: false, ecliptic: false, orbits: true, gridGalactic: false, compressed: false, skyOrbits: false,
+  smallBodies: true,
 };
 
 // Order is part of the URL format: append new layers at the end, never reorder.
 const LAYER_ORDER: (keyof LayerFlags)[] = [
   'lines', 'constellationLabels', 'boundaries', 'starLabels', 'planetLabels', 'dsos', 'milkyWay',
-  'atmosphere', 'ground', 'cardinals', 'gridAltAz', 'gridEquatorial', 'ecliptic', 'orbits', 'gridGalactic', 'compressed', 'skyOrbits',
+  'atmosphere', 'ground', 'cardinals', 'gridAltAz', 'gridEquatorial', 'ecliptic', 'orbits', 'gridGalactic', 'compressed', 'skyOrbits', 'smallBodies',
 ];
 
 /** A direction on the local sky, degrees (azimuth from north through east). */

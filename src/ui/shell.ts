@@ -6,7 +6,7 @@ import { Pointing } from '../render/pointing.ts';
 import { jdNow } from '../astro/time.ts';
 import { calendarNote, formatDate, formatDistanceAU, formatTime, localTime } from '../sim/format.ts';
 import { lightNote } from '../sim/lore.ts';
-import { h, fill, icon, iconButton, lumenGlyph } from './dom.ts';
+import { h, fill, icon, iconButton, lumenGlyph, swipeToDismiss } from './dom.ts';
 import { blurb, detailFacts, quickFacts, riseSetFacts, whereNow } from './facts.ts';
 import { type JourneyPlayer, journeyPlayer, journeysPanel } from './journeys.ts';
 import { measureTool } from './measure.ts';
@@ -59,6 +59,12 @@ export class Shell {
       this.sheetBody);
     this.sheetTitle.id = 'sheet-title';
     this.toastEl = h('div', { class: 'toast glass', role: 'status', 'aria-live': 'polite', hidden: true });
+    swipeToDismiss(this.toastEl, () => this.hideToast());
+    // Reading it holds it up.
+    this.toastEl.addEventListener('pointerenter', () => clearTimeout(this.toastTimer));
+    this.toastEl.addEventListener('pointerleave', () => {
+      if (!this.toastEl.hidden) this.toastTimer = window.setTimeout(() => this.hideToast(), 2500);
+    });
     this.journey = journeyPlayer(this);
     const nightVision = h('div', { class: 'night-vision', 'aria-hidden': 'true' });
     const point = this.pointButton();
@@ -148,11 +154,16 @@ export class Shell {
   }
 
   toast(message: string): void {
-    this.toastEl.textContent = message;
+    fill(this.toastEl, h('span', { class: 'toast-text' }, message), iconButton('close', 'Dismiss', () => this.hideToast(), 'toast-close'));
     this.toastEl.hidden = false;
     clearTimeout(this.toastTimer);
     // Longer notes (Lumen's) stay up long enough to read.
-    this.toastTimer = window.setTimeout(() => { this.toastEl.hidden = true; }, 3200 + message.length * 35);
+    this.toastTimer = window.setTimeout(() => this.hideToast(), 3200 + message.length * 35);
+  }
+
+  private hideToast(): void {
+    clearTimeout(this.toastTimer);
+    this.toastEl.hidden = true;
   }
 
   // ---------------------------------------------------------------- top bar
@@ -286,6 +297,12 @@ export class Shell {
       const seed = obj ? starSeed(app.universe, obj) : null;
       if (seed) this.openStarLab(seed);
     } }, icon('star', 16), 'Life story');
+    const zoomButton = h('button', { class: 'pill-button primary', type: 'button', onclick: () => {
+      if (app.selected) app.centre(app.selected, app.framingFov(app.selected));
+    } }, 'Zoom in');
+    const followButton = iconButton('target', 'Centre and follow', () => {
+      if (app.selected) app.centre(app.selected);
+    }, 'outlined');
     let expanded = false;
     let riseSetFor = '';
     let riseSet: ReturnType<typeof riseSetFacts> = [];
@@ -300,12 +317,8 @@ export class Shell {
       quick,
       lumen,
       h('div', { class: 'card-actions' },
-        h('button', { class: 'pill-button primary', type: 'button', onclick: () => {
-          if (app.selected) app.centre(app.selected, app.framingFov(app.selected));
-        } }, 'Zoom in'),
-        iconButton('target', 'Centre and follow', () => {
-          if (app.selected) app.centre(app.selected);
-        }, 'outlined'),
+        zoomButton,
+        followButton,
         measureButton,
         lifeButton),
       detailsButton,
@@ -331,7 +344,8 @@ export class Shell {
       document.documentElement.dataset.selected = String(!!obj);
       if (!obj) return;
       title.textContent = obj.name;
-      subtitle.textContent = app.mode === 'space' && obj.body
+      subtitle.textContent = obj.region ? obj.subtitle
+        : app.mode === 'space' && obj.body
         ? (obj.kind === 'sun' ? obj.subtitle : `${obj.subtitle} · ${formatDistanceAU(obj.body.r)} from the Sun`)
         : `${obj.subtitle} · ${whereNow(app.universe, obj, app.layers.atmosphere)}`;
       const space = app.mode === 'space';
@@ -340,7 +354,9 @@ export class Shell {
       const note = app.store.data.settings.guide === 'on' && !space ? lightNote(app.universe, obj) : null;
       lumen.hidden = !note;
       if (note) fill(lumen, lumenGlyph(), h('span', null, note));
-      measureButton.hidden = space || obj.kind === 'constellation';
+      measureButton.hidden = space || obj.kind === 'constellation' || !!obj.region;
+      followButton.hidden = !!obj.region;
+      zoomButton.textContent = obj.region && !space ? 'Show in space' : 'Zoom in';
       lifeButton.hidden = !(obj.kind === 'sun' || (obj.starIndex !== undefined && (app.universe.stars.dist[obj.starIndex] > 0 || !!app.universe.stars.meta.get(obj.starIndex)?.n)));
       renderMore();
     };

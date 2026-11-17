@@ -46,7 +46,8 @@ Dependencies flow downward only: `ui` and `journeys` use `sim` and `render`;
 | Moon | ELP/MPP02 (fit to DE405), truncated | a few ″ over ±3000 yr |
 | Galilean moons | Meeus ch. 44 low-precision theory | ~0.1 Jupiter radius |
 | Stars | HYG v4.1: J2000 positions, distances, proper motions and radial velocities, propagated linearly in 3D | the catalog, then degrading over ±100,000 yr |
-| Small bodies | Kepler orbits from osculating elements | depends on the elements |
+| Small bodies | Kepler orbits from osculating elements (comets, dwarf planets, large asteroids and trans-Neptunian objects) | depends on the elements |
+| Belts and clouds | Seeded samples following published distributions (main belt with Kirkwood gaps, trojans, Kuiper belt with plutinos in 3:2 resonance, scattered disc, Oort cloud), moved along their orbits on the GPU | statistical, not individual objects |
 | Dynamics | N-body leapfrog / RK4 integrator, Kepler solver, Lambert solver (patched conics) | for missions and the sandbox |
 | Searches | rise/set/transit, twilight, Moon phases, equinoxes, conjunctions, oppositions, greatest elongations, solar and lunar eclipses, meteor shower calendar | minute-level timing |
 
@@ -139,7 +140,7 @@ separate pages.
   - Mission planning: Hohmann transfers and gravity assists.
   - Sky cultures: the same stars as different peoples drew them.
 - **Space** — entered by zooming out of Sky: orrery, orbits, true or compressed
-  scale.
+  scale, out to the Oort cloud, with the belts and clouds of small bodies.
 
 Navigation is a dock with Sky, Tonight and Journeys; Space is reached from
 Sky by zooming out or from a button, and is also used by journeys.

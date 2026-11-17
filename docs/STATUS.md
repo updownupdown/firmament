@@ -318,6 +318,25 @@ eclipses were already drawn (the Moon covers the Sun; corona in totality).
 - Not yet tried on a real phone: only the maths and an emulated sensor are
   tested. Compass north is magnetic; no declination correction is applied.
 
+**Star lab** (`src/astro/stellar.ts`, `src/sim/starlink.ts`, `src/ui/starlab.ts`;
+tests in `stellar.test.ts` and `starlab.test.ts`): a sheet where the player
+sets a birth mass (0.1–250 M☉) and metallicity ([Fe/H] −2.5 to +0.3) and
+scrubs or plays through the star's life. `evolve(mass, feh)` returns a
+`Track`: stages (main sequence, subgiant, red giant, helium burning, AGB,
+planetary nebula; or supergiant / Wolf–Rayet, then carbon, neon, oxygen and
+silicon burning), the ending and remnant, the birth composition and the
+elements given back. Main-sequence luminosity, radius and lifetime are the
+published fits (Tout et al. 1996; Hurley, Pols & Tout 2000); white dwarf
+masses follow Cummings et al. 2018; neutron star or black hole from Fryer et
+al. 2012 ("rapid"); pair instability from the helium core mass. Later stages
+are simplified shapes between published end points. The slider gives each
+stage a share by weight, not time, so days of silicon burning are visible.
+Catalogue stars link in through "Life story" on a star's card (and the Sun's):
+a published birth mass from `KNOWN_STARS` where there is one, else `fitStar`
+finds the mass and age whose track passes nearest the star's luminosity
+(from magnitude, distance and a bolometric correction) and temperature (from
+its spectral type). The lab also opens from the top of the Journeys list.
+
 ## Next steps, in order
 
 ### 1. Remaining work

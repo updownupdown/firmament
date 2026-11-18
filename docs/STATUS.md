@@ -250,6 +250,14 @@ the sky does not spin. ‹ › step to the same time on the next night, month or
 The heading opens Place and time (date fields, any year). "Speed" opens the
 `RATE_STEPS` and direction for anyone who wants a rate.
 
+**View chips** (`src/ui/viewbar.ts`, `src/sim/looks.ts`; option B of the same
+study): the View button turns the bottom bar into one row of layer chips under
+tabs (Looks, Sky, Guides, Ground; in Space view one Space tab), so each switch is
+seen working. Looks (`LOOKS`: Naked eye, Stargazer = the defaults, Planets, Star
+chart, Navigator) set every sky layer and leave Space layers alone. More opens
+the full View sheet. Only one bottom bar (time or view) is open at a time
+(`Shell.barToggled`); opening a sheet or a journey closes them.
+
 **Picking**: tapping a label picks what it names (`LabelLayer.hit`). The
 nearest-object pick leans toward bright and named stars, and toward
 `App.pickPreference` (a journey's "find" targets). On phones a journey card

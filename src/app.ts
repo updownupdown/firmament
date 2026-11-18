@@ -63,7 +63,7 @@ export class App {
   selected: string | null = null;
   /** Objects a scene asked to point out. */
   highlight: string[] = [];
-  /** Objects a tap should lean toward, such as the target of a journey task. */
+  /** Objects a tap should lean toward, such as the answer to a question. */
   pickPreference: ReadonlySet<string> = new Set();
   section: Section = 'sky';
   /** Still mode: chrome hidden, the sky drifting. */
@@ -116,7 +116,7 @@ export class App {
           this.select(id && this.universe.resolve(id) ? id : null);
           return;
         }
-        // A tap on a name picks what it names; otherwise the nearest object, leaning toward the journey's target.
+        // A tap on a name picks what it names; otherwise the nearest object, leaning toward a preferred target.
         const named = this.labels.hit(x, y);
         const hit = named && this.universe.resolve(named) ? named : pick(this.renderer, this.layers, x, y, 36, this.pickPreference);
         if (this.measure && !this.measure.to) {

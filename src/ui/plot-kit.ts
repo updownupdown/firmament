@@ -1,4 +1,4 @@
-// Shared bits for the journey diagrams: colours from the design tokens and a
+// Shared bits for the concept diagrams: colours from the design tokens and a
 // canvas sized for the screen's pixel density.
 
 export interface PlotView {

@@ -2,7 +2,7 @@
 // a heavier Jupiter or a passing star to pick.
 
 import type { App } from '../app.ts';
-import { PLANETS, Sandbox, type WhatIf } from '../journeys/sandbox.ts';
+import { PLANETS, Sandbox, type WhatIf } from '../learn/sandbox.ts';
 import { fill, h, icon, iconButton } from './dom.ts';
 import { type PlotView, palette, prepare } from './plot-kit.ts';
 

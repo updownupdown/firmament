@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { testEphemeris } from '../astro/testdata.ts';
 import { ttFromUt } from '../astro/time.ts';
-import { WHAT_IF_TIME } from './content.ts';
+import { WHAT_IF_TIME } from '../atlas/moments.ts';
 import { PLANETS, Sandbox, type WhatIf } from './sandbox.ts';
 
 const eph = testEphemeris();

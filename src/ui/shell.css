@@ -386,63 +386,48 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
 .credits a { color: var(--color-accent); }
 .credits code { font-size: var(--text-xs); }
 
-/* ---------------------------------------------------------------- journeys */
+/* ---------------------------------------------------------------- concepts and labs */
 
-.journey-item { gap: var(--space-2); }
-.journey-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
-.journey-head .tag { display: inline-flex; align-items: center; gap: 2px; }
-.journey-card {
-  position: fixed; z-index: 3;
-  top: calc(var(--safe-top) + 48px + var(--space-4) + var(--space-6));
-  left: calc(var(--safe-left) + var(--space-4)); right: calc(var(--safe-right) + var(--space-4));
-  max-height: 40vh; overflow-y: auto; overscroll-behavior: contain;
-  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-5); border-radius: var(--radius-lg);
-  display: flex; flex-direction: column; gap: var(--space-3);
-}
-.journey-title { font-size: var(--text-lg); font-weight: var(--weight-medium); letter-spacing: var(--tracking-tight); outline: none; }
-.journey-card .fold-button { margin-top: calc(var(--space-2) * -1); }
-.journey-card.collapsed .fold-button { margin-top: calc(var(--space-1) * -1); }
-.journey-card.collapsed .journey-text, .journey-card.collapsed .journey-figure { display: none; }
-.journey-card.collapsed { gap: var(--space-2); }
-.journey-text { font-size: var(--text-md); line-height: 1.5; }
-.journey-task { display: flex; flex-direction: column; gap: var(--space-2); }
-.journey-task:empty { display: none; }
-.journey-prompt { font-weight: var(--weight-bold); }
-.journey-options { display: flex; flex-direction: column; gap: var(--space-2); }
-.journey-options .option { justify-content: flex-start; white-space: normal; text-align: left; padding: var(--space-2) var(--space-4); }
-.journey-options .option.correct { border-color: var(--color-good); color: var(--color-good); }
-.journey-options .option:disabled:not(.correct) { opacity: 0.5; }
-.journey-number { display: flex; align-items: center; gap: var(--space-2); }
-.journey-number .field { flex: 1; min-width: 0; }
-.journey-feedback { font-size: var(--text-sm); color: var(--color-text-muted); }
-.journey-feedback:empty { display: none; }
-.journey-feedback.good { color: var(--color-good); }
-.journey-feedback.bad { color: var(--color-warn); }
-.journey-nav { display: flex; justify-content: space-between; gap: var(--space-2); }
-.journey-nav .primary { margin-left: auto; }
+.concept-item { gap: var(--space-1); }
+.concept-try { gap: var(--space-2); align-items: flex-start; }
+.concept-try .pill-button { white-space: normal; text-align: left; }
+.concept-figure { margin: 0; gap: var(--space-2); align-items: stretch; }
+.concept-figure > .pill-button { align-self: flex-start; }
+.concept-question { gap: var(--space-2); }
+.concept-prompt { font-weight: var(--weight-bold); }
+.concept-options { display: flex; flex-direction: column; gap: var(--space-2); }
+.concept-options .option { justify-content: flex-start; white-space: normal; text-align: left; padding: var(--space-2) var(--space-4); }
+.concept-options .option.correct { border-color: var(--color-good); color: var(--color-good); }
+.concept-options .option:disabled:not(.correct) { opacity: 0.5; }
+.concept-number { display: flex; align-items: center; gap: var(--space-2); }
+.concept-number .field { flex: 1; min-width: 0; }
+.concept-feedback { font-size: var(--text-sm); color: var(--color-text-muted); }
+.concept-feedback:empty { display: none; }
+.concept-feedback.good { color: var(--color-good); }
+.concept-feedback.bad { color: var(--color-warn); }
 .pill-button:disabled { opacity: 0.45; cursor: default; }
-/* Learn: what you were doing, then the labs as tiles. */
-.continue-item { background: var(--color-accent-wash); border-color: var(--color-accent-edge); }
 .lab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
 .lab-tile { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); text-align: left; }
 .lab-tile svg { color: var(--color-accent); margin-bottom: var(--space-1); }
 
-/* While a journey runs on a phone, the object card shrinks to its essentials. */
 @media (max-width: 899px) {
-  /* One bar at the bottom: the dock, or in its place the object card or the
-     journey step, which sits over the ground so the sky it points at stays clear. */
-  .journey-card { top: auto; bottom: calc(var(--safe-bottom) + var(--space-3)); left: calc(var(--safe-left) + var(--space-3)); right: calc(var(--safe-right) + var(--space-3)); }
-  :root[data-journey]:not([data-sheet]) .dock, :root[data-selected='true']:not([data-sheet]) .dock { display: none; }
-  :root:not([data-journey]):not([data-bar]) .object-card { bottom: calc(var(--safe-bottom) + var(--space-3)); left: calc(var(--safe-left) + var(--space-3)); right: calc(var(--safe-right) + var(--space-3)); }
-  :root[data-journey] .object-card, :root[data-bar] .object-card { top: calc(var(--safe-top) + var(--space-4) + 48px + var(--space-3)); bottom: auto; }
+  /* One bar at the bottom: the dock, or in its place the object card. */
+  :root[data-selected='true']:not([data-sheet]) .dock { display: none; }
+  :root:not([data-bar]) .object-card { bottom: calc(var(--safe-bottom) + var(--space-3)); left: calc(var(--safe-left) + var(--space-3)); right: calc(var(--safe-right) + var(--space-3)); }
+  :root[data-bar] .object-card { top: calc(var(--safe-top) + var(--space-4) + 48px + var(--space-3)); bottom: auto; }
   :root[data-bar] .object-card .card-actions, :root[data-bar] .object-card .card-disclosure, :root[data-bar] .object-card .card-more { display: none; }
   :root[data-bar][data-selected='true'] .point-button { display: none; }
-  :root[data-journey] .time-bar, :root[data-journey] .view-bar { display: none; }
-  :root[data-journey][data-selected='true'] .point-button { display: none; }
-  :root[data-journey] .object-card .card-actions, :root[data-journey] .object-card .card-disclosure, :root[data-journey] .object-card .card-more { display: none; }
-  .journey-card { padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4); max-height: 46vh; }
-  .journey-text { font-size: var(--text-sm); }
-  .journey-nav .pill-button { min-height: 40px; }
+}
+
+/* On a phone, after a concept's Try it, a pill above the sky leads back to the page. */
+.reading-pill {
+  display: none; position: fixed; z-index: 2;
+  top: calc(var(--safe-top) + var(--space-4) + 48px + var(--space-2)); left: calc(var(--safe-left) + var(--space-4));
+  max-width: calc(100vw - var(--space-8) - 64px); gap: var(--space-2);
+}
+.reading-pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 899px) {
+  :root[data-reading]:not([data-sheet]) .reading-pill { display: inline-flex; }
 }
 
 /* ---------------------------------------------------------------- toast, loading, modes */
@@ -484,7 +469,7 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
 
 /* Phone: a sheet takes the whole screen above the dock. */
 @media (max-width: 899px) {
-  :root[data-sheet] .top-bar, :root[data-sheet] .object-card, :root[data-sheet] .journey-card { display: none; }
+  :root[data-sheet] .top-bar, :root[data-sheet] .object-card { display: none; }
 }
 
 /* Wide screens: the sheet is a column on the left and the sky stays in view. */
@@ -494,8 +479,6 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
   .dock { left: 50%; right: auto; width: 400px; transform: translateX(-50%); }
   .time-bar, .view-bar { left: 50%; right: auto; width: 480px; transform: translateX(-50%); }
   :root[data-sheet] .time-bar { left: calc(50% + 208px); }
-  .journey-card { right: auto; width: 400px; max-height: calc(100vh - 100px); }
-  :root[data-sheet] .journey-card { display: none; }
   .object-card { left: auto; width: 380px; top: calc(var(--safe-top) + var(--space-4)); bottom: auto; max-height: calc(100vh - 200px); }
   .toast { top: calc(var(--safe-top) + var(--space-4)); }
   :root[data-sheet] .dock { left: calc(50% + 208px); }
@@ -510,8 +493,7 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
 :root[data-sheet] .point-button { display: none; }
 .icon-button[aria-pressed="true"] { background: var(--color-accent); border-color: transparent; color: var(--color-on-accent); }
 
-/* Journey diagrams: the card grows to hold them, since the sky is not needed meanwhile. */
-.journey-figure:empty { display: none; }
+/* Concept diagrams. */
 .plot { display: flex; flex-direction: column; gap: var(--space-2); }
 .plot-canvas {
   width: 100%; height: var(--plot-height); display: block; touch-action: none; cursor: crosshair;
@@ -524,13 +506,6 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
 .plot-bar .segmented button { font-size: var(--text-xs); }
 .plot-slider { width: 100%; accent-color: var(--color-accent); min-height: var(--tap); }
 .plot-readout { font-size: var(--text-sm); color: var(--color-text-muted); min-height: 2.6em; }
-:root[data-plot] .journey-card { max-height: calc(100vh - 200px); }
-/* On a phone the diagram card reaches up to just below the top bar. */
-@media (max-width: 899px) {
-  :root[data-plot] .journey-card {
-    max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 48px - var(--space-4) - var(--space-3) * 2);
-  }
-}
 
 .loading-logo { width: 72px; height: 72px; border-radius: 18px; box-shadow: var(--shadow); }
 
@@ -562,7 +537,7 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
   top: calc(var(--safe-top) + var(--space-4) + 48px + var(--space-2)); left: calc(var(--safe-left) + var(--space-4));
   -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
 }
-:root[data-sheet] .scale-button, :root[data-journey] .scale-button { display: none; }
+:root[data-sheet] .scale-button { display: none; }
 @media (max-width: 899px) {
   .measure-banner { left: calc(var(--safe-left) + var(--space-4)); right: calc(var(--safe-right) + var(--space-4) + 56px); width: auto; transform: none; }
   :root:not([data-measuring='true']) .measure-banner { display: none; }
@@ -624,6 +599,7 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
 
 /* ---------------------------------------------------------------- atlas */
 
+.atlas .segmented { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .atlas-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
 .atlas-tile { gap: var(--space-1); }
 .atlas-tile svg { color: var(--color-accent); margin-bottom: var(--space-1); }

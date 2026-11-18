@@ -1,6 +1,6 @@
 // The Atlas sheet: search, the categories of objects, an entry page for each
-// object (live facts for your place and time, then the long read), and the
-// labs. Reading happens here; "Show me" turns the sky to the object and, on a
+// object (live facts for your place and time, then the long read), the
+// concepts (see concept.ts), and the labs. Reading happens here; "Show me" turns the sky to the object and, on a
 // phone, steps back so the sky is in view. The object card's book button
 // comes back to the same page.
 
@@ -18,17 +18,22 @@ import { starSeed } from '../sim/starlink.ts';
 import type { SkyObject } from '../sim/universe.ts';
 import { type Child, h, fill, icon } from './dom.ts';
 import { blurb, detailFacts, quickFacts, riseSetFacts, whereNow, type Fact } from './facts.ts';
-import { learnPanel } from './journeys.ts';
+import { CONCEPTS, CONCEPT_GROUPS, type Concept, findConcept } from '../atlas/concepts.ts';
+import { conceptPages } from './concept.ts';
 import type { Panel, Shell } from './shell.ts';
 
+type Tab = 'objects' | 'concepts' | 'labs';
+const TAB_LABEL: Record<Tab, string> = { objects: 'Objects', concepts: 'Concepts', labs: 'Labs' };
+
 type View =
-  | { kind: 'home'; tab: 'objects' | 'labs' }
+  | { kind: 'home'; tab: Tab }
+  | { kind: 'concept'; id: string }
   | { kind: 'category'; id: string }
   | { kind: 'entry'; ref: string };
 
 export interface AtlasPanel extends Panel {
   /** Open an entry, a category, or the front page with the search field focused. */
-  show(target: { ref: string } | { category: string } | { search: true }): void;
+  show(target: { ref: string } | { category: string } | { concept: string } | { search: true }): void;
 }
 
 export function atlasPanel(shell: Shell): AtlasPanel {
@@ -41,7 +46,6 @@ export function atlasPanel(shell: Shell): AtlasPanel {
     class: 'field', type: 'search', placeholder: 'Search: Mars, Vega, Orion, M31, Perseids…', autocomplete: 'off',
     autocapitalize: 'off', spellcheck: false, 'aria-label': 'Search the Atlas', enterkeyhint: 'search',
   });
-  const labs = learnPanel(shell);
   /** Pages visited, so Back retraces them. */
   const stack: View[] = [{ kind: 'home', tab: 'objects' }];
   const view = () => stack[stack.length - 1];
@@ -64,9 +68,10 @@ export function atlasPanel(shell: Shell): AtlasPanel {
   const row = (e: AtlasEntry, onClick: () => void) =>
     h('li', null, h('button', { class: 'result', type: 'button', onclick: onClick },
       h('span', { class: 'result-main' }, h('span', { class: 'result-name' }, e.name), h('span', { class: 'result-sub' }, e.subtitle)),
-      e.ref.startsWith('shower:') || e.ref.startsWith('culture:') || e.ref.startsWith('category:') ? null : upTag(e.ref)));
+      /^(shower|culture|category|concept):/.test(e.ref) ? null : upTag(e.ref)));
   const open = (e: AtlasEntry) => {
     if (e.ref.startsWith('category:')) go({ kind: 'category', id: e.ref.slice(9) });
+    else if (e.ref.startsWith('concept:')) go({ kind: 'concept', id: e.ref.slice(8) });
     else go({ kind: 'entry', ref: e.ref });
   };
   const backBar = (label: string) =>
@@ -75,7 +80,10 @@ export function atlasPanel(shell: Shell): AtlasPanel {
   // ------------------------------------------------------------ front page
 
   const searchResults = (q: string) => {
-    const extras = searchExtras(u, q);
+    const lq = q.toLowerCase();
+    const concepts = lq.length < 3 ? [] : CONCEPTS.filter((c) => c.title.toLowerCase().includes(lq) || c.summary.toLowerCase().includes(lq))
+      .map((c) => ({ ref: `concept:${c.id}`, name: c.title, subtitle: `Concept · ${c.group}` }));
+    const extras = [...searchExtras(u, q), ...concepts];
     const hits = u.search(q, 24).map((x) => ({ ref: x.ref, name: x.name, subtitle: x.subtitle }));
     const all = [...extras, ...hits];
     return all.length
@@ -91,16 +99,60 @@ export function atlasPanel(shell: Shell): AtlasPanel {
       h('span', { class: 'hint' }, n === 1 ? c.blurb : `${n} · ${c.blurb}`));
   };
 
-  const home = (tab: 'objects' | 'labs') => {
+  const conceptRow = (c: Concept) =>
+    h('button', { class: 'card concept-item', type: 'button', onclick: () => go({ kind: 'concept', id: c.id }) },
+      h('span', { class: 'row-name' }, c.title), h('span', { class: 'hint' }, c.summary));
+
+  const labTile = (title: string, glyph: string, hint: string, onClick: () => void) =>
+    h('button', { class: 'card lab-tile', type: 'button', onclick: onClick },
+      icon(glyph, 24), h('span', { class: 'row-name' }, title), h('span', { class: 'hint' }, hint));
+
+  const home = (tab: Tab) => {
     const q = input.value.trim();
     const tabs = h('div', { class: 'segmented', role: 'group', 'aria-label': 'Atlas sections' },
-      (['objects', 'labs'] as const).map((t) => h('button', {
+      (['objects', 'concepts', 'labs'] as const).map((t) => h('button', {
         type: 'button', 'aria-pressed': String(t === tab),
         onclick: () => { stack[stack.length - 1] = { kind: 'home', tab: t }; render(); },
-      }, t === 'objects' ? 'Objects' : 'Labs and journeys')));
+      }, TAB_LABEL[t])));
     if (q) return [searchResults(q)];
-    if (tab === 'labs') { labs.refresh(); return [tabs, labs.el]; }
+    if (tab === 'concepts') {
+      return [tabs,
+        h('p', { class: 'lede' }, 'The ideas behind the sky, each a long read with buttons that set the sky up to show it.'),
+        CONCEPT_GROUPS.map((g) => {
+          const list = CONCEPTS.filter((c) => c.group === g);
+          return list.length ? h('section', { class: 'view-section' }, h('h4', { class: 'section-title' }, g), list.map(conceptRow)) : null;
+        })];
+    }
+    if (tab === 'labs') {
+      return [tabs, h('div', { class: 'lab-grid' },
+        labTile('Star lab', 'star', 'Build a star and watch it live and die.', () => shell.openStarLab()),
+        CONCEPTS.filter((c) => c.lab).map((c) => labTile(c.lab!.title ?? c.title.replace(/:.*$/, ''), c.lab!.icon, c.lab!.hint, () => go({ kind: 'concept', id: c.id }))))];
+    }
     return [tabs, h('div', { class: 'atlas-grid' }, ATLAS_CATEGORIES.map(categoryTile))];
+  };
+
+  const concepts = conceptPages(shell, () => {
+    const scroll = el.closest('.sheet-body')?.scrollTop ?? 0;
+    render();
+    el.closest('.sheet-body')?.scrollTo({ top: scroll });
+  });
+
+  const conceptPage = (id: string) => {
+    const c = findConcept(id);
+    if (!c) return [backBar('Back')];
+    const rel = c.related.map((ref) => atlasEntry(u, ref)).filter((e): e is AtlasEntry => !!e);
+    return [
+      backBar('Back'),
+      concepts.page(c),
+      rel.length ? h('section', { class: 'view-section' }, h('h4', { class: 'section-title' }, 'In the Atlas'),
+        h('div', { class: 'chips' }, rel.map((e) => h('button', { class: 'chip-button', type: 'button', onclick: () => open(e) }, e.name)))) : null,
+    ];
+  };
+
+  /** Concepts that point at an object, for the foot of its page. */
+  const conceptsAbout = (ref: string) => {
+    const list = CONCEPTS.filter((c) => c.related.includes(ref));
+    return list.length ? h('section', { class: 'view-section' }, h('h4', { class: 'section-title' }, 'Concepts'), list.map(conceptRow)) : null;
   };
 
   // ------------------------------------------------------------ category
@@ -255,7 +307,7 @@ export function atlasPanel(shell: Shell): AtlasPanel {
 
   const entryPage = (ref: string) => {
     if (findShower(ref)) return [backBar('Back'), showerPage(ref), related(ref)];
-    if (findCultureInfo(u, ref)) return [backBar('Back'), culturePage(ref), related(ref)];
+    if (findCultureInfo(u, ref)) return [backBar('Back'), culturePage(ref), conceptsAbout(ref), related(ref)];
     const obj = u.resolve(ref);
     const e = atlasEntry(u, ref);
     if (!obj || !e) return [backBar('Back'), h('p', { class: 'hint' }, 'This object is not loaded yet.')];
@@ -265,6 +317,7 @@ export function atlasPanel(shell: Shell): AtlasPanel {
       objectActions(obj),
       rightNow(obj),
       readingFor(obj),
+      conceptsAbout(obj.ref),
       related(obj.ref),
     ];
   };
@@ -278,7 +331,7 @@ export function atlasPanel(shell: Shell): AtlasPanel {
     const v = view();
     if (v.kind !== 'home') input.blur();
     input.hidden = v.kind !== 'home';
-    fill(body, flat(v.kind === 'home' ? home(v.tab) : v.kind === 'category' ? category(v.id) : entryPage(v.ref)));
+    fill(body, flat(v.kind === 'home' ? home(v.tab) : v.kind === 'category' ? category(v.id) : v.kind === 'concept' ? conceptPage(v.id) : entryPage(v.ref)));
   };
   fill(el, input, body);
   input.addEventListener('input', render);
@@ -310,6 +363,8 @@ export function atlasPanel(shell: Shell): AtlasPanel {
         stack[0] = { kind: 'home', tab: 'objects' };
       } else if ('category' in target) {
         stack.push({ kind: 'category', id: target.category });
+      } else if ('concept' in target) {
+        if (!(view().kind === 'concept' && (view() as { id: string }).id === target.concept)) stack.push({ kind: 'concept', id: target.concept });
       } else if (!(view().kind === 'entry' && (view() as { ref: string }).ref === target.ref)) {
         stack.push({ kind: 'entry', ref: target.ref });
       }

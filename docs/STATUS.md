@@ -9,7 +9,7 @@ the build stands against that plan and what to do next, in order.
 - esbuild build (`scripts/build.mjs`), `tsc --noEmit` typecheck, `node --test`.
 - GitHub Actions (`.github/workflows/deploy.yml`) tests, builds and deploys
   `main` to https://updownupdown.github.io/firmament/. This is confirmed working.
-- The live site runs the app: Sky, Space, Tonight and Learn (journeys and labs).
+- The live site runs the app: Sky, Space, Tonight and the Atlas (objects, concepts, labs).
 
 **Data** (`scripts/build_data.py` → `public/data/`, committed)
 - `stars-bright.bin` (8,920 stars ≤ mag 6.5) and `stars-faint.bin` (101k stars to
@@ -155,58 +155,32 @@ chosen by the owner on 2026-11-16)
   needs `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`);
   `document.documentElement.dataset.ready` is set after the first frame.
 
-**Journeys** (`src/journeys`, `src/ui/journeys.ts`; tests in `journeys.test.ts`)
-- `engine.ts`: a `Journey` is steps; a `Step` has text, an optional `Scene` and
-  an optional task: `find` (tap an object), `choice`, or `number` (the answer
-  may be read off the simulation when checked). `JourneyRun` tracks position.
-- `content.ts`: the first five journeys: the wandering pole (Polaris, Thuban in 2800 BC,
-  Vega in AD 14,000), find your latitude (Polaris, then the Southern Cross),
-  measure the Earth (Eratosthenes, solstice noon 240 BC), Galileo's moons
-  (Padua, January 1610) and one sky, many stories (Scorpius and Manaiakalani).
-  Every scene and answer is asserted against the simulation in the tests.
-- The player is a card over the sky. It saves progress in the store, and puts
-  the player's own place, layers and culture back when a journey ends.
-- Diagrams: a `Step` can carry a `plot` (`triangulate`, `mars-orbit`,
-  `transfer`), drawn on a 2D canvas in the card by `src/ui/plot.ts` from the
-  geometry in `src/journeys/orbits.ts` (ecliptic plane from above, AU). A
-  `plot` task is answered by the diagram itself: it reports a miss (AU from a
-  tap, or degrees for a launch date) and within `tolerance` counts. Plot
-  colours are the `--plot-*` tokens.
-- Two more journeys use them. Kepler's Mars (Prague, 1602): two sightings one
-  Martian year apart cross at Mars (`marsFix`); twelve of them trace the orbit
-  (`marsTrack`), 1.38 to 1.66 AU. Plan a trip to Mars: slide the launch date
-  until a Hohmann transfer (`hohmann`) meets Mars; `nextWindow` finds
-  4 November 2026, arriving 27 July 2027, and the tests check with `lambert`
-  (`departureDv`) that a real trajectory costs least near that date
-  (about 3.1 km/s).
-- Three more from the original plan, plus a step:
-  - Galileo gains "Time Io" (1.77 days, with Kepler's third law against
-    Callisto).
-  - Fix your position at sea (40°N 35°W, 16 Nov 2026 21:00 UT): Vega and
-    Fomalhaut give two circles of position (`journeys/navigation.ts`:
-    `groundPoint`, `circleOfPosition`, `fixFromTwo`), drawn by the `star-fix`
-    plot (`ui/plot-fix.ts`); the miss is degrees from the ship.
-  - Stonehenge and the drifting Dipper: midsummer sunrise in 2500 BC
-    (azimuth about 48°) and 2026 (about a degree further south, as the tilt
-    shrinks), then Ursa Major now and in AD 52,000, where Dubhe and Alkaid
-    leave the moving group. Tests check the bowl's corner angle changes.
-  - A slingshot past Jupiter: Voyager 2 in 1979, and the `flyby` plot
-    (`journeys/flyby.ts`, `ui/plot-flyby.ts`): pick a side and periapsis;
-    passing behind at under about 10 Jupiter radii beats solar escape speed.
-  - What if? (the sandbox): `journeys/sandbox.ts` starts the Sun and eight
-    planets from their real places (ecliptic, AU, days) and runs them in
-    `astro/nbody.ts` with a step sized to the tightest pairing. Options: Jupiter
-    ×1/10/100/1,000, or a Sun-like star at 20 km/s passing 100 to 1 AU out.
-    Drawn live by `ui/plot-sandbox.ts` (trails relative to the Sun, three
-    zooms, play/pause). Tests (`sandbox.test.ts`) check the real orbits'
-    perihelia and aphelia, energy, and each claim the journey makes.
-  - Shared canvas helpers are in `ui/plot-kit.ts`. `find` tasks can carry an
-    `explain`.
-
-**Journey list**: grouped by `Journey.theme` (`JOURNEY_THEMES`: Find your
-way, Through time, Great discoveries, Into space). Diagrams: `ui/plot.ts`
-only dispatches; each kind is its own module (`plot-orbits`, `plot-fix`,
-`plot-flyby`, `plot-sandbox`).
+**Concepts** (`src/atlas/concepts.ts`, `src/ui/concept.ts`; tests in
+`atlas/concepts.test.ts`). The journeys were retired on 2026-11-18 and their
+scenes and diagrams folded into concepts. A `Concept` has a group, a lede and
+blocks: `text`, `try` (a button that applies a `Scene`), `plot` (a diagram,
+opened on request, with an optional task) and `question` (`choice` or
+`number`, never gating). A plot or question that reads the sky carries a
+`scene` applied before it is drawn or checked. The first Try it remembers the
+reader's sky; "Back to your sky" restores it. On a phone Try it closes the
+sheet and a "Back to …" pill (`data-reading`) leads back to the page.
+- 18 concepts so far, each at least 500 words (tested): the turning sky,
+  magnitudes, seasons (noon Sun 69.8° and 22.9° at Toronto; Stonehenge 2500
+  BC), Moon phases, eclipses (8 April 2024 at Dallas, 14 March 2025 from
+  Toronto), retrograde Mars 2026–27, Kepler, Galileo's moons, Hohmann
+  transfers, gravity assists, What if?, star colours, proper motion,
+  precession, latitude, celestial navigation, Eratosthenes, sky cultures.
+- Fixed moments and places are in `atlas/moments.ts`. Tasks and diagram
+  types are in `learn/tasks.ts` (`Task`, `Plot`, `checkTask`); the physics
+  behind the diagrams is in `src/learn` (`orbits.ts`: `marsFix`, `marsTrack`,
+  `hohmann`, `nextWindow`, `lambert`/`departureDv`; `navigation.ts`;
+  `flyby.ts`; `sandbox.ts` on `astro/nbody.ts`). Diagrams: `ui/plot.ts`
+  dispatches to `plot-orbits`, `plot-fix`, `plot-flyby`, `plot-sandbox`;
+  shared canvas helpers in `ui/plot-kit.ts`; colours are `--plot-*` tokens.
+- Atlas tabs: Objects, Concepts (by group), Labs (Star lab plus concepts with
+  `lab` set). Search finds concepts (`concept:<id>`); an entry page lists the
+  concepts whose `related` names it. Stored journey progress is dropped by
+  the store's migration.
 
 **Lumen, the optional guide** (owner's decision, 2026-11-17): off until the
 player opts in. `Settings.guide` is `'unset' | 'on' | 'off'`; while unset,
@@ -403,7 +377,7 @@ set, highest, with all the numbers folded), then the reading: a full article
 from `atlas/articles.ts` (Sun, planets, Moon so far; at least 500 words each,
 tested) or the card blurb and Lumen's lore. The object card's book button
 opens the entry; Show me on a phone closes the sheet so the sky is in view.
-Labs and the journeys sit under a second tab until the concepts replace them.
+Concepts and Labs are the other two tabs (see Concepts).
 
 ## Atlas plan (agreed with James 2026-11-17)
 
@@ -413,7 +387,8 @@ articles as long as the subject deserves; journeys are **retired** once
 concepts cover them; a simple generic horizon is fine when standing on other
 worlds; dock becomes Sky, Tonight, Atlas once viewpoints are unified. Order:
 1. Atlas foundation (done). 2. Concepts (about 60, each with "Try it" scenes),
-then remove journeys and their stored progress. 3. Sandboxes in Space view
+then remove journeys and their stored progress (first 18 concepts and the
+removal done 2026-11-18; more concepts to come in batches). 3. Sandboxes in Space view
 (overlay hook, a "What if" badge for physics forks, Hohmann planner with a
 porkchop plot first). 4. One viewpoint (continuous lift-off and landing,
 viewpoint chip, standing on the Moon and Mars). 5. Star travel to stars

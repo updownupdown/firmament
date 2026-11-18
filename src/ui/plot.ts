@@ -1,8 +1,8 @@
-// Diagrams in the journey card. Each kind lives in its own module; this picks
-// the one a step asks for.
+// Diagrams in the Atlas concepts. Each kind lives in its own module; this picks
+// the one a concept asks for.
 
 import type { App } from '../app.ts';
-import type { Plot } from '../journeys/engine.ts';
+import type { Plot } from '../learn/tasks.ts';
 import { flybyPlot } from './plot-flyby.ts';
 import { starFixPlot } from './plot-fix.ts';
 import { type PlotView } from './plot-kit.ts';

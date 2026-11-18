@@ -2,7 +2,7 @@
 // on the right the velocities seen from the Sun, with the speed needed to
 // escape the solar system drawn as a circle.
 
-import { ARRIVAL, JUPITER, SOLAR_ESCAPE_AT_JUPITER, type Flyby, flyby, flybyPath, speed } from '../journeys/flyby.ts';
+import { ARRIVAL, JUPITER, SOLAR_ESCAPE_AT_JUPITER, type Flyby, flyby, flybyPath, speed } from '../learn/flyby.ts';
 import { h } from './dom.ts';
 import { type PlotView, arrow, palette, prepare } from './plot-kit.ts';
 

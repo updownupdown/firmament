@@ -25,7 +25,8 @@ import { quickFacts, riseSetFacts, whereNow } from './facts.ts';
 import { type AtlasPanel, atlasPanel } from './atlas.ts';
 import { measureTool } from './measure.ts';
 import { settingsPanel, share } from './panels.ts';
-import { whereChip, wherePanel } from './where.ts';
+import { type WhereBar, whereBar, whereChip } from './where.ts';
+import { flightHud } from './flight.ts';
 import { TRIP_TARGETS } from '../learn/trip.ts';
 import { tonightPanel } from './tonight.ts';
 import { type StarLabPanel, starLabPanel } from './starlab.ts';
@@ -36,7 +37,7 @@ import { type ViewBar, viewBar } from './viewbar.ts';
 /** The toolbar's items. */
 type Tool = 'search' | 'tonight' | 'atlas' | 'view' | 'point' | 'settings';
 
-export type SheetId = 'atlas' | 'settings' | 'where' | 'tonight' | 'stars' | null;
+export type SheetId = 'atlas' | 'settings' | 'tonight' | 'stars' | null;
 
 /** A concept's Try it that is showing on the sky: the focus card leads back to the page, or home. */
 export interface Trying {
@@ -79,6 +80,7 @@ export class Shell {
   private readonly starLab: StarLabPanel;
   private readonly atlas: AtlasPanel;
   private timeBar!: TimeBar;
+  private whereBar!: WhereBar;
   private viewBar!: ViewBar;
 
   constructor(app: App, root: HTMLElement) {
@@ -87,7 +89,6 @@ export class Shell {
     this.panels = {
       atlas: (this.atlas = atlasPanel(this)),
       settings: settingsPanel(this),
-      where: wherePanel(this),
       tonight: tonightPanel(this),
       stars: (this.starLab = starLabPanel(this)),
     };
@@ -111,7 +112,7 @@ export class Shell {
       if (open) { this.closeBars(); this.back.push('search', () => this.search.close()); } else this.back.dropLast('search');
       this.syncTools();
     });
-    root.append(measure.layer, this.topBar(), measure.banner, this.reticle(), this.focusCard(), this.toolbar(), this.timeBar.el, this.viewBar.el, this.sheetEl, this.search.el, this.toastEl, this.stillHint(), nightVision);
+    root.append(measure.layer, this.topBar(), measure.banner, this.reticle(), this.focusCard(), this.toolbar(), ...flightHud(app, () => app.land()), this.timeBar.el, this.whereBar.el, this.viewBar.el, this.sheetEl, this.search.el, this.toastEl, this.stillHint(), nightVision);
     this.watchPointing();
 
     // Back steps out of a selection and of Still mode too.
@@ -139,6 +140,7 @@ export class Shell {
         else if (this.search.open) this.search.close();
         else if (this.sheet) this.closeSheet();
         else if (this.timeBar.open) this.timeBar.close();
+        else if (this.whereBar.open) this.whereBar.close();
         else if (this.viewBar.open) this.viewBar.close();
         else if (app.measure) app.stopMeasure();
         else if (app.selected) app.select(null);
@@ -294,15 +296,15 @@ export class Shell {
   // ---------------------------------------------------------------- bottom bars
 
   /** The timeline or the view chips take the dock's place; one at a time. */
-  private barToggled(kind: 'time' | 'view', open: boolean): void {
+  private barToggled(kind: 'time' | 'view' | 'where', open: boolean): void {
     const root = document.documentElement;
     if (open) {
       this.closeSheet();
       this.search.close();
-      if (kind === 'time') this.viewBar.close();
-      else this.timeBar.close();
+      const bars = { time: this.timeBar, view: this.viewBar, where: this.whereBar };
+      for (const [k, b] of Object.entries(bars)) if (k !== kind) b.close();
       root.dataset.bar = kind;
-      this.back.push('bar', () => (kind === 'time' ? this.timeBar.close() : this.viewBar.close()));
+      this.back.push('bar', () => bars[kind].close());
     } else if (root.dataset.bar === kind) {
       delete root.dataset.bar;
       this.back.dropLast('bar');
@@ -313,6 +315,7 @@ export class Shell {
   private closeBars(): void {
     this.timeBar.close();
     this.viewBar.close();
+    this.whereBar.close();
   }
 
   // ---------------------------------------------------------------- top bar: Where and When
@@ -321,7 +324,8 @@ export class Shell {
     const { chip, bar } = timeChip(this.app, { onToggle: (open) => this.barToggled('time', open) });
     this.timeBar = bar;
     this.viewBar = viewBar(this.app, { onToggle: (open) => this.barToggled('view', open) });
-    const where = whereChip(this.app, () => (this.sheet === 'where' ? this.closeSheet() : this.openSheet('where')));
+    const where = whereChip(this.app, () => (this.whereBar.open ? this.whereBar.close() : this.whereBar.show()));
+    this.whereBar = whereBar(this.app, { onToggle: (open) => this.barToggled('where', open), chip: () => where });
     return h('div', { class: 'top-bar' }, where, chip);
   }
 

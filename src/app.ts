@@ -2,7 +2,9 @@
 // settings. Sections of the UI read from it and call its methods; "show me"
 // anywhere means `app.apply(scene)`.
 
-import { DEG, type Vec3, apply, clamp, scale, transpose } from './astro/math.ts';
+import { DEG, type Vec3, apply, clamp, dot, norm, normalize, scale, sub, transpose } from './astro/math.ts';
+import { fromAzAlt } from './astro/frames.ts';
+import { LY_PER_PC, SECONDS_PER_YEAR } from './astro/relativity.ts';
 import { jdNow } from './astro/time.ts';
 import { type CoreData, loadBoundaries, loadCulture, loadFaintStars, loadTychoBand, loadTychoIndex } from './data/load.ts';
 import { ASCENT_SECONDS, type SkyPose, ascentPose, matchingFov, nadirAzimuth, orbitAngles } from './render/ascent.ts';
@@ -34,6 +36,24 @@ export type AppEvent =
 export const MAX_TRIP_PC = 30.7;
 /** How far short of a star a trip stops, parsecs (about 400 AU). */
 const STOP_SHORT_PC = 0.002;
+
+/** Speeds offered for interstellar flight, in multiples of light speed. Below 1 the view follows special relativity. */
+export const FLIGHT_SPEEDS = [0.5, 0.99, 1e3, 1e6, 1e7];
+
+/** Interstellar flight: heading somewhere at a chosen speed, in real time. */
+export interface Flight {
+  /** Unit direction of travel, J2000. */
+  heading: Vec3;
+  /** Where the flight stops (a few hundred AU short of the star), or null to keep going. */
+  target: Vec3 | null;
+  ref: string | null;
+  /** What the flight is heading for: "Vega", "the Sun", or "where you were looking". */
+  name: string;
+  /** Multiples of light speed; 0 when stopped. */
+  speed: number;
+  /** A short note when the flight stopped by itself (arrived, or reached the edge of the map). */
+  note: string;
+}
 
 const DEFAULT_SITE: Site = (() => {
   const p = PLACES[0];
@@ -470,7 +490,8 @@ export class App {
   viewpoint(): { label: string; place: 'ground' | 'orbit'; body: string; away: boolean } {
     const away = this.universe.away;
     if (this.mode === 'sky' && away?.world === 'star') {
-      return { label: this.travel ? 'Between the stars' : `Near ${away.name}`, place: 'ground', body: away.ref ?? 'sun', away: true };
+      const between = this.travel || (this.flight && this.flight.speed > 0) || away.name === 'Between the stars';
+      return { label: between ? 'Between the stars' : `Near ${away.name}`, place: 'ground', body: away.ref ?? 'sun', away: true };
     }
     if (this.mode === 'sky' && away) return { label: `${away.name}, ${WORLD_NAMES[away.world as 'moon' | 'mars']}`, place: 'ground', body: away.world, away: true };
     if (this.mode === 'sky') return { label: `${this.site.name}, Earth`, place: 'ground', body: 'earth', away: false };
@@ -497,6 +518,134 @@ export class App {
     // Stop a few hundred AU short, so the star shines as a sun with its neighbours around it.
     const at = scale(dir, Math.max(0, pc - STOP_SHORT_PC));
     return { i, at, name: o.name };
+  }
+
+  /** Interstellar flight, while it is on. */
+  flight: Flight | null = null;
+
+  /** Start interstellar flight from where you are among the stars (or from the Sun), heading for `ref` (Vega by default). */
+  startFlight(ref = 'star:91262'): void {
+    if (this.flying) return;
+    const begin = () => {
+      this.flight = { heading: [1, 0, 0], target: null, ref: null, name: '', speed: 0, note: '' };
+      this.setFlightHeading(ref);
+      this.setFlightSpeed(1e6);
+    };
+    if (this.universe.voyage && this.mode === 'sky') { begin(); return; }
+    this.cut(() => {
+      void this.setPointing(false);
+      this.stopMeasure();
+      this.mode = 'sky';
+      this.renderer.height = 0;
+      this.renderer.projection.lens = 0.5;
+      this.select(null);
+      this.universe.setAway({ world: 'star', name: 'Sun', at: [0, 0, 0] });
+      this.emitPlace();
+      begin();
+    });
+  }
+
+  /** Head for a star, for the Sun ('sun'), or straight on the way the view faces ('look'). */
+  setFlightHeading(choice: string): void {
+    const fl = this.flight;
+    const at = this.universe.voyage;
+    if (!fl || !at) return;
+    let target: Vec3 | null = null;
+    let name = 'where you were looking';
+    let heading: Vec3;
+    if (choice === 'look') {
+      const p = this.renderer.projection;
+      heading = apply(transpose(this.universe.frame.j2000ToHorizon), fromAzAlt(p.az, p.alt));
+    } else {
+      if (choice === 'sun') {
+        const d = norm(at);
+        if (d < STOP_SHORT_PC * 2) return;
+        target = scale(at, STOP_SHORT_PC / d);
+        name = 'the Sun';
+      } else {
+        const trip = this.starTrip(choice);
+        if (!trip) return;
+        target = trip.at;
+        name = trip.name;
+      }
+      const to = sub(target, at);
+      if (norm(to) < 1e-6) return;
+      heading = normalize(to);
+    }
+    fl.heading = normalize(heading);
+    fl.target = target;
+    fl.ref = choice === 'look' || choice === 'sun' ? null : choice;
+    fl.name = name;
+    fl.note = '';
+    this.syncBeta();
+    // Face the way you are going.
+    const h = this.universe.horizontal(fl.heading);
+    this.camera.track = null;
+    this.camera.flyTo({ az: h.az, alt: h.alt, fov: Math.max(this.renderer.projection.fov, 80 * DEG) }, 1.2);
+    this.invalidate();
+    this.emit('mode');
+  }
+
+  setFlightSpeed(c: number): void {
+    const fl = this.flight;
+    if (!fl) return;
+    fl.speed = c;
+    fl.note = '';
+    this.syncBeta();
+    this.invalidate();
+    this.emit('mode');
+  }
+
+  /** How long the rest of the flight takes at this speed, real seconds; null without a target or speed. */
+  flightEta(): number | null {
+    const fl = this.flight, at = this.universe.voyage;
+    if (!fl?.target || !at || !(fl.speed > 0)) return null;
+    return norm(sub(fl.target, at)) / flightPcPerSecond(fl.speed);
+  }
+
+  private syncBeta(): void {
+    const fl = this.flight;
+    this.universe.beta = fl && fl.speed > 0 && fl.speed < 1 ? scale(fl.heading, fl.speed) : null;
+  }
+
+  private stepFlight(dt: number): boolean {
+    const fl = this.flight!;
+    const at = this.universe.voyage;
+    // Leaving the stars any other way (home, Space view, a trip) ends the flight.
+    if (!at || this.mode !== 'sky') {
+      this.flight = null;
+      this.syncBeta();
+      this.emit('mode');
+      return true;
+    }
+    if (!(fl.speed > 0) || this.travel) return false;
+    let step = flightPcPerSecond(fl.speed) * dt;
+    let arrived = false;
+    if (fl.target) {
+      const left = norm(sub(fl.target, at));
+      if (step >= left) { step = left; arrived = true; }
+    }
+    const next: Vec3 = [at[0] + fl.heading[0] * step, at[1] + fl.heading[1] * step, at[2] + fl.heading[2] * step];
+    // The map of the stars is reliable to about 100 light years: stop at its edge rather than fly into guesses.
+    const outward = dot(next, fl.heading) > 0;
+    if (outward && norm(next) > MAX_TRIP_PC) {
+      fl.speed = 0;
+      fl.note = 'This is the edge of the map: past about 100 light years, star distances are too uncertain to fly by.';
+      this.syncBeta();
+      this.emit('mode');
+      return false;
+    }
+    if (step <= 0 && !arrived) return false;
+    this.universe.setAway({ world: 'star', name: arrived ? fl.name.replace(/^the /, 'The ') : 'Between the stars', at: next, ref: fl.ref ?? undefined });
+    if (arrived) {
+      fl.speed = 0;
+      fl.target = null;
+      fl.note = `Arrived near ${fl.name}.`;
+      this.syncBeta();
+      this.emit('mode');
+    }
+    this.invalidate();
+    return true;
   }
 
   /** A trip between the stars in progress. */
@@ -817,6 +966,7 @@ export class App {
       let moved = space ? this.space.camera.tick(dt) : this.camera.tick(dt);
       if (this.transit) { this.stepTransit(dt); moved = true; }
       if (this.travel) { this.stepTravel(dt); moved = true; }
+      if (this.flight && this.stepFlight(dt)) moved = true;
       this.sinceDraw += dt;
       // The sky turns 15 arcseconds a second: redraw once it has moved a third of a pixel.
       const drift = (0.3 * this.renderer.projection.pixelAngle) / (7.3e-5 * Math.max(1, Math.abs(this.clock.rate)));
@@ -861,4 +1011,9 @@ export class App {
     this.labels.update(layoutLabels(items, p.width, p.height));
     this.emit('frame');
   }
+}
+
+/** Parsecs travelled per real second at `c` times light speed. */
+export function flightPcPerSecond(c: number): number {
+  return (c / LY_PER_PC) / SECONDS_PER_YEAR;
 }

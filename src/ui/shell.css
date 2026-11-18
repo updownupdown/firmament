@@ -632,14 +632,38 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
 :root[data-still='true'] .measure-layer { display: none; }
 @media (min-width: 900px) { .measure-banner { top: calc(var(--safe-top) + var(--space-4)); } }
 
-/* Space view scale switch, under the place chip. */
-.scale-button {
-  justify-content: flex-start;
+/* The viewpoint chip under the time chip, with Space view's scale switch beside it. */
+.viewpoint {
   position: fixed; z-index: 2;
   top: calc(var(--safe-top) + var(--space-4) + 48px + var(--space-2)); left: calc(var(--safe-left) + var(--space-4));
-  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  max-width: calc(100vw - var(--safe-left) - var(--safe-right) - var(--space-4) * 2 - 56px);
 }
-:root[data-sheet] .scale-button { display: none; }
+.viewpoint-row { display: flex; gap: var(--space-2); align-items: center; }
+.viewpoint-button, .scale-button { -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.viewpoint-button { gap: var(--space-2); min-width: 0; }
+.viewpoint-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viewpoint-glyph { display: inline-flex; color: var(--color-accent); }
+.viewpoint-menu {
+  margin-top: var(--space-2); padding: var(--space-2); border-radius: var(--radius-lg);
+  display: flex; flex-direction: column; gap: 2px; width: max-content; max-width: min(320px, 100%);
+}
+.viewpoint-item {
+  display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3);
+  border: 0; border-radius: var(--radius-md); background: none; color: var(--color-text); font: inherit; text-align: left; cursor: pointer;
+}
+.viewpoint-item:hover, .viewpoint-item:focus-visible { background: var(--color-surface-hover); }
+.viewpoint-item svg { color: var(--color-accent); flex: none; }
+.viewpoint-section {
+  margin: var(--space-2) var(--space-3) 0; color: var(--color-text-faint);
+  font-size: var(--text-xs); font-weight: var(--weight-medium); letter-spacing: var(--tracking-wide); text-transform: uppercase;
+}
+.card-verbs { display: contents; }
+/* On a narrow phone the verbs other than the leading one keep only their icons, so the row fits. */
+@media (max-width: 430px) {
+  .card-verbs .pill-button:not(.primary) { padding-inline: var(--space-3); }
+  .card-verbs .pill-button:not(.primary) .verb-label { display: none; }
+}
+:root[data-sheet] .viewpoint, :root[data-trip] .viewpoint, :root[data-still='true'] .viewpoint { display: none; }
 @media (max-width: 899px) {
   .measure-banner { left: calc(var(--safe-left) + var(--space-4)); right: calc(var(--safe-right) + var(--space-4) + 56px); width: auto; transform: none; }
   :root:not([data-measuring='true']) .measure-banner { display: none; }

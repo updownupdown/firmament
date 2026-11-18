@@ -444,6 +444,67 @@ export class App {
     this.emit('select');
   }
 
+  // ---------------------------------------------------------------- viewpoint
+
+  /** Called once the next landing touches down. */
+  private afterLanding: (() => void) | null = null;
+
+  /** Where the camera is, in words: "Toronto, Earth", "Orbiting Mars", "Above the Solar System". */
+  viewpoint(): { label: string; place: 'ground' | 'orbit'; body: string } {
+    if (this.mode === 'sky') return { label: `${this.site.name}, Earth`, place: 'ground', body: 'earth' };
+    const focus = this.space.camera.focus;
+    if (focus === 'sun') return { label: this.space.camera.dist > 0.6 ? 'Above the Solar System' : 'Near the Sun', place: 'orbit', body: 'sun' };
+    return { label: `Orbiting ${this.universe.resolve(focus)?.name ?? focus}`, place: 'orbit', body: focus };
+  }
+
+  /** Can the camera fly out to circle this in Space view? */
+  canFlyTo(ref: string): boolean {
+    return ref.startsWith('region:') || this.space.bodies.some((b) => b.id === ref);
+  }
+
+  /** Can the camera land on this world? */
+  canStandOn(ref: string): boolean {
+    return ref === 'earth';
+  }
+
+  /** Come down to the ground at home (in one flight when allowed), then run `then`. */
+  land(then?: () => void): void {
+    if (this.mode === 'sky' && !this.flying) { then?.(); return; }
+    if (this.flying) return;
+    this.afterLanding = then ?? null;
+    this.setMode('sky', undefined, true);
+    if (this.mode === 'sky' && !this.flying) this.touchedDown();
+  }
+
+  private touchedDown(): void {
+    const then = this.afterLanding;
+    this.afterLanding = null;
+    then?.();
+  }
+
+  /** Turn to face an object from where you stand, landing first when out in space. */
+  lookAt(ref: string): void {
+    this.select(ref);
+    this.land(() => this.centre(ref, this.framingFov(ref)));
+  }
+
+  /** Fly out to circle an object in Space view. */
+  flyToObject(ref: string): void {
+    if (!this.canFlyTo(ref) || this.flying) return;
+    if (ref.startsWith('region:')) { this.centre(ref); this.select(ref); return; }
+    this.select(this.universe.resolve(ref) ? ref : null);
+    if (this.mode === 'sky') { this.setMode('space', ref, true); return; }
+    this.space.setFocus(ref);
+    this.space.camera.flyTo(ref === 'sun' ? 4.2 : this.space.framingDistance(ref));
+    this.invalidate();
+    this.emit('mode');
+  }
+
+  /** Stand on a world's surface. */
+  standOn(ref: string): void {
+    if (ref === 'earth') this.land();
+  }
+
   /** The top of the climb: as high as Space view's lift-off starts, looking down through its lens. */
   private top(): { az: number; fov: number; height: number } {
     const p = this.renderer.projection;
@@ -520,6 +581,7 @@ export class App {
       this.emit('select');
     } else {
       p.lens = 0.5;
+      this.touchedDown();
     }
     this.invalidate();
   }

@@ -5,6 +5,7 @@
 // bottom right. One sheet at a time holds everything else. Back (the phone's
 // or the browser's) closes whatever was opened last; see back.ts.
 
+import { verbsFor, viewpointChip } from './viewpoint.ts';
 import type { App } from '../app.ts';
 import type { TripTarget } from '../learn/trip.ts';
 import { type SlingshotLab, slingshotLab } from './slingshot.ts';
@@ -92,7 +93,7 @@ export class Shell {
     const nightVision = h('div', { class: 'night-vision', 'aria-hidden': 'true' });
     const point = this.pointButton();
     if (point) root.append(point);
-    root.append(this.scaleButton());
+    root.append(viewpointChip(app, [this.scaleButton()]));
     const measure = measureTool(app);
     this.search = searchOverlay(this, (open) => {
       if (open) { this.closeBars(); this.back.push('search', () => this.search.close()); } else this.back.dropLast('search');
@@ -416,9 +417,8 @@ export class Shell {
     const readButton = iconButton('book', 'Read about it in the Atlas', () => {
       if (app.selected) this.openAtlas({ ref: app.selected });
     }, 'outlined');
-    const zoomButton = h('button', { class: 'pill-button primary', type: 'button', onclick: () => {
-      if (app.selected) app.centre(app.selected, app.framingFov(app.selected));
-    } }, 'Zoom in');
+    // Look at it, Fly to it, Stand on it: whichever make sense for this object from here.
+    const verbRow = h('div', { class: 'card-verbs' });
     const followButton = iconButton('target', 'Centre and follow', () => {
       if (app.selected) app.centre(app.selected);
     }, 'outlined');
@@ -436,7 +436,7 @@ export class Shell {
       quick,
       lumen,
       h('div', { class: 'card-actions' },
-        zoomButton,
+        verbRow,
         followButton,
         readButton,
         measureButton,
@@ -477,7 +477,22 @@ export class Shell {
       measureButton.hidden = space || obj.kind === 'constellation' || !!obj.region;
       followButton.hidden = !!obj.region;
       readButton.hidden = obj.ref.startsWith('tyc:');
-      zoomButton.textContent = obj.region && !space ? 'Show in space' : 'Zoom in';
+      const verbs = verbsFor(app, obj.ref);
+      // The verb that keeps you where you are leads: looking from the ground, flying in space.
+      const lead = space ? 'fly' : 'look';
+      const key = `${obj.ref}|${verbs.map((v) => v.id).join()}|${lead}`;
+      if (verbRow.dataset.key !== key) {
+        verbRow.dataset.key = key;
+        fill(verbRow, verbs.map((v) => h('button', {
+          class: `pill-button${v.id === lead ? ' primary' : ''}`, type: 'button', onclick: () => {
+            // Fresh each time: the selection may have changed since the row was built.
+            const sel = app.selected;
+            if (!sel) return;
+            verbsFor(app, sel).find((x) => x.id === v.id)?.run();
+          },
+          'aria-label': `${v.label}: ${obj.name}`, title: v.label,
+        }, icon(v.glyph, 16), h('span', { class: 'verb-label' }, v.label))));
+      }
       lifeButton.hidden = !(obj.kind === 'sun' || (obj.starIndex !== undefined && (app.universe.stars.dist[obj.starIndex] > 0 || !!app.universe.stars.meta.get(obj.starIndex)?.n)));
       renderMore();
     };

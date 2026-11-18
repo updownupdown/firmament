@@ -126,7 +126,8 @@ export function atlasPanel(shell: Shell): AtlasPanel {
     if (tab === 'labs') {
       return [tabs, h('div', { class: 'lab-grid' },
         labTile('Star lab', 'star', 'Build a star and watch it live and die.', () => shell.openStarLab()),
-        CONCEPTS.filter((c) => c.lab).map((c) => labTile(c.lab!.title ?? c.title.replace(/:.*$/, ''), c.lab!.icon, c.lab!.hint, () => go({ kind: 'concept', id: c.id }))))];
+        labTile('Trip planner', 'rocket', 'Plan a real trip to Mars, Venus or Jupiter and fly it.', () => shell.openTrip()),
+        CONCEPTS.filter((c) => c.lab && c.id !== 'hohmann').map((c) => labTile(c.lab!.title ?? c.title.replace(/:.*$/, ''), c.lab!.icon, c.lab!.hint, () => go({ kind: 'concept', id: c.id }))))];
     }
     return [tabs, h('div', { class: 'atlas-grid' }, ATLAS_CATEGORIES.map(categoryTile))];
   };

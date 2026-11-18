@@ -419,6 +419,33 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
   :root[data-bar][data-selected='true'] .point-button { display: none; }
 }
 
+/* The trip planner: a card over Space view. */
+.trip-card {
+  position: fixed; z-index: 3;
+  left: calc(var(--safe-left) + var(--space-3)); right: calc(var(--safe-right) + var(--space-3));
+  bottom: calc(var(--safe-bottom) + var(--space-3));
+  max-height: 62dvh; overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--space-3) var(--space-4) var(--space-4); border-radius: var(--radius-lg);
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+.trip-card[hidden] { display: none; }
+.trip-title { font-size: var(--text-lg); font-weight: var(--weight-medium); letter-spacing: var(--tracking-tight); }
+.trip-targets { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.trip-nav { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.trip-window { font-size: var(--text-sm); color: var(--color-text-muted); }
+.trip-card .trip-plot { height: 150px; }
+.trip-key { font-size: var(--text-xs); }
+.trip-readout .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-4); }
+.trip-readout { display: flex; flex-direction: column; gap: var(--space-2); }
+:root[data-trip] .time-bar, :root[data-trip] .view-bar, :root[data-trip] .object-card { display: none; }
+:root[data-trip][data-sheet] .trip-card { display: none; }
+@media (max-width: 899px) {
+  :root[data-trip]:not([data-sheet]) .dock { display: none; }
+}
+@media (min-width: 900px) {
+  .trip-card { right: auto; width: 400px; top: calc(var(--safe-top) + 48px + var(--space-4) + var(--space-3)); bottom: auto; max-height: calc(100vh - 120px); }
+}
+
 /* On a phone, after a concept's Try it, a pill above the sky leads back to the page. */
 .reading-pill {
   display: none; position: fixed; z-index: 2;

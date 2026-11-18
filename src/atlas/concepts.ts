@@ -26,6 +26,8 @@ export type ConceptBlock =
    * request; `scene` is applied first for diagrams that read the sky.
    */
   | { kind: 'plot'; plot: Plot; caption: string; task?: Extract<Task, { kind: 'plot' }>; scene?: Scene }
+  /** A button that opens one of the labs. */
+  | { kind: 'lab'; lab: 'trip'; label: string; note: string }
   /**
    * A question to check yourself; never blocks reading on. `scene` is the sky
    * the answer is read from, set up again when checking so the answer matches.
@@ -325,6 +327,7 @@ export const CONCEPTS: Concept[] = [
       ] },
       { kind: 'try', label: 'Earth and Mars from above, autumn 2026', note: 'Space view over the Solar System, looking down on the orbits.', scene: sky({ time: { jd: jdFromCalendar(2026, 10, 1, 0, 0) }, site: CAPE_CANAVERAL, camera: { look: 'sun', mode: 'space', dist: 5.5, orbit: { yaw: -90, pitch: 80 } }, layers: { orbits: true, planetLabels: true } }) },
       { kind: 'plot', plot: { kind: 'transfer', from: jdFromCalendar(2026, 8, 1, 0, 0), to: jdFromCalendar(2027, 2, 1, 0, 0), start: jdFromCalendar(2026, 8, 15, 0, 0) }, caption: 'Slide the launch date. The dashed path ends at Mars\'s orbit; the red dot is where Mars will be that day.', task: { kind: 'plot', prompt: 'Find the launch date when Mars arrives at the orbit together with the spacecraft.', tolerance: 2, hint: 'Keep sliding: Mars needs to be on the end of the path, not ahead of it or behind.', explain: 'Early November 2026. Launch then and Mars is right there at the end of the trip.' } },
+      { kind: 'lab', lab: 'trip', label: 'Open the trip planner', note: 'Plan real trips to Venus, Mars or Jupiter on a porkchop plot, compare with Perseverance, and fly them in Space view.' },
       { kind: 'text', title: 'Launch windows', paragraphs: [
         'The right arrangement comes round only once every 26 months, when the Earth is about to overtake Mars. Space agencies plan every Mars mission around these windows; miss one and the spacecraft waits on the ground for the next. In July 2020 three missions left within two weeks of each other: the UAE\'s Hope orbiter, China\'s Tianwen-1 and NASA\'s Perseverance rover, which landed on 18 February 2021.',
         'Real missions rarely fly a pure Hohmann transfer. The orbits of Earth and Mars are neither circles nor in quite the same plane, and a slightly faster path can be worth the extra fuel. Planners draw "porkchop plots", maps of launch date against arrival date coloured by cost, and pick a spot near the cheapest valley.',

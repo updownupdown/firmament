@@ -1,6 +1,6 @@
 # Status and handoff
 
-Last updated 2026-11-17. Read `docs/ARCHITECTURE.md` first; this file says where
+Last updated 2026-11-18. Read `docs/ARCHITECTURE.md` first; this file says where
 the build stands against that plan and what to do next, in order.
 
 ## Done
@@ -371,6 +371,35 @@ picking one plays its life from birth. Mass and metals sit in a folded
 **Notices**: toasts have a close button and can be swiped away (sideways or
 up), and so can the update and measuring banners (`swipeToDismiss` in
 `dom.ts`). Pointing at a toast holds it up.
+
+**Atlas, phase 1** (2026-11-18; `src/atlas`, `src/ui/atlas.ts`; tests in
+`atlas.test.ts`). Learn is now the Atlas in the dock, and Search lives inside
+it (`/` and the top-bar button open it with the field focused; the old search
+sheet is gone). `atlas/catalog.ts` sorts every object into categories (Sun,
+planets, moons, dwarf planets and asteroids, comets, belts and clouds, stars
+grouped as brightest / nearest / with a story / more named, the 88
+constellations and asterisms, clusters, nebulae, galaxies, meteor showers,
+sky cultures). Showers and cultures are Atlas-only refs (`shower:<id>`,
+`culture:<id>`). An entry page has Show me, a live "Right now" block (rise,
+set, highest, with all the numbers folded), then the reading: a full article
+from `atlas/articles.ts` (Sun, planets, Moon so far; at least 500 words each,
+tested) or the card blurb and Lumen's lore. The object card's book button
+opens the entry; Show me on a phone closes the sheet so the sky is in view.
+Labs and the journeys sit under a second tab until the concepts replace them.
+
+## Atlas plan (agreed with James 2026-11-17)
+
+Plan doc: https://claude.ai/artifact/THe6GBiAoC8DTMUBuFFsV6. Decisions:
+satellites and probes are **out** for now (no daily data workflows); concept
+articles as long as the subject deserves; journeys are **retired** once
+concepts cover them; a simple generic horizon is fine when standing on other
+worlds; dock becomes Sky, Tonight, Atlas once viewpoints are unified. Order:
+1. Atlas foundation (done). 2. Concepts (about 60, each with "Try it" scenes),
+then remove journeys and their stored progress. 3. Sandboxes in Space view
+(overlay hook, a "What if" badge for physics forks, Hohmann planner with a
+porkchop plot first). 4. One viewpoint (continuous lift-off and landing,
+viewpoint chip, standing on the Moon and Mars). 5. Star travel to stars
+within about 100 ly.
 
 ## Next steps, in order
 

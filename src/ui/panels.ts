@@ -1,4 +1,4 @@
-// The sheets that are mostly forms: search, view and settings, place and time.
+// The sheets that are mostly forms: view and settings, place and time.
 
 import { DEG } from '../astro/math.ts';
 import { fetchText } from '../data/load.ts';
@@ -6,66 +6,9 @@ import { JD_MAX, JD_MIN } from '../sim/clock.ts';
 import { MONTHS, formatLatLon, formatYear, formatZone, jdFromLocal, localTime } from '../sim/format.ts';
 import { PLACES, searchPlaces } from '../sim/places.ts';
 import type { LayerFlags } from '../sim/scene.ts';
-import type { ObjectKind, SearchHit, Site } from '../sim/universe.ts';
+import type { Site } from '../sim/universe.ts';
 import { h, fill, icon, toggle } from './dom.ts';
 import type { Panel, Shell } from './shell.ts';
-
-const KIND_LABEL: Record<ObjectKind, string> = {
-  sun: 'Star', moon: 'Moon', planet: 'Planet', dwarf: 'Dwarf planet', satellite: 'Moon', comet: 'Comet', minor: 'Small body', region: 'Region',
-  star: 'Star', dso: 'Deep sky', constellation: 'Constellation',
-};
-
-// ------------------------------------------------------------------ search
-
-export function searchPanel(shell: Shell): Panel {
-  const app = shell.app;
-  const input = h('input', {
-    class: 'field', type: 'search', placeholder: 'Planet, star, constellation, M31…', autocomplete: 'off',
-    autocapitalize: 'off', spellcheck: false, 'aria-label': 'Search the sky', enterkeyhint: 'search',
-  });
-  const results = h('ul', { class: 'result-list', role: 'list' });
-  const status = h('p', { class: 'hint', role: 'status' });
-
-  const go = (ref: string) => {
-    if (ref.startsWith('region:')) {
-      // Belts and clouds are seen from Space view.
-      shell.show({ select: ref, camera: { mode: 'space', look: 'sun' } });
-      app.centre(ref);
-      return;
-    }
-    shell.show({ select: ref, camera: { look: ref, fov: Math.min(app.renderer.projection.fov, app.framingFov(ref) * 4) / DEG } });
-  };
-  const row = (hit: SearchHit) => {
-    const obj = app.universe.resolve(hit.ref);
-    const up = obj ? app.universe.horizontal(obj.dir).altApparent > 0 : true;
-    const tag = hit.kind === 'region' ? h('span', { class: 'tag' }, 'Space view')
-      : h('span', { class: `tag${up ? ' up' : ''}` }, up ? 'Up now' : 'Below horizon');
-    return h('li', null, h('button', { class: 'result', type: 'button', onclick: () => go(hit.ref) },
-      h('span', { class: 'result-main' }, h('span', { class: 'result-name' }, hit.name), h('span', { class: 'result-sub' }, hit.subtitle || KIND_LABEL[hit.kind])),
-      tag));
-  };
-  const refresh = () => {
-    const q = input.value.trim();
-    let hits: SearchHit[];
-    if (q) hits = app.universe.search(q, 20);
-    else {
-      // Nothing typed yet: offer what is worth looking at right now.
-      const refs = ['moon', 'venus', 'jupiter', 'saturn', 'mars', 'mercury', 'star:32349', 'star:91262', 'dso:M31', 'dso:M42', 'dso:M45'];
-      hits = refs.map((ref) => app.universe.resolve(ref)).filter((o) => !!o)
-        .map((o) => ({ ref: o.ref, name: o.name, subtitle: o.subtitle, kind: o.kind }));
-    }
-    fill(results, hits.map(row));
-    status.textContent = q && hits.length === 0 ? `Nothing found for “${q}”. Try a star name, a constellation, or a number like M13.` : q ? '' : 'Suggestions';
-  };
-  input.addEventListener('input', refresh);
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      const first = app.universe.search(input.value.trim(), 1)[0];
-      if (first) go(first.ref);
-    }
-  });
-  return { title: 'Search', el: h('div', { class: 'panel' }, input, status, results), refresh, focus: input };
-}
 
 // ------------------------------------------------------------------ view and settings
 

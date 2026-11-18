@@ -330,7 +330,7 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
   /* One bar at the bottom: the dock, or in its place the object card or the
      journey step, which sits over the ground so the sky it points at stays clear. */
   .journey-card { top: auto; bottom: calc(var(--safe-bottom) + var(--space-3)); left: calc(var(--safe-left) + var(--space-3)); right: calc(var(--safe-right) + var(--space-3)); }
-  :root[data-journey] .dock, :root[data-selected='true'] .dock { display: none; }
+  :root[data-journey]:not([data-sheet]) .dock, :root[data-selected='true']:not([data-sheet]) .dock { display: none; }
   :root:not([data-journey]) .object-card { bottom: calc(var(--safe-bottom) + var(--space-3)); left: calc(var(--safe-left) + var(--space-3)); right: calc(var(--safe-right) + var(--space-3)); }
   :root[data-journey] .object-card { top: calc(var(--safe-top) + var(--space-4) + 48px + var(--space-3)); bottom: auto; }
   :root[data-journey][data-selected='true'] .point-button { display: none; }
@@ -517,3 +517,30 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
 
 /* An open time panel sits above the object card and dock. */
 .top-bar:has(.time-panel:not([hidden])) { z-index: 5; }
+
+/* ---------------------------------------------------------------- atlas */
+
+.atlas-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.atlas-tile { gap: var(--space-1); }
+.atlas-tile svg { color: var(--color-accent); margin-bottom: var(--space-1); }
+.atlas-tile:hover { background: var(--color-surface-hover); }
+.atlas-back { align-self: flex-start; display: inline-flex; align-items: center; gap: var(--space-1); }
+.atlas-head { display: flex; flex-direction: column; gap: var(--space-1); padding: 0 var(--space-1); }
+.atlas-kicker { align-self: flex-start; padding: 0; min-height: 0; }
+.atlas-title { font-size: var(--text-xl); font-weight: var(--weight-medium); letter-spacing: var(--tracking-tight); }
+.atlas-sub { color: var(--color-text-muted); font-size: var(--text-md); }
+.atlas-now { gap: var(--space-3); }
+.atlas-now .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3) var(--space-4); }
+.atlas-where { font-size: var(--text-lg); }
+.atlas-lede { font-size: var(--text-lg); line-height: 1.55; padding: 0 var(--space-1); }
+.atlas-section { display: flex; flex-direction: column; gap: var(--space-2); padding: 0 var(--space-1); }
+.atlas-section p { font-size: var(--text-md); line-height: 1.6; color: var(--color-text); }
+.atlas-section-title { font-size: var(--text-lg); font-weight: var(--weight-medium); margin: var(--space-3) 0 0; }
+.atlas-section p { margin: 0; }
+.atlas-body { gap: var(--space-3); }
+.atlas-sources { padding: 0 var(--space-1); font-size: var(--text-sm); color: var(--color-text-muted); }
+.atlas-sources ul { margin: var(--space-1) 0 0; padding-left: var(--space-4); }
+.atlas-sources a { color: var(--color-accent); }
+.atlas-more summary { cursor: pointer; color: var(--color-accent); font-size: var(--text-sm); list-style: none; }
+.atlas-more summary::-webkit-details-marker { display: none; }
+.atlas-more[open] summary { margin-bottom: var(--space-3); }

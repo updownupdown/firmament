@@ -1,6 +1,6 @@
 // Tiny DOM helpers: the UI is plain elements, no framework.
 
-type Child = Node | string | number | null | undefined | false;
+export type Child = Node | string | number | null | undefined | false;
 type Props = Record<string, unknown>;
 
 /** Create an element. Props: `class`, `text`, `on<event>` handlers, `dataset`, anything else as an attribute. */
@@ -33,6 +33,11 @@ export function fill(el: Element, ...children: (Child | Child[])[]): void {
 }
 
 const ICONS: Record<string, string> = {
+  sun: '<circle cx="10" cy="10" r="3.6"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4"/>',
+  comet: '<circle cx="14" cy="6" r="2.4"/><path d="M12.2 7.8L3.5 16.5M12.6 4.6L6 6.5M15.4 8.4L13.5 15"/>',
+  cluster: '<circle cx="10" cy="7" r="1.3"/><circle cx="6.5" cy="11" r="1.3"/><circle cx="13.5" cy="11.5" r="1.3"/><circle cx="9.5" cy="14.5" r="1.3"/><circle cx="14" cy="5" r="0.9"/><circle cx="5" cy="6" r="0.9"/>',
+  nebula: '<path d="M4 12c-1.5-3 1-6.5 4-5.5 1-2.5 5-2.5 6 0 3 .5 3.5 4.5 1 6 0 2.5-3.5 3.5-5.5 2-2 1.5-5 .5-5.5-2.5z"/>',
+  meteor: '<path d="M16.5 3.5L7 13M13 3.5L5.5 11M16.5 7L9 14.5"/><circle cx="5" cy="15" r="1.8"/>',
   search: '<circle cx="9" cy="9" r="5.5"/><path d="M13 13l4 4"/>',
   sliders: '<path d="M3 6h8M15 6h2M3 14h2M9 14h8"/><circle cx="13" cy="6" r="2"/><circle cx="7" cy="14" r="2"/>',
   play: '<path d="M6 4l10 6-10 6z" fill="currentColor" stroke="none"/>',

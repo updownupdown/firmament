@@ -1,4 +1,6 @@
-// The sheets that are mostly forms: view and settings, place and time.
+// The sheets that are mostly forms: settings, place and time. The layer
+// lists here also feed the View bar (viewbar.ts), which owns everything about
+// what the sky shows.
 
 import { DEG } from '../astro/math.ts';
 import { fetchText } from '../data/load.ts';
@@ -10,7 +12,7 @@ import type { Site } from '../sim/universe.ts';
 import { h, fill, icon, toggle } from './dom.ts';
 import type { Panel, Shell } from './shell.ts';
 
-// ------------------------------------------------------------------ view and settings
+// ------------------------------------------------------------------ layers and settings
 
 /** A layer as a tile: [layer, label, icon, what it is]. */
 export type LayerTile = [keyof LayerFlags, string, string, string];
@@ -44,18 +46,7 @@ export const LAYER_GROUPS: { title: string; note?: string; items: LayerTile[] }[
   ] },
 ];
 
-/** A grid of on/off tiles, one per layer. */
-function layerTiles(app: Shell['app'], items: LayerTile[]): HTMLElement {
-  return h('div', { class: 'tile-grid' }, items.map(([key, label, glyph, hint]) => {
-    const tile = h('button', {
-      class: 'layer-tile', type: 'button', title: hint, 'aria-pressed': String(app.layers[key]),
-      onclick: () => { app.setLayer(key, !app.layers[key]); tile.setAttribute('aria-pressed', String(app.layers[key])); },
-    }, icon(glyph, 22), h('span', null, label));
-    return tile;
-  }));
-}
-
-const BORTLE = ['', 'Pristine dark site', 'Truly dark site', 'Rural sky', 'Rural edge', 'Suburban sky', 'Bright suburb', 'Suburb to city', 'City sky', 'Inner city'];
+export const BORTLE = ['', 'Pristine dark site', 'Truly dark site', 'Rural sky', 'Rural edge', 'Suburban sky', 'Bright suburb', 'Suburb to city', 'City sky', 'Inner city'];
 
 export function settingsPanel(shell: Shell): Panel {
   const app = shell.app;
@@ -79,26 +70,12 @@ export function settingsPanel(shell: Shell): Panel {
 
   const refresh = () => {
     // Rebuilding the panel must not lose the keyboard's place.
-    const focused = (document.activeElement as HTMLElement | null)?.closest?.('.layer-tile')?.getAttribute('title');
-    queueMicrotask(() => { if (focused) (el.querySelector(`.layer-tile[title="${CSS.escape(focused)}"]`) as HTMLElement | null)?.focus(); });
+    const focused = (document.activeElement as HTMLElement | null)?.closest?.('.toggle')?.textContent;
+    queueMicrotask(() => { if (focused) ([...el.querySelectorAll('.toggle')] as HTMLElement[]).find((t) => t.textContent === focused)?.querySelector('input')?.focus(); });
     const s = app.store.data.settings;
-    const culture = app.universe.culture;
-    const select = h('select', { class: 'field', 'aria-label': 'Sky culture', onchange: () => app.setCulture(select.value) },
-      app.universe.cultureIndex.map((c) => h('option', { value: c.id, selected: c.id === s.culture }, `${c.name} (${c.region})`)));
-    const slider = h('input', {
-      type: 'range', min: '1', max: '9', step: '1', value: String(s.bortle), class: 'slider bortle-slider', 'aria-label': 'Light pollution',
-      oninput: () => { app.setBortle(Number(slider.value)); bortleText.textContent = BORTLE[app.store.data.settings.bortle]; },
-    });
-    const bortleText = h('span', { class: 'value' }, BORTLE[s.bortle]);
     const install = installButton(shell);
     fill(el,
-      LAYER_GROUPS.map((g) => section(g.title, layerTiles(app, g.items))),
-      section('Light pollution',
-        h('div', { class: 'control-card' },
-          h('div', { class: 'control-head' }, h('span', null, 'How bright your sky is'), bortleText),
-          h('div', { class: 'slider-row' }, h('span', { class: 'hint' }, 'Dark'), slider, h('span', { class: 'hint' }, 'City')))),
-      section('Whose sky',
-        h('div', { class: 'control-card' }, select, culture && culture.id === s.culture ? h('p', { class: 'hint' }, culture.intro) : null)),
+      h('p', { class: 'lede' }, 'What the sky shows (layers, looks, light pollution and sky culture) is under View, at the bottom right.'),
       section('Guide',
         h('div', { class: 'control-card' },
           toggle('Lumen', s.guide === 'on', (on) => app.updateSettings((x) => { x.guide = on ? 'on' : 'off'; }), 'Science and stories in Tonight, and how old the light is on each object\'s card'))),
@@ -115,7 +92,7 @@ export function settingsPanel(shell: Shell): Panel {
           action('info', 'Credits and data sources', loadCredits, { 'aria-expanded': String(!credits.hidden) })),
         credits));
   };
-  return { title: 'View', el, refresh };
+  return { title: 'Settings', el, refresh };
 }
 
 // Installing as an app: Chrome and Edge offer a prompt we can trigger; Safari
@@ -149,7 +126,7 @@ function installButton(shell: Shell): HTMLElement | null {
 
 function share(shell: Shell): void {
   const url = shell.app.shareUrl();
-  history.replaceState(null, '', url);
+  history.replaceState(history.state, '', url);
   const done = () => shell.toast('Link copied. It opens this exact sky.');
   const failed = () => shell.toast('The link is in the address bar, ready to copy.');
   if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url).then(done, failed);

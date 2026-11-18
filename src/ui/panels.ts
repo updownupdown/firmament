@@ -13,9 +13,9 @@ import type { Panel, Shell } from './shell.ts';
 // ------------------------------------------------------------------ view and settings
 
 /** A layer as a tile: [layer, label, icon, what it is]. */
-type LayerTile = [keyof LayerFlags, string, string, string];
+export type LayerTile = [keyof LayerFlags, string, string, string];
 
-const LAYER_GROUPS: { title: string; note?: string; items: LayerTile[] }[] = [
+export const LAYER_GROUPS: { title: string; note?: string; items: LayerTile[] }[] = [
   { title: 'On the sky', items: [
     ['lines', 'Figures', 'figures', 'Constellation figures'],
     ['constellationLabels', 'Constellations', 'names', 'Constellation names'],

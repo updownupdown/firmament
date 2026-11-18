@@ -63,6 +63,7 @@ export function spaceLab(shell: Shell, opts: { title: string; badge?: string; ch
       current = lab;
       shell.closeSheet();
       app.select(null);
+      if (!open) shell.back.push('lab', () => lab.close());
       open = true;
       el.hidden = false;
       document.documentElement.dataset.trip = '';
@@ -75,6 +76,7 @@ export function spaceLab(shell: Shell, opts: { title: string; badge?: string; ch
     close() {
       if (!open) return;
       open = false;
+      shell.back.dropLast('lab');
       if (current === lab) current = null;
       el.hidden = true;
       app.space.camera.shiftY = 0;

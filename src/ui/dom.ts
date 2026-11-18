@@ -84,6 +84,25 @@ const ICONS: Record<string, string> = {
   belt: '<circle cx="10" cy="10" r="1.8"/><ellipse cx="10" cy="10" rx="7.5" ry="3.2" stroke-dasharray="1.2 2"/>',
   ruler: '<path d="M3 14.5L14.5 3l2.5 2.5L5.5 17z"/><path d="M6.5 11.5l1.5 1.5M9 9l1.5 1.5M11.5 6.5L13 8"/>',
   rocket: '<path d="M10 2.5c2.6 2 3.6 5 3.2 8.6l-1.7 2.4H8.5l-1.7-2.4C6.4 7.5 7.4 4.5 10 2.5z"/><circle cx="10" cy="8" r="1.4"/><path d="M6.8 11.1L4.5 13.5l.5 2.5 3-1.2M13.2 11.1l2.3 2.4-.5 2.5-3-1.2M9 15.5l1 2 1-2"/>',
+  // Controls
+  pointing: '<path d="M3 7V5a2 2 0 0 1 2-2h2M13 3h2a2 2 0 0 1 2 2v2M17 13v2a2 2 0 0 1-2 2h-2M7 17H5a2 2 0 0 1-2-2v-2"/><path d="M10 6.2l1 2.8 2.8 1-2.8 1-1 2.8-1-2.8-2.8-1 2.8-1z"/>',
+  spread: '<path d="M7.5 10h5M2.5 10h1.5M16 10h1.5M5.5 7L2.5 10l3 3M14.5 7l3 3-3 3"/>',
+  gear: '<circle cx="10" cy="10" r="2.2"/><path d="M8.6 2.8h2.8l.4 2.1 1.5.9 2-.8 1.4 2.4-1.6 1.4v1.7l1.6 1.4-1.4 2.4-2-.8-1.5.9-.4 2.1H8.6l-.4-2.1-1.5-.9-2 .8-1.4-2.4 1.6-1.4V9.2L3.3 7.8l1.4-2.4 2 .8 1.5-.9z"/>',
+  // Concepts
+  turning: '<path d="M16.5 10a6.5 6.5 0 1 1-2-4.7"/><path d="M14.8 2.6v2.9h-2.9"/><circle cx="10" cy="10" r="1.3" fill="currentColor" stroke="none"/>',
+  magnitude: '<circle cx="5" cy="12" r="3"/><circle cx="11.5" cy="12" r="2"/><circle cx="16" cy="12" r="1.1"/>',
+  seasons: '<circle cx="5" cy="10" r="2.4"/><circle cx="14.5" cy="10" r="3"/><path d="M13 5.5l3 9"/>',
+  phases: '<circle cx="4" cy="10" r="2.4"/><path d="M10 7.6a2.4 2.4 0 0 1 0 4.8z" fill="currentColor"/><circle cx="10" cy="10" r="2.4"/><circle cx="16" cy="10" r="2.4" fill="currentColor"/>',
+  eclipse: '<circle cx="8" cy="10" r="5"/><circle cx="12" cy="10" r="5" fill="currentColor" fill-opacity=".35"/>',
+  loop: '<path d="M2.5 14c3-1 4.5-3 5.5-5.5.8-2 3-2 3.3 0 .3 2-2 2.8-2.8 1.2C7.7 8 10 6 13 6c2 0 3.5.8 4.5 2"/>',
+  ellipse: '<ellipse cx="10" cy="10" rx="7.5" ry="4.5"/><circle cx="6" cy="10" r="1.4" fill="currentColor" stroke="none"/><circle cx="15.5" cy="7.2" r="1"/>',
+  moons: '<circle cx="10" cy="10" r="3"/><circle cx="3" cy="10" r=".9" fill="currentColor"/><circle cx="5.5" cy="10" r=".9" fill="currentColor"/><circle cx="14.5" cy="10" r=".9" fill="currentColor"/><circle cx="17.5" cy="10" r=".9" fill="currentColor"/>',
+  slingshot: '<circle cx="11" cy="9" r="2.6"/><path d="M2.5 17c4-1 6.5-2.5 7-4.5M17.5 3c-1 3-2.5 5-5 6.5" stroke-dasharray="2 1.8"/><path d="M9.5 12.5c1.5 1.5 4 .5 5-3.5"/>',
+  whatif: '<path d="M7 7.2a3 3 0 1 1 4.3 2.7c-.8.4-1.3 1.1-1.3 2v.6"/><circle cx="10" cy="15.5" r=".6" fill="currentColor"/>',
+  starcolors: '<circle cx="4.5" cy="10" r="2.6"/><circle cx="10.5" cy="10" r="2" fill="currentColor" fill-opacity=".4"/><circle cx="15.5" cy="10" r="1.5" fill="currentColor"/>',
+  drift: '<circle cx="5" cy="15" r="1.6" fill="currentColor" stroke="none"/><path d="M7 13l8-8M11 5h4v4"/>',
+  precession: '<ellipse cx="10" cy="4.5" rx="5" ry="1.6" stroke-dasharray="1.6 1.6"/><path d="M10 17L7 4.8"/><circle cx="7" cy="4.8" r="1" fill="currentColor"/>',
+  gnomon: '<path d="M2.5 16h15"/><path d="M6 16V5"/><path d="M6 5l10 11" stroke-dasharray="1.6 1.6"/><circle cx="16" cy="4" r="1.6"/>',
 };
 
 export function icon(name: string, size = 20): SVGSVGElement {

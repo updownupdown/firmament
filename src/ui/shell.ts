@@ -1,6 +1,6 @@
 // The app shell: the living sky behind, a top bar whose chip holds the time,
 // and one bar at the bottom: the dock of four places (Sky, Space, Tonight,
-// Learn), or the object card or journey step in its place. One sheet at a time
+// Atlas), or the object card or journey step in its place. One sheet at a time
 // holds everything else.
 
 import type { App } from '../app.ts';
@@ -9,18 +9,19 @@ import { formatDistanceAU } from '../sim/format.ts';
 import { lightNote } from '../sim/lore.ts';
 import { h, fill, icon, iconButton, lumenGlyph, swipeToDismiss } from './dom.ts';
 import { blurb, detailFacts, quickFacts, riseSetFacts, whereNow } from './facts.ts';
-import { type JourneyPlayer, journeyPlayer, learnPanel } from './journeys.ts';
+import { type AtlasPanel, atlasPanel } from './atlas.ts';
+import { type JourneyPlayer, journeyPlayer } from './journeys.ts';
 import { measureTool } from './measure.ts';
-import { placeTimePanel, searchPanel, settingsPanel } from './panels.ts';
+import { placeTimePanel, settingsPanel } from './panels.ts';
 import { tonightPanel } from './tonight.ts';
 import { type StarLabPanel, starLabPanel } from './starlab.ts';
 import { type StarSeed, starSeed } from '../sim/starlink.ts';
 import { timeChip } from './timebar.ts';
 
 /** The four places in the dock. */
-type Place = 'sky' | 'space' | 'tonight' | 'learn';
+type Place = 'sky' | 'space' | 'tonight' | 'atlas';
 
-export type SheetId = 'search' | 'settings' | 'place' | 'tonight' | 'learn' | 'stars' | null;
+export type SheetId = 'atlas' | 'settings' | 'place' | 'tonight' | 'stars' | null;
 
 export interface Panel {
   title: string;
@@ -44,16 +45,16 @@ export class Shell {
   private lastFocus: HTMLElement | null = null;
   private readonly journey: JourneyPlayer;
   private readonly starLab: StarLabPanel;
+  private readonly atlas: AtlasPanel;
 
   constructor(app: App, root: HTMLElement) {
     this.app = app;
     this.root = root;
     this.panels = {
-      search: searchPanel(this),
+      atlas: (this.atlas = atlasPanel(this)),
       settings: settingsPanel(this),
       place: placeTimePanel(this),
       tonight: tonightPanel(this),
-      learn: learnPanel(this),
       stars: (this.starLab = starLabPanel(this)),
     };
     this.sheetTitle = h('h2', { class: 'sheet-title', tabindex: '-1' });
@@ -96,7 +97,7 @@ export class Shell {
         else if (app.selected) app.select(null);
       } else if (e.key === '/' && !isTyping(e)) {
         e.preventDefault();
-        this.openSheet('search');
+        this.openAtlas({ search: true });
       } else if (e.key === ' ' && !isTyping(e) && document.activeElement === app.canvas) {
         e.preventDefault();
         app.setRate(app.clock.rate, !app.clock.paused);
@@ -125,7 +126,7 @@ export class Shell {
     panel.refresh();
     this.sheetBody.scrollTop = 0;
     (panel.focus ?? this.sheetTitle).focus({ preventScroll: true });
-    this.app.setSection(id === 'tonight' || id === 'learn' ? id : 'sky');
+    this.app.setSection(id === 'tonight' || id === 'atlas' ? id : 'sky');
     this.syncDock();
   }
 
@@ -143,6 +144,11 @@ export class Shell {
   openStarLab(seed?: StarSeed | null): void {
     if (seed !== undefined) this.starLab.seed(seed);
     this.openSheet('stars');
+  }
+
+  /** Open the Atlas at an entry, a category, or its search field. */
+  openAtlas(target: Parameters<AtlasPanel['show']>[0]): void {
+    this.atlas.show(target);
   }
 
   /** Begin or resume a journey, with the sky in view. */
@@ -175,7 +181,7 @@ export class Shell {
   private topBar(): HTMLElement {
     const { chip, panel } = timeChip(this.app, () => this.openSheet('place'));
     return h('div', { class: 'top-bar chrome' }, chip,
-      iconButton('search', 'Search the sky', () => this.openSheet('search'), 'glass'),
+      iconButton('search', 'Search the Atlas', () => this.openAtlas({ search: true }), 'glass'),
       iconButton('sliders', 'View and settings', () => this.openSheet('settings'), 'glass'),
       panel);
   }
@@ -262,6 +268,9 @@ export class Shell {
       const seed = obj ? starSeed(app.universe, obj) : null;
       if (seed) this.openStarLab(seed);
     } }, icon('star', 16), 'Life story');
+    const readButton = iconButton('book', 'Read about it in the Atlas', () => {
+      if (app.selected) this.openAtlas({ ref: app.selected });
+    }, 'outlined');
     const zoomButton = h('button', { class: 'pill-button primary', type: 'button', onclick: () => {
       if (app.selected) app.centre(app.selected, app.framingFov(app.selected));
     } }, 'Zoom in');
@@ -284,6 +293,7 @@ export class Shell {
       h('div', { class: 'card-actions' },
         zoomButton,
         followButton,
+        readButton,
         measureButton,
         lifeButton),
       detailsButton,
@@ -321,6 +331,7 @@ export class Shell {
       if (note) fill(lumen, lumenGlyph(), h('span', null, note));
       measureButton.hidden = space || obj.kind === 'constellation' || !!obj.region;
       followButton.hidden = !!obj.region;
+      readButton.hidden = obj.ref.startsWith('tyc:');
       zoomButton.textContent = obj.region && !space ? 'Show in space' : 'Zoom in';
       lifeButton.hidden = !(obj.kind === 'sun' || (obj.starIndex !== undefined && (app.universe.stars.dist[obj.starIndex] > 0 || !!app.universe.stars.meta.get(obj.starIndex)?.n)));
       renderMore();
@@ -344,7 +355,7 @@ export class Shell {
 
   private dockButtons: Partial<Record<Place, HTMLButtonElement>> = {};
 
-  /** The four places: the sky from the ground, space, tonight's guide, and Learn (journeys and labs). */
+  /** The four places: the sky from the ground, space, tonight's guide, and the Atlas (objects, labs and journeys). */
   private dock(): HTMLElement {
     const app = this.app;
     const make = (place: Place, label: string, glyph: string, onClick: () => void) => {
@@ -356,7 +367,7 @@ export class Shell {
       make('sky', 'Sky', 'sky', () => { this.closeSheet(); app.setMode('sky'); }),
       make('space', 'Space', 'orbit', () => { this.closeSheet(); app.setMode('space'); }),
       make('tonight', 'Tonight', 'moon', () => this.openSheet('tonight')),
-      make('learn', 'Learn', 'book', () => this.openSheet('learn')));
+      make('atlas', 'Atlas', 'book', () => this.openSheet('atlas')));
     app.on('mode', () => {
       document.documentElement.dataset.mode = app.mode;
       this.syncDock();
@@ -367,7 +378,7 @@ export class Shell {
   }
 
   private syncDock(): void {
-    const current = this.sheet === 'tonight' || this.sheet === 'learn' ? this.sheet : this.app.mode === 'space' ? 'space' : 'sky';
+    const current = this.sheet === 'tonight' || this.sheet === 'atlas' ? this.sheet : this.app.mode === 'space' ? 'space' : 'sky';
     for (const [place, button] of Object.entries(this.dockButtons)) {
       if (place === current) button.setAttribute('aria-current', 'page');
       else button.removeAttribute('aria-current');

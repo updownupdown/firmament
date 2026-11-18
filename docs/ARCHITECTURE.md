@@ -26,10 +26,11 @@ src/
   render/    WebGL2 renderer: sky view and space view
   ui/        app shell, sections, panels, design tokens
   journeys/  journey definitions (data + small checker functions)
+  atlas/     the Atlas: categories of objects and the article texts (no DOM)
   data/      typed loaders for the generated assets in public/data
 ```
 
-Dependencies flow downward only: `ui` and `journeys` use `sim` and `render`;
+Dependencies flow downward only: `ui`, `journeys` and `atlas` use `sim` (and `ui` uses `render`);
 `render` uses `sim`; `sim` uses `astro`. `astro` imports nothing else.
 
 ### 1. `astro` — the simulation core
@@ -142,7 +143,7 @@ separate pages.
 - **Space** — entered by zooming out of Sky: orrery, orbits, true or compressed
   scale, out to the Oort cloud, with the belts and clouds of small bodies.
 
-Navigation is a dock with Sky, Tonight and Journeys; Space is reached from
+Navigation is a dock with Sky, Space, Tonight and Atlas (see the Atlas plan in `docs/STATUS.md`); Space is reached from
 Sky by zooming out or from a button, and is also used by journeys.
 
 Persistence is `localStorage` with a versioned schema: settings, observer

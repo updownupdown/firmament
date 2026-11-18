@@ -116,8 +116,8 @@ export const PARTICLE_STRIDE = 7;
 export interface Population {
   id: PopulationId;
   count: number;
-  /** Linear RGB. */
-  color: [number, number, number];
+  /** Two surface types (RGB) and the share of the second. */
+  color: { a: [number, number, number]; b: [number, number, number]; shareB: number };
   data: Float32Array;
 }
 
@@ -226,9 +226,21 @@ export function buildPopulation(id: PopulationId, count: number, seed = 1): Floa
 const COUNTS: Record<PopulationId, number> = {
   'main-belt': 7000, trojans: 2600, kuiper: 4200, plutinos: 1400, scattered: 2200, 'oort-inner': 5000, 'oort-outer': 9000,
 };
-const COLORS: Record<PopulationId, [number, number, number]> = {
-  'main-belt': [0.86, 0.78, 0.66], trojans: [0.86, 0.72, 0.58], kuiper: [0.66, 0.78, 0.95],
-  plutinos: [0.72, 0.84, 1], scattered: [0.6, 0.72, 0.95], 'oort-inner': [0.62, 0.74, 1], 'oort-outer': [0.55, 0.66, 0.95],
+/**
+ * Surface colours, as two common types and the share of the rarer: dark grey
+ * C-types and tan S-types in the main belt (about 3 in 4 are C-like); reddish
+ * D-types among the Trojans; Kuiper belt objects from grey to the "ultra-red"
+ * of the cold classical belt; and the Oort cloud's comets as pale, icy grey.
+ * Brightened to read against the black, but in the right order of hue.
+ */
+const COLORS: Record<PopulationId, { a: [number, number, number]; b: [number, number, number]; shareB: number }> = {
+  'main-belt': { a: [0.70, 0.68, 0.65], b: [0.92, 0.74, 0.54], shareB: 0.3 },
+  trojans: { a: [0.84, 0.60, 0.46], b: [0.72, 0.66, 0.60], shareB: 0.2 },
+  kuiper: { a: [0.95, 0.62, 0.46], b: [0.80, 0.76, 0.74], shareB: 0.35 },
+  plutinos: { a: [0.88, 0.70, 0.58], b: [0.80, 0.78, 0.78], shareB: 0.45 },
+  scattered: { a: [0.80, 0.70, 0.64], b: [0.92, 0.62, 0.48], shareB: 0.3 },
+  'oort-inner': { a: [0.74, 0.80, 0.90], b: [0.86, 0.80, 0.74], shareB: 0.3 },
+  'oort-outer': { a: [0.70, 0.77, 0.90], b: [0.84, 0.80, 0.76], shareB: 0.3 },
 };
 
 export function allPopulations(): Population[] {

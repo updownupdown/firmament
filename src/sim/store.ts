@@ -5,7 +5,7 @@ import { DEFAULT_LAYERS, type LayerFlags } from './scene.ts';
 import { type Site } from './universe.ts';
 
 export const STORE_KEY = 'firmament';
-export const STORE_VERSION = 1;
+export const STORE_VERSION = 2;
 
 export interface Settings {
   layers: LayerFlags;
@@ -33,7 +33,7 @@ export function defaultData(): StoreData {
   return {
     version: STORE_VERSION,
     settings: {
-      layers: { ...DEFAULT_LAYERS }, culture: 'western', bortle: 4, hour12: false,
+      layers: { ...DEFAULT_LAYERS }, culture: 'western', bortle: 2, hour12: false,
       nightVision: false, reducedMotion: false, theme: 'default',
     },
     site: null, recentSites: [], seen: [],
@@ -52,9 +52,10 @@ export function migrate(raw: unknown): StoreData {
   const base = defaultData();
   if (!raw || typeof raw !== 'object') return base;
   const r = raw as Partial<StoreData>;
-  // Version 1 is the first schema. Future versions transform `r` here, step by step.
   if (typeof r.version !== 'number' || r.version > STORE_VERSION) return base;
-  const settings = (r.settings && typeof r.settings === 'object' ? r.settings : {}) as Partial<Settings>;
+  const settings = { ...(r.settings && typeof r.settings === 'object' ? r.settings : {}) } as Partial<Settings>;
+  // Version 2: the default sky became a dark one (Bortle 2, was 4). Anyone still on the old default moves with it.
+  if (r.version < 2 && settings.bortle === 4) settings.bortle = base.settings.bortle;
   return {
     version: STORE_VERSION,
     settings: {

@@ -83,6 +83,13 @@ export function collectLabels(r: SkyRenderer, layers: LayerFlags, selectedRef: s
       const isSolar = (SOLAR_BODIES as string[]).includes(d.id) || d.id === 'earth';
       const moon = GALILEAN.find((g) => g.id === d.id);
       if (!d.screen || !d.screen.onScreen || d.alt < floor) continue;
+      // A planet passing behind the Moon (or the Sun) is hidden, and so is its name.
+      const at = d.screen;
+      if (r.drawn.some((o) => {
+        if (o === d || !o.screen || o.body.dist >= d.body.dist) return false;
+        const trueRadius = o.body.radius / p.pixelAngle;
+        return trueRadius > 2 && Math.hypot(at.x - o.screen.x, at.y - o.screen.y) < trueRadius * 0.98;
+      })) continue;
       const sel = marked.has(d.id);
       if (!sel) {
         if (d.body.mag > c.limitMag + 0.5 && d.id !== 'sun' && d.id !== 'moon' && d.id !== 'earth') continue;

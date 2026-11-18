@@ -24,7 +24,7 @@ export const LAYER_GROUPS: { title: string; note?: string; items: LayerTile[] }[
     ['lines', 'Figures', 'figures', 'Constellation figures'],
     ['constellationLabels', 'Constellations', 'names', 'Constellation names'],
     ['starLabels', 'Star names', 'starname', 'Names of bright stars'],
-    ['planetLabels', 'Planets', 'planet', 'Names of the planets and the Moon'],
+    ['planetLabels', 'Planet names', 'planet', 'Names of the planets and the Moon'],
     ['dsos', 'Deep sky', 'galaxy', 'Galaxies, clusters and nebulae'],
     ['milkyWay', 'Milky Way', 'milkyway', 'The glow of our galaxy'],
     ['skyOrbits', 'Orbits', 'skyorbit', 'The planets\' and the Moon\'s orbits, as seen from where you stand'],

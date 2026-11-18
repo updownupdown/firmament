@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEG, type Vec3 } from '../astro/math.ts';
-import { SpaceCamera, keplerPeriod, sampleOrbit } from './space.ts';
+import { SpaceCamera, behindDisc, keplerPeriod, orbitRate, sampleOrbit } from './space.ts';
 
 test('the focus sits in the middle of the view, at the camera distance', () => {
   const cam = new SpaceCamera();
@@ -110,4 +110,36 @@ test('space: compressed scale keeps the order of distances and sizes', async () 
   const earthR = BODIES.earth.radiusEq / AU_KM;
   const moon = Math.hypot(...COMPRESS.moon([384400 / AU_KM, 0, 0], earthR));
   assert.ok(moon > COMPRESS.size(earthR) * 3 && moon < 0.23 / 1.2);
+});
+
+test('in orbit the camera goes round at the true rate, or at least once in three minutes', () => {
+  // Low Earth orbit, 6,778 km from the centre: a lap in about 92.6 minutes.
+  const leo = 6778 / 149597870.7;
+  const lap = (2 * Math.PI) / orbitRate('earth', leo, 100) * 100 / 60;
+  assert.ok(Math.abs(lap - 92.6) < 0.5, `${lap} minutes`);
+  // At the real rate that is far too slow to see, so it is shown at the floor.
+  assert.ok(Math.abs(orbitRate('earth', leo, 1) - (2 * Math.PI) / 180) < 1e-12);
+  // Stopped time, the Sun, and a wide view hold still; reversed time turns the other way.
+  assert.equal(orbitRate('earth', leo, 0), 0);
+  assert.equal(orbitRate('sun', 0.01, 1), 0);
+  assert.equal(orbitRate('jupiter', 1, 1), 0);
+  assert.ok(orbitRate('mars', 0.0003, -1) < 0);
+  // The camera moves on its own while cruising, and not while held.
+  const cam = new SpaceCamera();
+  cam.cruise = 0.1;
+  const yaw = cam.yaw;
+  cam.tick(1);
+  assert.ok(Math.abs(cam.yaw - yaw - 0.1) < 1e-12);
+  cam.held = true;
+  cam.tick(1);
+  assert.ok(Math.abs(cam.yaw - yaw - 0.1) < 1e-12);
+});
+
+test('a body behind a nearer disc is hidden', () => {
+  const near = { id: 'jupiter', x: 100, y: 100, depth: 1, trueRadiusPx: 50 };
+  assert.ok(behindDisc({ id: 'saturn', x: 120, y: 110, depth: 5 }, [near]));
+  assert.ok(!behindDisc({ id: 'saturn', x: 170, y: 100, depth: 5 }, [near]));
+  assert.ok(!behindDisc({ id: 'io', x: 120, y: 110, depth: 0.9 }, [near]));
+  // A dot drawn bigger than the body (the Moon from far off) hides nothing.
+  assert.ok(!behindDisc({ id: 'earth', x: 100.5, y: 100, depth: 5 }, [{ id: 'moon', x: 100, y: 100, depth: 4.99, trueRadiusPx: 0.2 }]));
 });

@@ -5,6 +5,7 @@
 // below (light pollution under Ground, the sky culture in its own tab).
 // Settings holds everything that is not about what the sky shows.
 
+import { picker } from './menu.ts';
 import type { App } from '../app.ts';
 import { LOOKS, currentLook, lookLayers } from '../sim/looks.ts';
 import type { LayerFlags } from '../sim/scene.ts';
@@ -82,11 +83,14 @@ export function viewBar(app: App, opts: { onToggle: (open: boolean) => void }): 
   const culture = () => {
     const s = app.store.data.settings;
     const current = app.universe.culture;
-    const select = h('select', { class: 'field', 'aria-label': 'Sky culture', onchange: () => app.setCulture(select.value) },
-      app.universe.cultureIndex.map((c) => h('option', { value: c.id, selected: c.id === s.culture }, `${c.name} (${c.region})`)));
+    const select = picker({
+      label: 'Sky culture', className: 'wide', value: s.culture,
+      items: app.universe.cultureIndex.map((c) => ({ value: c.id, label: c.name, detail: c.region })),
+      onPick: (v) => app.setCulture(v),
+    });
     return h('div', { class: 'vb-control' },
       h('div', { class: 'control-head' }, h('span', null, 'Whose sky: the figures and names drawn')),
-      select,
+      select.el,
       current && current.id === s.culture && current.intro ? h('p', { class: 'vb-note clamp' }, current.intro) : null);
   };
 

@@ -1,6 +1,6 @@
 // The app shell: the living sky behind, a top bar whose chip holds the time,
-// and one bar at the bottom: the dock of four places (Sky, Space, Tonight,
-// Atlas), or the object card in its place. One sheet at a time
+// and one bar at the bottom: the dock of three places (Sky, Tonight, Atlas),
+// or the object card in its place. Space is reached by flying. One sheet at a time
 // holds everything else.
 
 import { verbsFor, viewpointChip } from './viewpoint.ts';
@@ -23,8 +23,8 @@ import { type StarSeed, starSeed } from '../sim/starlink.ts';
 import { type TimeBar, timeChip } from './timebar.ts';
 import { type ViewBar, viewBar } from './viewbar.ts';
 
-/** The four places in the dock. */
-type Place = 'sky' | 'space' | 'tonight' | 'atlas';
+/** The places in the dock. */
+type Place = 'sky' | 'tonight' | 'atlas';
 
 export type SheetId = 'atlas' | 'settings' | 'place' | 'tonight' | 'stars' | null;
 
@@ -416,7 +416,7 @@ export class Shell {
 
   private dockButtons: Partial<Record<Place, HTMLButtonElement>> = {};
 
-  /** The four places: the sky from the ground, space, tonight's guide, and the Atlas (objects, concepts and labs). */
+  /** Three places: the sky (Sky also brings you home from space), tonight's guide, and the Atlas (objects, concepts and labs). */
   private dock(): HTMLElement {
     const app = this.app;
     const make = (place: Place, label: string, glyph: string, onClick: () => void) => {
@@ -425,8 +425,7 @@ export class Shell {
       return b;
     };
     const el = h('nav', { class: 'dock glass chrome', 'aria-label': 'Places' },
-      make('sky', 'Sky', 'sky', () => { this.closeSheet(); app.setMode('sky', undefined, true); }),
-      make('space', 'Space', 'orbit', () => { this.closeSheet(); app.setMode('space', undefined, true); }),
+      make('sky', 'Sky', 'sky', () => { this.closeSheet(); app.land(); }),
       make('tonight', 'Tonight', 'moon', () => this.openSheet('tonight')),
       make('atlas', 'Atlas', 'book', () => this.openSheet('atlas')));
     app.on('mode', () => {
@@ -439,7 +438,8 @@ export class Shell {
   }
 
   private syncDock(): void {
-    const current = this.sheet === 'tonight' || this.sheet === 'atlas' ? this.sheet : this.app.mode === 'space' ? 'space' : 'sky';
+    // Space is reached by flying (the viewpoint chip, Fly to it, or zooming out), so the dock lights Sky only on the ground.
+    const current = this.sheet === 'tonight' || this.sheet === 'atlas' ? this.sheet : this.app.mode === 'space' ? null : 'sky';
     for (const [place, button] of Object.entries(this.dockButtons)) {
       if (place === current) button.setAttribute('aria-current', 'page');
       else button.removeAttribute('aria-current');

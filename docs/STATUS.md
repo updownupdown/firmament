@@ -136,8 +136,9 @@ chosen by the owner on 2026-11-16)
   `toggle`). No framework.
 - `shell.ts`: top chip (place, date, time, pace and accuracy note, play/pause;
   tapping it opens the time panel), search and view buttons, object card (quick facts, centre,
-  zoom, details with rise/transit/set), selection reticle, the dock of four
-  places (Sky and Space switch the view mode; Tonight and Learn open sheets) and
+  zoom, details with rise/transit/set), selection reticle, the dock of three
+  places (Sky, which also brings you home from space or another world; Tonight
+  and Atlas open sheets; Space is reached by flying, see Viewpoint) and
   one sheet at a time: full screen above the dock on phones, a left column from
   900 px. On a phone the bottom holds one bar: the dock, or the object card in
   its place while something is selected, or the journey card during a journey
@@ -311,6 +312,19 @@ unresolved stars, not catalog stars, so they cannot be picked.
   it (`App.canStandOn`: the Earth for now; the Moon and Mars next). The
   verb that keeps you where you are leads; on narrow phones the others show
   only their icons.
+- Standing on the Moon and Mars (`sim/worlds.ts`, `makeWorldFrame` in
+  `astro/ephemeris.ts`, `Universe.away`): Stand on it puts the observer at
+  Tranquility Base or Jezero Crater. The horizon frame comes from the world's
+  IAU pole and rotation (`primeMeridian`); `observerGeo` becomes the observer
+  relative to the Earth's centre, so every body (the Earth included) is seen
+  from there, and the world underfoot is dropped from its own sky. The Moon
+  has no air (black sky, lit grey ground, no refraction); Mars has a
+  butterscotch day sky with blue around a low Sun and rust ground
+  (`uWorld`, `uLand`, `uSunLit`). Rise and set times and the Moon's light are
+  Earth-only and switch off away. The jump is a fade through black for now;
+  Sky, or Home to (the viewpoint chip), comes back. Tests in
+  `sim/worlds.test.ts` (the Earth fixed high over Tranquility Base, the
+  Earth's phase from the Moon, a Martian sol, the Sun's size from Mars).
   `ZoomPast` in `render/camera.ts` needs a deliberate push, so resting on a
   limit never switches views. Zoom input is ignored while lifting off.
 - Compressed scale in Space view: layer `compressed`, switched by the pill

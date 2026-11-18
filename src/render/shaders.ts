@@ -55,9 +55,10 @@ uniform float uMoonLight;      // 0..1 moonlight reaching the ground
 uniform float uLightPollution; // 0 (pristine) .. 1 (inner city)
 uniform float uAtmosphere;     // 0 turns the air off
 uniform float uAir;            // 1 on the ground, fading to 0 as the camera rises out of the air
+uniform int uWorld;            // 0 the Earth, 1 the Moon (no air), 2 Mars (thin, dusty air)
 
 vec3 skyColor(vec3 h) {
-  if (uAtmosphere < 0.5 || uAir <= 0.0) return vec3(0.0, 0.001, 0.004);
+  if (uAtmosphere < 0.5 || uAir <= 0.0 || uWorld == 1) return vec3(0.0, 0.001, 0.004);
   float mu = max(h.z, 0.0);
   float hz = pow(1.0 - mu, 3.0);
   float s = uSunAlt / DEG;
@@ -100,6 +101,13 @@ vec3 skyColor(vec3 h) {
   float cosMoon = max(dot(h, uMoonDir), 0.0);
   c += (vec3(0.010, 0.017, 0.036) * (0.7 + hz) + vec3(0.05, 0.055, 0.065) * pow(cosMoon, 60.0)) * uMoonLight * dark;
 
+  if (uWorld == 2) {
+    // Mars: fine dust turns the day sky butterscotch, browner overhead, while around a low Sun it scatters blue.
+    float l = dot(c, vec3(0.3, 0.5, 0.2));
+    vec3 dust = mix(vec3(0.80, 0.56, 0.38), vec3(0.58, 0.42, 0.31), mu);
+    c = dust * l * 1.15;
+    c += vec3(0.22, 0.40, 0.78) * pow(max(cosSun, 0.0), 24.0) * smoothstep(-8.0, 1.0, s) * (1.0 - smoothstep(6.0, 30.0, s)) * 0.55 * uSunVisible;
+  }
   // Below the horizon (only seen with the ground hidden) fade toward black.
   c *= mix(1.0, 0.45, smoothstep(0.0, -0.35, h.z));
   return mix(vec3(0.0, 0.001, 0.004), c, uAir);
@@ -243,6 +251,8 @@ uniform float uPixelAngle;
 uniform float uHeight;   // camera height above the ground, Earth radii (0 standing on it)
 uniform vec3 uPole;      // the Earth's north pole, horizon frame
 uniform vec3 uPrime;     // its prime meridian, horizon frame
+uniform vec3 uLand;      // the colour of the ground: green-grey on the Earth, grey on the Moon, rust on Mars
+uniform float uSunLit;   // direct sunlight on airless ground, 0..1
 in vec2 vNdc;
 out vec4 outColor;
 void main() {
@@ -252,7 +262,7 @@ void main() {
   // Lit by the whole sky overhead, not by the glow at the horizon.
   vec3 overhead = skyColor(vec3(0.0, 0.0, 1.0));
   float luma = dot(overhead, vec3(0.3, 0.5, 0.2));
-  vec3 land = vec3(0.008, 0.010, 0.014) + vec3(0.30, 0.36, 0.24) * luma * 0.6 + overhead * 0.04;
+  vec3 land = vec3(0.008, 0.010, 0.014) + uLand * (luma * 0.6 + uSunLit) + overhead * 0.04;
   land *= mix(1.0, 0.55, smoothstep(0.0, -0.6, h.z));
   float edge = groundProfile(h);
   float hills = 1.0 - smoothstep(edge - uPixelAngle, edge + uPixelAngle, alt);

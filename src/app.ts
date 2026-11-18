@@ -15,6 +15,7 @@ import { SpaceRenderer } from './render/space.ts';
 import { Clock } from './sim/clock.ts';
 import { EventService, workerCompute } from './sim/events.ts';
 import { PLACES } from './sim/places.ts';
+import { WORLD_NAMES, WORLD_SITES } from './sim/worlds.ts';
 import { type LayerFlags, type Scene, type SceneCamera, encodeScene, sceneJd } from './sim/scene.ts';
 import { type Store, browserStorage } from './sim/store.ts';
 import { type Site, type SkyObject, Universe } from './sim/universe.ts';
@@ -425,6 +426,16 @@ export class App {
     if (this.flying) return;
     if (mode === this.mode) return;
     if (mode === 'space') { void this.setPointing(false); this.stopMeasure(); }
+    const away = this.universe.away;
+    if (mode === 'space' && away) {
+      // Off from another world: straight into orbit around it, and home is the Earth again.
+      this.universe.setAway(null);
+      this.mode = 'space';
+      this.universe.update(this.clock.jdUT);
+      this.space.place(away.world, this.space.framingDistance(away.world) * 3);
+      this.emitPlace();
+      return;
+    }
     if (fly && !this.reducedMotion && !this.layers.compressed) {
       if (mode === 'space') this.climb(target ?? this.selected ?? 'sun');
       else this.descend();
@@ -450,11 +461,14 @@ export class App {
   private afterLanding: (() => void) | null = null;
 
   /** Where the camera is, in words: "Toronto, Earth", "Orbiting Mars", "Above the Solar System". */
-  viewpoint(): { label: string; place: 'ground' | 'orbit'; body: string } {
-    if (this.mode === 'sky') return { label: `${this.site.name}, Earth`, place: 'ground', body: 'earth' };
+  viewpoint(): { label: string; place: 'ground' | 'orbit'; body: string; away: boolean } {
+    const away = this.universe.away;
+    if (this.mode === 'sky' && away) return { label: `${away.name}, ${WORLD_NAMES[away.world]}`, place: 'ground', body: away.world, away: true };
+    if (this.mode === 'sky') return { label: `${this.site.name}, Earth`, place: 'ground', body: 'earth', away: false };
     const focus = this.space.camera.focus;
-    if (focus === 'sun') return { label: this.space.camera.dist > 0.6 ? 'Above the Solar System' : 'Near the Sun', place: 'orbit', body: 'sun' };
-    return { label: `Orbiting ${this.universe.resolve(focus)?.name ?? focus}`, place: 'orbit', body: focus };
+    if (focus === 'sun') return { label: this.space.camera.dist > 0.05 ? 'Above the Solar System' : 'Near the Sun', place: 'orbit', body: 'sun', away: false };
+    const name = focus === 'earth' ? 'Earth' : this.universe.resolve(focus)?.name ?? focus;
+    return { label: `Orbiting ${name}`, place: 'orbit', body: focus, away: false };
   }
 
   /** Can the camera fly out to circle this in Space view? */
@@ -464,16 +478,32 @@ export class App {
 
   /** Can the camera land on this world? */
   canStandOn(ref: string): boolean {
-    return ref === 'earth';
+    const here = this.mode === 'sky' ? this.universe.world : null;
+    return (ref === 'moon' || ref === 'mars' || ref === 'earth') && ref !== here;
+  }
+
+  /** A quick fade through black for jumps that cannot be flown yet (to and from other worlds). */
+  private cut(change: () => void): void {
+    const veil = document.querySelector<HTMLElement>('.cut-veil') ?? document.body.appendChild(Object.assign(document.createElement('div'), { className: 'cut-veil' }));
+    if (this.reducedMotion) { change(); return; }
+    veil.dataset.on = '';
+    window.setTimeout(() => {
+      change();
+      requestAnimationFrame(() => requestAnimationFrame(() => delete veil.dataset.on));
+    }, 260);
   }
 
   /** Come down to the ground at home (in one flight when allowed), then run `then`. */
   land(then?: () => void): void {
-    if (this.mode === 'sky' && !this.flying) { then?.(); return; }
     if (this.flying) return;
+    if (this.mode === 'sky' && this.universe.away) {
+      this.cut(() => { this.universe.setAway(null); this.settleOnGround(); this.emitPlace(); then?.(); });
+      return;
+    }
+    if (this.mode === 'sky') { then?.(); return; }
     this.afterLanding = then ?? null;
     this.setMode('sky', undefined, true);
-    if (this.mode === 'sky' && !this.flying) this.touchedDown();
+    if ((this.mode as ViewMode) === 'sky' && !this.flying) this.touchedDown();
   }
 
   private touchedDown(): void {
@@ -492,7 +522,6 @@ export class App {
   flyToObject(ref: string): void {
     if (!this.canFlyTo(ref) || this.flying) return;
     if (ref.startsWith('region:')) { this.centre(ref); this.select(ref); return; }
-    this.select(this.universe.resolve(ref) ? ref : null);
     if (this.mode === 'sky') { this.setMode('space', ref, true); return; }
     this.space.setFocus(ref);
     this.space.camera.flyTo(ref === 'sun' ? 4.2 : this.space.framingDistance(ref));
@@ -500,9 +529,39 @@ export class App {
     this.emit('mode');
   }
 
-  /** Stand on a world's surface. */
+  /** Stand on a world's surface: home on the Earth, or a landing site on the Moon or Mars. */
   standOn(ref: string): void {
-    if (ref === 'earth') this.land();
+    if (this.flying || !this.canStandOn(ref)) return;
+    if (ref === 'earth') { this.land(); return; }
+    const world = ref as 'moon' | 'mars';
+    this.cut(() => {
+      void this.setPointing(false);
+      this.stopMeasure();
+      this.universe.setAway({ world, ...WORLD_SITES[world] });
+      this.mode = 'sky';
+      this.renderer.height = 0;
+      this.select(null);
+      // From the Moon, turn to the Earth hanging in the sky; on Mars, look out over the plain.
+      const earth = this.aim('earth');
+      if (world === 'moon' && earth) this.camera.flyTo({ ...earth, fov: 80 * DEG }, 0);
+      else this.camera.flyTo({ az: 90 * DEG, alt: 22 * DEG, fov: 90 * DEG }, 0);
+      this.camera.track = null;
+      this.emitPlace();
+    });
+  }
+
+  private settleOnGround(): void {
+    this.renderer.height = 0;
+    this.renderer.projection.lens = 0.5;
+    if (this.renderer.projection.fov > 120 * DEG) this.camera.flyTo({ fov: 90 * DEG }, 0);
+  }
+
+  private emitPlace(): void {
+    this.invalidate();
+    this.emit('mode');
+    this.emit('site');
+    this.emit('select');
+    this.emit('time');
   }
 
   /** The top of the climb: as high as Space view's lift-off starts, looking down through its lens. */

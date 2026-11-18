@@ -59,6 +59,8 @@ export interface DrawnBody {
   alt: number;
 }
 
+const WORLD_INDEX = { earth: 0, moon: 1, mars: 2 } as const;
+const LAND: Record<string, Vec3> = { earth: [0.30, 0.36, 0.24], moon: [0.42, 0.42, 0.40], mars: [0.62, 0.36, 0.22] };
 const smoothstep01 = (x: number): number => { const t = clamp(x, 0, 1); return t * t * (3 - 2 * t); };
 
 export class SkyRenderer {
@@ -384,19 +386,20 @@ export class SkyRenderer {
       .v2('uScale', (pr.scale * 2) / pr.width, (pr.scale * 2) / pr.height).f('uLens', pr.lens)
       .v3('uSunDir', c.sunDir).f('uSunAlt', c.sunAltEffective).f('uSunVisible', c.sunVisible)
       .v3('uMoonDir', c.moonDir).f('uMoonLight', c.moonLight)
-      .f('uLightPollution', (clamp(opts.bortle, 1, 9) - 1) / 8)
-      .f('uAtmosphere', opts.layers.atmosphere ? 1 : 0).f('uAir', 1 - smoothstep01(this.height / 0.004));
+      .f('uLightPollution', this.universe.world === 'earth' ? (clamp(opts.bortle, 1, 9) - 1) / 8 : 0)
+      .f('uAtmosphere', opts.layers.atmosphere ? 1 : 0).f('uAir', 1 - smoothstep01(this.height / 0.004))
+      .i('uWorld', WORLD_INDEX[this.universe.world]);
   }
 
-  /** The air counts once the camera is down in it. */
+  /** The air counts once the camera is down in it, and the Moon has none. */
   private air(opts: SkyOptions): boolean {
-    return opts.layers.atmosphere && this.height < 0.004;
+    return opts.layers.atmosphere && this.height < 0.004 && this.universe.world !== 'moon';
   }
 
   render(opts: SkyOptions): void {
     const gl = this.gl, u = this.universe, pr = this.projection, f = u.frame;
     this.resize();
-    pr.refraction = this.air(opts) && this.height === 0;
+    pr.refraction = this.air(opts) && this.height === 0 && this.universe.world === 'earth';
     pr.update();
     const c = skyConditions(u, { bortle: opts.bortle, atmosphere: this.air(opts), fov: pr.fov });
     // Climbing toward orbit, the stars settle to the way Space view draws them.
@@ -520,7 +523,8 @@ export class SkyRenderer {
       const w = e.w0 + e.wRate * days;
       const prime = add(scale(node, Math.cos(w)), scale(cross(pole, node), Math.sin(w)));
       this.skyUniforms(this.groundProgram, c, opts).f('uPixelAngle', pr.pixelAngle / dpr)
-        .f('uHeight', this.height).v3('uPole', apply(f.j2000ToHorizon, pole)).v3('uPrime', apply(f.j2000ToHorizon, prime));
+        .f('uHeight', this.height).v3('uPole', apply(f.j2000ToHorizon, pole)).v3('uPrime', apply(f.j2000ToHorizon, prime))
+        .v3('uLand', LAND[u.world]).f('uSunLit', (u.world === 'moon' ? 0.45 : u.world === 'mars' ? 0.3 : 0) * smoothstep01((c.sunAlt / DEG + 1) / 12));
       this.quad.drawQuads(1);
     }
     this.dirty = false;

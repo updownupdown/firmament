@@ -145,7 +145,8 @@ export class Mesh {
   }
 }
 
-export function loadTexture(gl: WebGL2RenderingContext, url: string, onLoad?: (img: HTMLImageElement) => void): WebGLTexture {
+/** Load an image into a mipmapped texture: one channel by default, or colour (`rgb`, `rgba`). */
+export function loadTexture(gl: WebGL2RenderingContext, url: string, onLoad?: (img: HTMLImageElement) => void, channels: 'red' | 'rgb' | 'rgba' = 'red'): WebGLTexture {
   const tex = gl.createTexture()!;
   gl.bindTexture(gl.TEXTURE_2D, tex);
   // One dark pixel until the image arrives.
@@ -154,7 +155,9 @@ export function loadTexture(gl: WebGL2RenderingContext, url: string, onLoad?: (i
   img.onload = () => {
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, gl.RED, gl.UNSIGNED_BYTE, img);
+    if (channels === 'rgb') gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB8, gl.RGB, gl.UNSIGNED_BYTE, img);
+    else if (channels === 'rgba') gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    else gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, gl.RED, gl.UNSIGNED_BYTE, img);
     gl.generateMipmap(gl.TEXTURE_2D);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);

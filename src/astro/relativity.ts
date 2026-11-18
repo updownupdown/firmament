@@ -36,8 +36,10 @@ export function relativisticView(n: Vec3, beta: Vec3): RelativisticView {
 /**
  * The change in magnitude of a Doppler-shifted star, roughly: photon arrival
  * rate goes as D squared (aberration concentrating the light) times D (time
- * dilation), so the star brightens by 2.5 log10 D^3.
+ * dilation), so the star brightens by 2.5 log10 D^3, held to between 2.5
+ * magnitudes brighter and 6 fainter.
  */
 export function dopplerMagnitude(doppler: number): number {
-  return -7.5 * Math.log10(doppler);
+  // Capped as the renderer caps it, so the crowded stars ahead do not wash out into one disc.
+  return Math.min(6, Math.max(-2.5, -7.5 * Math.log10(doppler)));
 }

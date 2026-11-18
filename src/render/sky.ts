@@ -17,6 +17,7 @@ import type { Boundaries, Constellation, Dso } from '../data/types.ts';
 import type { LayerFlags } from '../sim/scene.ts';
 import type { Universe } from '../sim/universe.ts';
 import { Mesh, Program, loadTexture } from './gl.ts';
+import { SurfaceMaps, bindSurfaceMaps } from './maps.ts';
 import { TYCHO_KEEP, type TychoBand, type TychoIndex, bandsNear, countBrighter as countTycho } from '../astro/tycho.ts';
 import { type SkyConditions, airDimming, dsoLimit, skyConditions } from './conditions.ts';
 import { type Projected, SkyProjection, refractVector } from './projection.ts';
@@ -108,6 +109,8 @@ export class SkyRenderer {
   private figureStars = 0;
   /** Set when something changed outside the clock, so the loop redraws. */
   dirty = true;
+  /** Surface maps of the Sun, planets and Moon, shared with Space view. */
+  readonly maps: SurfaceMaps;
 
   constructor(canvas: HTMLCanvasElement, universe: Universe, milkyWayUrl: string) {
     this.canvas = canvas;
@@ -121,6 +124,8 @@ export class SkyRenderer {
     this.lineProgram = new Program(gl, LINE_VERT, LINE_FRAG, LINE_ATTRIBUTES);
     this.markerProgram = new Program(gl, MARKER_VERT, MARKER_FRAG, MARKER_ATTRIBUTES);
     this.bodyProgram = new Program(gl, BODY_VERT, BODY_FRAG, ['aCorner']);
+    this.maps = new SurfaceMaps(gl);
+    this.maps.onLoad = () => { this.dirty = true; };
 
     this.quad = new Mesh(gl, 1, [], { quadSlot: 0 });
     this.quad.set(new Float32Array([0]));
@@ -600,6 +605,10 @@ export class SkyRenderer {
     return out.sort((a, b) => b.body.dist - a.body.dist);
   }
 
+  private bindMaps(p: Program, id: string, radiusDevPx: number): void {
+    bindSurfaceMaps(this.gl, this.maps, p, id, radiusDevPx);
+  }
+
   private drawBodies(c: SkyConditions, opts: SkyOptions): void {
     const u = this.universe, pr = this.projection, dpr = this.pixelRatio;
     const p = this.skyUniforms(this.bodyProgram, c, opts);
@@ -676,6 +685,7 @@ export class SkyRenderer {
         adapted = 1 - clamp(s.uncovered / 0.12, 0, 1);
       }
       const half = radius * extent;
+      this.bindMaps(p, id, radius * dpr);
       p.v3('uShadow', shadow).v2('uShadowEdge', penumbra, adapted);
       p.i('uKind', kind).f('uExtent', extent).f('uRadiusPx', radius * dpr)
         .v2('uCentre', (d.screen.x / pr.width) * 2 - 1, 1 - (d.screen.y / pr.height) * 2)

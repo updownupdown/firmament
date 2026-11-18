@@ -19,9 +19,8 @@ import { DEG } from '../astro/math.ts';
 import { Pointing } from '../render/pointing.ts';
 import { BackStack } from './back.ts';
 import { type SearchOverlay, searchOverlay } from './search.ts';
-import { formatDistanceAU } from '../sim/format.ts';
 import { h, fill, icon, iconButton, swipeToDismiss } from './dom.ts';
-import { quickFacts, riseSetFacts, whereNow } from './facts.ts';
+import { whereNow } from './facts.ts';
 import { type AtlasPanel, atlasPanel } from './atlas.ts';
 import { measureTool } from './measure.ts';
 import { settingsPanel, share } from './panels.ts';
@@ -346,7 +345,7 @@ export class Shell {
       make('search', 'Search', 'search', () => this.openSearch()),
       make('tonight', 'Tonight', 'moon', sheet('tonight')),
       make('atlas', 'Atlas', 'book', sheet('atlas')),
-      make('view', 'View', 'sliders', () => (this.viewBar.open ? this.viewBar.close() : this.viewBar.show())),
+      make('view', 'View', 'eye', () => (this.viewBar.open ? this.viewBar.close() : this.viewBar.show())),
       Pointing.supported ? make('point', 'Point', 'pointing', () => this.togglePointing()) : null,
       make('settings', 'Settings', 'gear', sheet('settings')));
     app.on('mode', () => {
@@ -448,7 +447,6 @@ export class Shell {
     // An object.
     const title = h('h2', { class: 'card-title' });
     const subtitle = h('p', { class: 'card-subtitle' });
-    const quick = h('dl', { class: 'facts quick' });
     const atlasButton = h('button', { class: 'pill-button primary focus-atlas', type: 'button', onclick: () => {
       if (app.selected) this.openAtlas({ ref: app.selected });
     } }, icon('book', 16), 'Atlas');
@@ -460,8 +458,7 @@ export class Shell {
       h('header', { class: 'card-header' },
         h('div', { class: 'card-heading' }, title, subtitle),
         atlasButton, moreButton,
-        iconButton('close', 'Stop looking at it', () => app.select(null), 'outlined focus-close')),
-      quick);
+        iconButton('close', 'Stop looking at it', () => app.select(null), 'outlined focus-close')));
     const el = h('section', { class: 'focus-card glass chrome', hidden: true, 'aria-label': 'What you are looking at' }, trySection, objSection, menu);
 
     // ---- the ⋯ menu: every action, by name, with a line on what it does
@@ -498,12 +495,6 @@ export class Shell {
     document.addEventListener('pointerdown', (e) => { if (!menu.hidden && !menu.contains(e.target as Node) && e.target !== moreButton && !moreButton.contains(e.target as Node)) closeMenu(); });
     menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeMenu(); moreButton.focus(); } });
 
-    let riseSetFor = '';
-    let riseSet: ReturnType<typeof riseSetFacts> = [];
-    const style = () => ({ hour12: app.store.data.settings.hour12 });
-    const factList = (facts: { label: string; value: string }[]) =>
-      facts.map((f) => h('div', { class: 'fact' }, h('dt', null, f.label), h('dd', null, f.value)));
-
     const update = () => {
       const obj = app.selectedObject;
       const t = this.trying;
@@ -518,27 +509,14 @@ export class Shell {
         tryNote.textContent = t.note;
       }
       if (!obj) { closeMenu(); return; }
+      // Just what it is and where to look; the numbers (brightness, distances, rise and set) live in the Atlas.
       title.textContent = obj.name;
-      subtitle.textContent = obj.region ? obj.subtitle
-        : app.mode === 'space' && obj.body
-        ? (obj.kind === 'sun' ? obj.subtitle : `${obj.subtitle} · ${formatDistanceAU(obj.body.r)} from the Sun`)
-        : app.universe.voyage ? obj.subtitle
+      subtitle.textContent = obj.region || app.mode === 'space' || app.universe.voyage ? obj.subtitle
         : `${obj.subtitle} · ${whereNow(app.universe, obj, app.layers.atmosphere)}`;
-      // Out in space or among the stars there is no horizon to measure from.
-      const space = app.mode === 'space' || !!app.universe.voyage;
-      const key = `${obj.ref}|${Math.floor(app.clock.jdUT * 4)}|${app.site.lat}|${app.site.lon}`;
-      if (key !== riseSetFor) {
-        riseSetFor = key;
-        riseSet = space || obj.region ? [] : riseSetFacts(app.universe, obj, app.clock.jdUT, style());
-      }
-      // Three numbers at most: how bright, how far, and the next rise or set.
-      const facts = quickFacts(app.universe, obj).filter((f) => f.label !== 'Altitude');
-      const next = riseSet.find((f) => /^(Rises|Sets)/.test(f.label));
-      fill(quick, factList([...facts.slice(0, next ? 2 : 3), ...(next ? [next] : [])]));
       atlasButton.hidden = obj.ref.startsWith('tyc:');
     };
     this.renderFocus = update;
-    app.on('select', () => { riseSetFor = ''; closeMenu(); update(); });
+    app.on('select', () => { closeMenu(); update(); });
     app.on('second', update);
     app.on('time', update);
     app.on('site', update);

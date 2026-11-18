@@ -9,6 +9,10 @@ Sources are expected as shallow git clones in ../vendor (next to the repo):
   git clone --depth 1 https://github.com/commenthol/astronomia           ../vendor/astronomia
   git clone --depth 1 https://github.com/lkangas/python-tycho2           ../vendor/python-tycho2
 
+Planet surface maps are Solar System Scope's 2k textures
+(https://www.solarsystemscope.com/textures/, CC BY 4.0), downloaded into
+../vendor/planet-textures under their original names (2k_mars.jpg, ...).
+
 The last is the Tycho-2 catalogue (Høg et al. 2000) as NumPy arrays of
 right ascension, declination (radians, J2000) and VT magnitude.
 
@@ -531,6 +535,31 @@ def build_deltat():
     write_json('deltat.json', {'years': [round(y, 3) for y, _ in samples], 'seconds': [round(v, 3) for _, v in samples]})
 
 
+# Surface maps: [output name, source file, width]. Equirectangular, longitude 0 in the middle, north up.
+TEXTURES = [
+    ('sun', '2k_sun.jpg', 1024), ('mercury', '2k_mercury.jpg', 1024), ('venus', '2k_venus_atmosphere.jpg', 1024),
+    ('earth', '2k_earth_daymap.jpg', 2048), ('moon', '2k_moon.jpg', 2048), ('mars', '2k_mars.jpg', 2048),
+    ('jupiter', '2k_jupiter.jpg', 2048), ('saturn', '2k_saturn.jpg', 1024), ('uranus', '2k_uranus.jpg', 512),
+    ('neptune', '2k_neptune.jpg', 1024),
+]
+
+
+def build_textures():
+    """Planet and Moon maps, resized and re-encoded; Saturn's rings as a radial strip (RGBA)."""
+    from PIL import Image
+    out = os.path.join(OUT, 'textures')
+    os.makedirs(out, exist_ok=True)
+    for name, source, width in TEXTURES:
+        im = Image.open(src('planet-textures', source)).convert('RGB')
+        im = im.resize((width, width // 2), Image.LANCZOS)
+        im.save(os.path.join(out, f'{name}.jpg'), quality=84, optimize=True, progressive=True)
+    # The ring strip runs from 1.166 to 2.330 Saturn radii (the C ring's inner edge at 1.239 and the
+    # A ring's outer edge at 2.269 fall at columns 128 and 1940 of the 2048 source). Keep one row.
+    ring = Image.open(src('planet-textures', '2k_saturn_ring_alpha.png')).convert('RGBA')
+    ring = ring.crop((0, ring.height // 2, ring.width, ring.height // 2 + 1)).resize((1024, 1), Image.LANCZOS)
+    ring.save(os.path.join(out, 'saturn-rings.png'), optimize=True)
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     only = sys.argv[1:]
@@ -546,6 +575,7 @@ def main():
     print('vsop87'); build_vsop()
     print('elp'); build_elp()
     print('delta t'); build_deltat()
+    print('textures'); build_textures()
 
 
 if __name__ == '__main__':

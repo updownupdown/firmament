@@ -118,6 +118,24 @@ the build stands against that plan and what to do next, in order.
   (with the Great Red Spot) and Saturn once a disc is over about 6 px (the
   noise and Moon chunks are shared with the sky shader as `SURFACE`), the
   globe's shadow on Saturn's rings, and the Milky Way behind everything.
+- **Surface maps** (2026-11-18, `render/maps.ts`): Solar System Scope's 2k maps
+  (CC BY 4.0) of the Sun, Mercury, Venus' clouds, Earth, Moon, Mars, Jupiter,
+  Saturn, Uranus and Neptune, plus Saturn's ring strip (1.166–2.330 Saturn
+  radii), in `public/data/textures` (`build_data.py textures`). `SurfaceMaps`
+  fetches each the first time its disc is over a few pixels; both body
+  shaders sample them with `mapAt` (seamless at the antimeridian) and keep the
+  painted look until they arrive. The Sun only takes faint mottling from its map.
+- **Orbiting moves** (2026-11-18): `orbitRate` makes the camera circle a
+  focused body (not the Sun, and only within 0.05 AU) at the true circular-orbit
+  rate for the clock's speed, never slower than a lap in 3 minutes and never
+  faster than one in 40 s; stopped time holds still. `SpaceCamera.cruise`.
+- Labels: a body whose centre is behind a nearer body's true disc has no name
+  (`behindDisc`; the sky view does the same for the Moon and the Sun), and the
+  Planet names switch now works in Space view too.
+- Small-body populations take two surface colours each (C/S types in the main
+  belt, red D types among the Trojans, grey to ultra-red in the Kuiper belt,
+  icy grey in the Oort cloud). Stars: B−V colour saturation lifted ×1.4 and a
+  faint bloom on the brightest (`STAR_LOOK`).
 - Shared links keep the Space camera: `c=jupiter,,space,0.0125au,-60;12deg`
   (distance, then yaw and pitch). `SpaceRenderer.place` opens there with no
   flight. Lifting off toward a far body first pulls back until the Earth and
@@ -141,7 +159,7 @@ chosen by the owner on 2026-11-16)
   running or stopped; not a button). **Bottom:** one toolbar (Search, Tonight,
   Atlas, View, Point on phones that can, Settings), always visible; Sky is gone
   because going home lives in Where. **Just above the toolbar:** the focus card,
-  "what you are looking at": an object (name, where it is, three numbers, Atlas
+  "what you are looking at": an object (name, what and where it is; the numbers live in the Atlas since 2026-11-18; Atlas
   as the one labelled button, a ⋯ menu that names every other action with a line
   on what it does, and × to let go) and/or the concept being tried (`Shell.setTrying`:
   Back to the article, Back to my sky). Flying to an object keeps it selected.
@@ -384,7 +402,7 @@ unresolved stars, not catalog stars, so they cannot be picked.
   `flightPcPerSecond`). Below light speed `Universe.beta` turns on special
   relativity (`astro/relativity.ts`, tested against the textbook values):
   aberration crowds stars ahead, the Doppler factor brightens them by
-  7.5 log10 D and tints them (rough colour shift), in the star shader
+  7.5 log10 D (held to 2.5 mag brighter, 6 fainter) and tints them (rough colour shift), in the star shader
   (`uBeta`) and in `starDirection`/`starMag`. Faster than light is labelled
   make-believe: plain motion, no relativity. The flight stops on arrival a few
   hundred AU short, and at the 30.7 pc edge of the reliable map.

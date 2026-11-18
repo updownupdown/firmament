@@ -13,6 +13,7 @@ import type { LayerFlags } from '../sim/scene.ts';
 import type { Universe } from '../sim/universe.ts';
 import { type Controllable, ZoomPast } from './camera.ts';
 import { Mesh, Program } from './gl.ts';
+import { type SurfaceMaps, bindSurfaceMaps } from './maps.ts';
 import type { LabelItem } from './labels.ts';
 import {
   ORBIT_FRAG, ORBIT_VERT, POP_FRAG, POP_VERT, SPACE_BODY_FRAG, SPACE_BODY_VERT, SPACE_MILKY_FRAG, SPACE_MILKY_VERT, SPACE_STAR_VERT,
@@ -55,6 +56,8 @@ export class SpaceCamera implements Controllable {
   floor = 0;
   /** Zooming in past the floor. */
   readonly zoomPast = new ZoomPast();
+  /** Orbiting: how fast the camera drifts round the focus on its own, radians per real second (0 holds still). */
+  cruise = 0;
   /** What is left of the glide from the previous focus (AU, J2000). */
   offset: Vec3 = [0, 0, 0];
   /** J2000 → camera rotation (camera looks along −z). */
@@ -230,9 +233,42 @@ export class SpaceCamera implements Controllable {
       if (Math.abs(this.velYaw) + Math.abs(this.velPitch) < 2e-3) this.velYaw = this.velPitch = 0;
       changed = true;
     }
+    // In orbit the camera keeps going round, eastward like the planets, unless a hand or a flight has it.
+    if (this.cruise !== 0 && !this.held && !this.flight && this.velYaw === 0 && this.velPitch === 0) {
+      this.yaw += this.cruise * dt;
+      changed = true;
+    }
     if (changed) this.update();
     return changed;
   }
+}
+
+/** Mass of a body that can be orbited, solar masses (IAU nominal; the Earth without the Moon). */
+const ORBIT_MASS: Record<string, number> = {
+  sun: 1, mercury: 1.6601e-7, venus: 2.4478e-6, earth: 3.0035e-6, moon: 3.6943e-8, mars: 3.2272e-7,
+  jupiter: 9.5479e-4, saturn: 2.8589e-4, uranus: 4.3662e-5, neptune: 5.1514e-5, pluto: 6.58e-9,
+  io: 4.49e-8, europa: 2.41e-8, ganymede: 7.45e-8, callisto: 5.42e-8,
+};
+/** The slowest an orbit is shown going round: one lap in three minutes, so it reads as motion. */
+const ORBIT_MIN_RATE = (2 * Math.PI) / 180;
+const ORBIT_MAX_RATE = (2 * Math.PI) / 40;
+
+/**
+ * How fast the camera circles a body, radians per real second: the true
+ * angular speed of a circular orbit at that distance (GM = k² M in AU³/day²)
+ * at the clock's rate, but never slower than a lap in three minutes while
+ * time runs, so being in orbit always looks like it. Stopped time holds the
+ * camera still; so does a view wide enough to be "above" a system rather than
+ * in orbit round one body.
+ */
+export function orbitRate(focus: string, distAu: number, clockRate: number, reducedMotion = false): number {
+  const mass = ORBIT_MASS[focus];
+  if (!mass || clockRate === 0 || focus === 'sun' || distAu > 0.05) return 0;
+  const k = 0.01720209895;
+  const perDay = Math.sqrt((k * k * mass) / distAu ** 3);
+  const real = (perDay / 86400) * Math.abs(clockRate);
+  if (reducedMotion) return Math.sign(clockRate) * Math.min(real, ORBIT_MAX_RATE);
+  return Math.sign(clockRate) * clamp(real, ORBIT_MIN_RATE, ORBIT_MAX_RATE);
 }
 
 // ------------------------------------------------------------------ compressed scale
@@ -308,6 +344,8 @@ export interface DrawnSpaceBody {
   x: number;
   y: number;
   radiusPx: number;
+  /** The disc's true radius, before any minimum size (CSS pixels). */
+  trueRadiusPx: number;
   depth: number;
   onScreen: boolean;
 }
@@ -406,8 +444,11 @@ export class SpaceRenderer {
   /** Belts and clouds of small bodies, built on first use. */
   private populations: { pop: Population; mesh: Mesh }[] | null = null;
 
-  constructor(gl: WebGL2RenderingContext, universe: Universe, starMesh: Mesh, milkyWay: WebGLTexture) {
+  private readonly maps: SurfaceMaps;
+
+  constructor(gl: WebGL2RenderingContext, universe: Universe, starMesh: Mesh, milkyWay: WebGLTexture, maps: SurfaceMaps) {
     this.gl = gl;
+    this.maps = maps;
     this.universe = universe;
     this.starMesh = starMesh;
     this.milkyWay = milkyWay;
@@ -641,8 +682,9 @@ export class SpaceRenderer {
       const c = cam.toCamera(sub(this.positions.get(b.id)!, focusPos));
       const s = cam.projectCamera(c);
       if (!s) continue;
-      const radiusPx = Math.max(b.minPx, (cam.focal * this.radiusOf(b)) / s.depth);
-      drawn.push({ id: b.id, name: b.name, x: s.x, y: s.y, radiusPx, depth: s.depth, onScreen: s.onScreen, body: b, cam: c });
+      const trueRadiusPx = (cam.focal * this.radiusOf(b)) / s.depth;
+      const radiusPx = Math.max(b.minPx, trueRadiusPx);
+      drawn.push({ id: b.id, name: b.name, x: s.x, y: s.y, radiusPx, trueRadiusPx, depth: s.depth, onScreen: s.onScreen, body: b, cam: c });
     }
     drawn.sort((a, b) => b.depth - a.depth);
     const p = this.bodyProgram.use();
@@ -658,6 +700,7 @@ export class SpaceRenderer {
         .v3('uPole', d.body.pole ? apply(cam.view, d.body.pole) : [0, 1, 0])
         .v3('uPrime', apply(cam.view, this.primeMeridian(d.body, days)))
         .i('uKind', d.body.kind).f('uExtent', extent).f('uPixels', d.radiusPx * pixelRatio);
+      bindSurfaceMaps(gl, this.maps, p, d.id, d.radiusPx * pixelRatio > 6 ? d.radiusPx * pixelRatio : 0);
       this.quad.drawQuads();
     }
     this.drawn = drawn;
@@ -674,7 +717,7 @@ export class SpaceRenderer {
         p.v2('uCentre', (s.x / cam.width) * 2 - 1, 1 - (s.y / cam.height) * 2)
           .v2('uHalf', (r * 1.4 / cam.width) * 2, (r * 1.4 / cam.height) * 2)
           .v3('uColor', m.color).v3('uLight', [0, 0, 1]).v3('uPole', [0, 1, 0]).v3('uPrime', [1, 0, 0])
-          .i('uKind', 0).f('uExtent', 1.4).f('uPixels', r * pixelRatio);
+          .i('uKind', 0).f('uExtent', 1.4).f('uPixels', r * pixelRatio).f('uMapped', 0).f('uRingMapped', 0);
         this.quad.drawQuads();
       }
     }
@@ -725,9 +768,9 @@ export class SpaceRenderer {
       .f('uPointSize', Math.max(1, 1.6 * pixelRatio));
     for (const { pop, mesh } of this.populations) {
       const region = REGIONS.find((r) => r.populations.includes(pop.id))!;
-      const alpha = this.ringAlpha((region.inner + region.outer) / 2) * (region.id === 'oort' ? 0.5 : 0.6);
+      const alpha = this.ringAlpha((region.inner + region.outer) / 2) * (region.id === 'oort' ? 0.55 : 0.75);
       if (alpha <= 0.01) continue;
-      p.v4('uColor', pop.color[0], pop.color[1], pop.color[2], alpha);
+      p.v3('uColorA', pop.color.a).v3('uColorB', pop.color.b).f('uShareB', pop.color.shareB).f('uAlpha', alpha);
       mesh.drawPoints();
     }
   }
@@ -774,8 +817,11 @@ export class SpaceRenderer {
     return normalize(sub(toParent, scale(pole, toParent[0] * pole[0] + toParent[1] * pole[1] + toParent[2] * pole[2])));
   }
 
-  /** Names for what was drawn. */
-  labels(selected: string | null, smallBodies = true): LabelItem[] {
+  /**
+   * Names for what was drawn. With `bodyNames` off only the selected body keeps
+   * its name. A body hidden behind a nearer disc gets no name either.
+   */
+  labels(selected: string | null, smallBodies = true, bodyNames = true): LabelItem[] {
     const items: LabelItem[] = [];
     const cam = this.camera, focusPos = this.positions.get(cam.focus) ?? [0, 0, 0];
     for (const region of smallBodies ? REGIONS : []) {
@@ -794,6 +840,8 @@ export class SpaceRenderer {
       // A body that fills the view needs no name tag.
       if (!d.onScreen || d.radiusPx > 110) continue;
       const sel = d.id === selected;
+      if (!bodyNames && !sel) continue;
+      if (behindDisc(d, this.drawn)) continue;
       // A moon gets its name once it has pulled clear of its planet.
       const parent = parentOf.get(d.id);
       const host = parent ? this.drawn.find((x) => x.id === parent) : undefined;
@@ -815,6 +863,11 @@ export class SpaceRenderer {
     }
     return best;
   }
+}
+
+/** Is this body's centre covered by the true disc of a nearer one (not its minimum-size dot)? */
+export function behindDisc(d: { x: number; y: number; depth: number; id: string }, all: readonly { x: number; y: number; depth: number; trueRadiusPx: number; id: string }[]): boolean {
+  return all.some((o) => o.id !== d.id && o.depth < d.depth && o.trueRadiusPx > 2 && Math.hypot(d.x - o.x, d.y - o.y) < o.trueRadiusPx * 0.98);
 }
 
 /** Heliocentric positions (AU, J2000) of Io, Europa, Ganymede and Callisto. */

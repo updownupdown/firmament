@@ -13,7 +13,7 @@ import { LabelLayer, collectLabels, layoutLabels } from './render/labels.ts';
 import { pick } from './render/pick.ts';
 import { Pointing, type PointingResult } from './render/pointing.ts';
 import { SkyRenderer } from './render/sky.ts';
-import { SpaceRenderer } from './render/space.ts';
+import { SpaceRenderer, orbitRate } from './render/space.ts';
 import { Clock } from './sim/clock.ts';
 import { EventService, workerCompute } from './sim/events.ts';
 import { PLACES } from './sim/places.ts';
@@ -124,7 +124,7 @@ export class App {
     });
     this.renderer = new SkyRenderer(canvas, this.universe, 'data/milkyway.png');
     this.camera = new SkyCamera(this.renderer.projection);
-    this.space = new SpaceRenderer(this.renderer.gl, this.universe, this.renderer.stars, this.renderer.milkyWay);
+    this.space = new SpaceRenderer(this.renderer.gl, this.universe, this.renderer.stars, this.renderer.milkyWay, this.renderer.maps);
     this.labels = new LabelLayer(labelRoot);
     this.events = new EventService(
       workerCompute(() => new Worker('events-worker.js', { type: 'module' })), browserStorage(),
@@ -963,6 +963,7 @@ export class App {
         this.pointingFollowing = false;
         void this.setPointing(false);
       }
+      if (space) this.space.camera.cruise = this.transit || this.travel || this.descending ? 0 : orbitRate(this.space.camera.focus, this.space.camera.dist, this.clock.paused ? 0 : this.clock.rate, this.reducedMotion);
       let moved = space ? this.space.camera.tick(dt) : this.camera.tick(dt);
       if (this.transit) { this.stepTransit(dt); moved = true; }
       if (this.travel) { this.stepTravel(dt); moved = true; }
@@ -992,7 +993,7 @@ export class App {
       cam.width = p.width; cam.height = p.height;
       cam.update();
       this.space.render({ layers: this.layers, lineColor: this.lineColor, accentColor: this.accentColor, selected: this.selected }, this.renderer.pixelRatio);
-      this.labels.update(layoutLabels(this.still ? [] : this.space.labels(this.selected, this.layers.smallBodies), p.width, p.height));
+      this.labels.update(layoutLabels(this.still ? [] : this.space.labels(this.selected, this.layers.smallBodies, this.layers.planetLabels), p.width, p.height));
       this.renderer.dirty = false;
       this.emit('frame');
       return;

@@ -112,7 +112,9 @@ export function collectLabels(r: SkyRenderer, layers: LayerFlags, selectedRef: s
       if (!meta.n || i >= u.stars.count) continue;
       const ref = starRef(u.stars, i);
       const sel = marked.has(ref);
-      if ((u.voyage ? u.starMag(i) : u.stars.mag[i]) > limit && !sel) continue;
+      // Near light speed the stars ahead crowd together and brighten: name only the ones bright at rest.
+      const mag = !u.voyage ? u.stars.mag[i] : u.beta ? u.stars.at(i, u.years, u.voyage).mag + 1.5 : u.starMag(i);
+      if (mag > limit && !sel) continue;
       const s = place(u.starDirection(i));
       if (!s) continue;
       items.push({ key: ref, text: meta.n, x: s.x, y: s.y, kind: 'star', priority: 500 - u.stars.mag[i] * 10, offset: 7, selected: sel });

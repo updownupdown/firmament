@@ -2,6 +2,7 @@
 // current instant and observer. Every feature asks it; nothing else computes
 // positions on its own.
 
+import { dopplerMagnitude, relativisticView } from '../astro/relativity.ts';
 import { BODIES, type SolarBodyId } from '../astro/bodies.ts';
 import {
   type ApparentBody, type EarthSite, type Ephemeris, type Frame, type World,
@@ -121,6 +122,9 @@ export class Universe {
   /** Standing somewhere other than home, on the Moon or Mars, or out among the stars; null at home on the Earth. */
   away: Away | null = null;
 
+  /** Velocity over light speed (J2000) while flying between the stars below light speed; null otherwise. */
+  beta: Vec3 | null = null;
+
   /** Where the observer is among the stars, parsecs from the Sun (J2000); null within the Solar System. */
   get voyage(): Vec3 | null {
     return this.away?.world === 'star' ? this.away.at : null;
@@ -235,12 +239,14 @@ export class Universe {
 
   /** Apparent direction of a catalog star now (space motion and aberration applied). */
   starDirection(i: number): Vec3 {
-    return aberrate(this.stars.at(i, this.years, this.voyage ?? undefined).dir, this.frame.earthVel);
+    const dir = this.stars.at(i, this.years, this.voyage ?? undefined).dir;
+    return this.beta ? relativisticView(dir, this.beta).dir : aberrate(dir, this.frame.earthVel);
   }
 
   /** A catalog star's magnitude from where the observer is. */
   starMag(i: number): number {
-    return this.stars.at(i, this.years, this.voyage ?? undefined).mag;
+    const s = this.stars.at(i, this.years, this.voyage ?? undefined);
+    return this.beta ? s.mag + dopplerMagnitude(relativisticView(s.dir, this.beta).doppler) : s.mag;
   }
 
   /** Keep a Tycho-2 band so its stars can be picked and named. */

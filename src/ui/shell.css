@@ -553,7 +553,9 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
 @media (min-width: 900px) {
   .top-bar { right: auto; width: 440px; }
   .sheet { right: auto; width: 440px; top: calc(var(--safe-top) + var(--space-3) + 54px + var(--space-2)); bottom: calc(var(--safe-bottom) + var(--space-3)); }
-  .time-bar { right: auto; width: 440px; max-height: calc(100vh - 54px - var(--space-8)); }
+  .time-bar, .where-bar { right: auto; width: 440px; max-height: calc(100vh - 54px - var(--space-8)); }
+  .flight-top { right: auto; width: 440px; }
+  .flight-bottom { left: 50%; right: auto; width: 480px; transform: translateX(-50%); }
   .toolbar { left: 50%; right: auto; width: 480px; transform: translateX(-50%); }
   .view-bar { left: 50%; right: auto; width: 520px; transform: translateX(-50%); }
   :root[data-sheet] .toolbar, :root[data-sheet] .view-bar { left: calc(50% + 240px); }
@@ -746,44 +748,87 @@ button.sys-item:hover { background: var(--color-surface-raised); }
 
 /* ---------------------------------------------------------------- Where */
 
-.where-panel { gap: var(--space-5); }
-.where-current {
-  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-lg); background: var(--color-accent-wash); border: 1px solid var(--color-accent-edge);
+.where-bar {
+  position: fixed; z-index: 4;
+  top: calc(var(--safe-top) + var(--space-3));
+  left: calc(var(--safe-left) + var(--space-3)); right: calc(var(--safe-right) + var(--space-3));
+  max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - var(--dock-height) - var(--space-8));
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--space-3); border-radius: var(--radius-lg);
+  display: flex; flex-direction: column; gap: var(--space-1);
+  animation: drop-in var(--duration) var(--ease);
 }
-.where-current-glyph { flex: none; width: 40px; height: 40px; border-radius: var(--radius-md); display: inline-flex; align-items: center; justify-content: center; background: var(--color-accent-wash); color: var(--color-accent-strong); }
-.where-current-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.where-current-text .card-label { color: var(--color-accent-strong); }
-.where-current-name { font-size: var(--text-lg); font-weight: var(--weight-medium); }
-.where-current .pill-button { flex: 1 0 100%; justify-content: center; }
-.where-section { display: flex; flex-direction: column; gap: var(--space-2); }
-.where-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0 var(--space-1); }
-.where-badge {
-  padding: 2px var(--space-2); border-radius: var(--radius-pill); border: 1px solid var(--color-accent-edge);
-  color: var(--color-accent-strong); font-size: var(--text-xs); white-space: nowrap;
-}
+.where-bar[hidden] { display: none; }
+:root[data-bar='where'] .top-bar { visibility: hidden; }
+.where-top { display: flex; gap: var(--space-2); margin-bottom: var(--space-1); }
+.where-search { flex: 1; min-width: 0; }
+.where-locate, .where-close { flex: none; }
+.where-status { padding: 0 var(--space-2); }
+.where-status[hidden] { display: none; }
+.where-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.where-places { display: flex; flex-direction: column; gap: 2px; }
+.where-places[hidden] { display: none; }
 .where-row {
-  display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 56px; padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-raised);
+  display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 52px; padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
+  border: none; border-radius: var(--radius-md); background: none;
   color: var(--color-text); font: inherit; text-align: left;
 }
-.where-row:hover { background: var(--color-surface-hover); }
-.where-row.current { border-color: var(--color-accent-edge); }
+.where-row:hover { background: var(--color-surface-raised); }
+.where-row.current { background: var(--color-accent-wash); }
 .where-row > svg { flex: none; color: var(--color-text-faint); }
+.where-row.current > svg { color: var(--color-accent); }
+.where-glyph { flex: none; width: 34px; height: 34px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--color-surface-raised); color: var(--color-text); }
+.where-row.current .where-glyph { background: var(--color-accent); color: var(--color-on-accent); }
 .where-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.where-row-name { font-size: var(--text-md); font-weight: var(--weight-medium); }
-.where-row-sub { color: var(--color-text-muted); font-size: var(--text-xs); }
-.where-here { flex: none; color: var(--color-accent-strong); font-size: var(--text-xs); }
-.where-dot { flex: none; width: 14px; height: 14px; border-radius: 50%; background: var(--dot, var(--sys-small)); }
-.where-bodies { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); }
-.where-body {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 64px; padding: var(--space-2) 2px;
-  border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-raised);
-  color: var(--color-text); font-size: var(--text-xs); font-weight: var(--weight-medium);
+.where-row-name { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-md); font-weight: var(--weight-medium); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.where-row-sub { color: var(--color-text-muted); font-size: var(--text-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.where-new {
+  flex: none; padding: 1px 7px; border-radius: var(--radius-pill); background: var(--color-accent); color: var(--color-on-accent);
+  font-size: 0.62rem; font-weight: var(--weight-bold); letter-spacing: var(--tracking-wide); text-transform: uppercase;
 }
-.where-body:hover { background: var(--color-surface-hover); }
-.where-body[aria-current='location'] { border-color: var(--color-accent-edge); background: var(--color-accent-wash); }
-.where-scale { margin-top: var(--space-1); }
+.where-coords-link { margin: var(--space-1) 0 0 var(--space-2); }
+.where-coords { display: flex; align-items: flex-end; gap: var(--space-2); padding: var(--space-1) var(--space-2) var(--space-2); }
+.where-coords[hidden] { display: none; }
+.where-coords label { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.where-coords .field { width: 100%; }
+
+/* Interstellar flight: where you're heading at the top, the speed above the toolbar. */
+:root[data-flight] .top-bar, :root[data-flight] .focus-card { visibility: hidden; }
+.flight-top {
+  position: fixed; z-index: 3;
+  top: calc(var(--safe-top) + var(--space-3));
+  left: calc(var(--safe-left) + var(--space-3)); right: calc(var(--safe-right) + var(--space-3));
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4); border-radius: var(--radius-lg);
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+.flight-bottom {
+  position: fixed; z-index: 3;
+  left: calc(var(--safe-left) + var(--space-3)); right: calc(var(--safe-right) + var(--space-3));
+  bottom: calc(var(--safe-bottom) + var(--space-3) + var(--dock-height) + var(--space-2));
+  padding: var(--space-2); border-radius: var(--radius-lg);
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+.flight-top[hidden], .flight-bottom[hidden] { display: none; }
+:root[data-bar] .flight-top { display: none; }
+.flight-row { display: flex; align-items: center; gap: var(--space-2); }
+.flight-cap { flex: 1; min-width: 0; color: var(--color-text-faint); font-size: 0.66rem; font-weight: var(--weight-medium); letter-spacing: var(--tracking-wide); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flight-close { width: 36px; height: 36px; background: var(--color-surface-raised); border-color: var(--color-border); }
+.flight-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+.flight-stats div { display: flex; flex-direction: column; min-width: 0; }
+.flight-stats .hint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flight-stats b { font-size: var(--text-lg); font-weight: var(--weight-medium); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.flight-note { color: var(--color-warn); font-size: var(--text-sm); }
+.flight-note[hidden] { display: none; }
+.flight-speeds { display: grid; grid-template-columns: 40px repeat(5, minmax(0, 1fr)); gap: 4px; }
+.flight-speeds button {
+  min-height: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;
+  border: none; border-radius: var(--radius-sm); background: var(--color-surface-raised); color: var(--color-text-muted);
+  font: inherit; font-size: var(--text-sm); white-space: nowrap;
+}
+.flight-speeds button small { font-size: 0.6rem; color: var(--color-text-faint); }
+.flight-speeds button[aria-pressed='true'] { background: var(--color-text); color: var(--color-on-accent); font-weight: var(--weight-medium); }
+.flight-speeds button[aria-pressed='true'] small { color: var(--color-on-accent); opacity: 0.7; }
+.flight-hint { padding: 0 var(--space-2) var(--space-1); }
 .place-form { display: flex; flex-direction: column; gap: var(--space-2); }
 .place-search { display: flex; gap: var(--space-2); }
 .place-search .field { flex: 1; min-width: 0; }

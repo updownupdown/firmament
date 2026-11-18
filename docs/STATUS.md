@@ -168,11 +168,17 @@ chosen by the owner on 2026-11-16)
   changed. Every panel has the same head (`.panel-head`: title left, × right).
   Sheets fill the screen above the toolbar on phones, a left column from 900 px.
   `Esc` closes, `/` searches, space pauses.
-- `where.ts`: the Where panel (a sheet): You are here (with Home to … when away),
-  On the Earth (city search, my location, coordinates: `placeForm` in panels.ts),
-  On other worlds (Moon, Mars), In space (above the Solar System, each planet,
-  true or compressed scale while in Space view), Among the stars (four nearby
-  stars). Each section carries a badge for the view it leads to.
+- `where.ts`: the Where panel (2026-11-18, mock-up C): opens over the chips like
+  When, no title. One search box finds cities (`searchPlaces`), planets (orbit
+  them) and stars within reach (fly toward them); my location beside it. Then
+  four rows: the city on the ground; Earth, no ground (ground and atmosphere
+  layers off at home: `groundless`); Solar System; Interstellar flight. A link
+  opens coordinates. Standing on the Moon or Mars is only on their Atlas pages
+  and focus card ("Stand on it"); the suggested-city and near-star lists are gone.
+- `menu.ts`: `picker`, our own drop-down (trigger plus a fixed glass list in
+  `<body>`, keyboard and outside-tap aware). No native `<select>` is left.
+- `flight.ts`: the Interstellar flight HUD (heading picker, distance from the
+  Sun and to go, arrival time; speed row of `FLIGHT_SPEEDS`).
 - `panels.ts`: Settings (night vision, 12-hour clock, reduced motion, share
   link, Still mode, install, credits rendered from `ATTRIBUTION.md`; nothing that
   View holds); `LAYER_GROUPS` and `BORTLE` for View; `placeForm` (Where) and
@@ -272,9 +278,13 @@ only stars a magnitude above the limit, so what is picked is visible.
 magnitude, eclipse dimming and the deep-sky limit, split out of `sky.ts` so
 labels, picking and tests use it without the renderer.
 
-**When panel** (`src/ui/timebar.ts`, `src/sim/timeline.ts`): tapping the When
-chip drops the panel down from under the chips (the toolbar stays in view).
-Head: When, Back to now, ×. The date written out (tap to type any date and time,
+**When panel** (`src/ui/timebar.ts`, `src/sim/timeline.ts`; reworked
+2026-11-18 as mock-up A): tapping the When chip opens the panel over the chips
+(no title, the date shown once with a status line, Back to now, ×). While time
+runs it shrinks to one slim bar (pause, date, pace, speed, expand) over a mini
+strip; tap expand to open it again. Zoom, Jump and speed are `picker` menus on
+one row with Play; speed has a Forward/Backward switch. Lanes are 14 px apart.
+The date written out (tap to type any date and time,
 `dateForm`), a note when the sky is less than precise, Night / Month / Year,
 ‹ › to the same time on the next night, month or year, then the strip. **Night**
 is noon to noon (`timelineWindow`) with day, twilight and dark as the background
@@ -386,6 +396,16 @@ unresolved stars, not catalog stars, so they cannot be picked.
   comes back; going to Space from there lands over the Solar System.
   `ZoomPast` in `render/camera.ts` needs a deliberate push, so resting on a
   limit never switches views. Zoom input is ignored while lifting off.
+- Interstellar flight (2026-11-18): `App.startFlight(ref)` goes out among the
+  stars and flies in real time toward a star, the Sun, or where the view faces
+  (`setFlightHeading`), at `FLIGHT_SPEEDS` (0.5c, 0.99c, 1,000c, 1M c, 10M c;
+  `flightPcPerSecond`). Below light speed `Universe.beta` turns on special
+  relativity (`astro/relativity.ts`, tested against the textbook values):
+  aberration crowds stars ahead, the Doppler factor brightens them by
+  7.5 log10 D (held to 2.5 mag brighter, 6 fainter) and tints them (rough colour shift), in the star shader
+  (`uBeta`) and in `starDirection`/`starMag`. Faster than light is labelled
+  make-believe: plain motion, no relativity. The flight stops on arrival a few
+  hundred AU short, and at the 30.7 pc edge of the reliable map.
 - Compressed scale in Space view: layer `compressed`, switched by the pill
   under the place chip. `COMPRESS` in `render/space.ts` squares-roots
   distances from the Sun (Earth stays at 1 AU), takes sizes to the 0.6 power

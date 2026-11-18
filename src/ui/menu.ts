@@ -18,6 +18,8 @@ export interface Picker {
   el: HTMLButtonElement;
   value: string;
   disabled: boolean;
+  /** The list is showing. */
+  readonly isOpen: boolean;
   setItems(items: MenuItem[], placeholder?: string | null): void;
   close(): void;
 }
@@ -132,6 +134,7 @@ export function picker(opts: PickerOptions): Picker {
     get value() { return value; },
     set value(v: string) { if (v === value) { syncText(); return; } value = v; syncText(); if (!list.hidden) render(); },
     get disabled() { return el.disabled; },
+    get isOpen() { return !list.hidden; },
     set disabled(d: boolean) { el.disabled = d; if (d) api.close(); },
     setItems(next, ph) {
       items = next;

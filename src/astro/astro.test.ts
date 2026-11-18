@@ -229,3 +229,18 @@ test('earth shadow: contacts of the total lunar eclipse of 14 March 2025', () =>
   const half = at(5, 48).uncovered;
   assert.ok(half > 0.35 && half < 0.65, `about half covered midway through the partial phase, got ${half}`);
 });
+
+test('relativistic aberration and Doppler (McKinley & Doherty 1979)', async () => {
+  const { relativisticView } = await import('./relativity.ts');
+  // At 0.5c, a star square to the motion appears at 60° from the direction of travel: cos θ' = (cos θ + β) / (1 + β cos θ).
+  const side = relativisticView([0, 1, 0], [0.5, 0, 0]);
+  near(Math.acos(side.dir[0]) / DEG, 60, 1e-9);
+  near(norm(side.dir), 1, 1e-12);
+  // Straight ahead keeps its place and is blueshifted by √((1+β)/(1−β)) = √3; straight behind is redshifted by 1/√3.
+  const ahead = relativisticView([1, 0, 0], [0.5, 0, 0]);
+  near(ahead.dir[0], 1, 1e-12);
+  near(ahead.doppler, Math.sqrt(3), 1e-12);
+  near(relativisticView([-1, 0, 0], [0.5, 0, 0]).doppler, 1 / Math.sqrt(3), 1e-12);
+  // At 0.9c the forward half of the sky crowds into a cone of half-angle acos(0.9) ≈ 25.8°.
+  near(Math.acos(relativisticView([0, 0, 1], [0, 0.9, 0]).dir[1]) / DEG, Math.acos(0.9) / DEG, 1e-9);
+});

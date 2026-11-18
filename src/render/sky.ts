@@ -492,7 +492,7 @@ export class SkyRenderer {
     const stars = this.common(this.starProgram)
       .m3('uJ2000ToHorizon', f.j2000ToHorizon).f('uYears', u.years).v3('uAberration', aberration)
       .f('uLimitMag', c.limitMag).f('uExtinction', c.extinction).f('uPixelRatio', dpr).f('uSizeBoost', 1).f('uOrbit', orbit)
-      .v3('uObserver', voyage ?? [0, 0, 0]);
+      .v3('uObserver', voyage ?? [0, 0, 0]).v3('uBeta', voyage && u.beta ? u.beta : [0, 0, 0]);
     // The catalog is sorted by magnitude, so only the stars that can show are sent.
     // Out among the stars a faint star can be close and bright, so all of them are sent.
     this.stars.drawPoints(voyage ? undefined : this.countBrighter(c.limitMag + 0.5));

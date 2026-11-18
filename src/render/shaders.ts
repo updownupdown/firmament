@@ -364,6 +364,7 @@ uniform float uPixelRatio;
 uniform float uSizeBoost;
 uniform float uOrbit;       // 0 on the ground, 1 drawn as Space view draws its stars (lifting off)
 uniform vec3 uObserver;     // where the observer is among the stars, parsecs from the Sun (zero at home)
+uniform vec3 uBeta;         // the observer's velocity over light speed, J2000 (zero unless flying below light speed)
 out vec3 vColor;
 out float vCore;    // core radius in device pixels
 out float vBright;  // 0..1 peak intensity
@@ -374,7 +375,22 @@ void main() {
   float r = length(p);
   float mag = aMagColor.x;
   if (aPos.w > 0.5) mag += 5.0 * log(r / length(aPos.xyz)) / log(10.0);
-  vec3 d = normalize(p / r + uAberration);
+  vec3 n = p / r;
+  vec3 tint = vec3(1.0);
+  float b2 = dot(uBeta, uBeta);
+  if (b2 > 0.0) {
+    // Special relativity: stars crowd toward the direction of travel and shift in colour and brightness.
+    float g = inversesqrt(1.0 - b2);
+    float nb = dot(n, uBeta);
+    float D = g * (1.0 + nb);
+    n = (n + (g + (g - 1.0) * nb / b2) * uBeta) / D;
+    // Brighter ahead and fainter behind; capped so the crowd ahead stays a field of stars, not a blown-out disc.
+    mag -= clamp(7.5 * log(D) / log(10.0), -6.0, 2.5);
+    // A rough colour shift: blueshifted light loses red and gains blue, and the reverse.
+    float s = clamp(log(D), -2.0, 2.0);
+    tint = vec3(exp(-0.9 * s), exp(-0.15 * abs(s)), exp(0.9 * s));
+  }
+  vec3 d = normalize(n + uAberration);
   vec3 h = refractDir(uJ2000ToHorizon * d);
   if (uExtinction > 0.0) {
     float sinAlt = max(h.z, 0.0);
@@ -387,7 +403,8 @@ void main() {
   float core = mix(min(0.55 + 0.30 * x + 0.015 * x * x, 6.0), min(0.5 + 0.22 * x + 0.012 * x * x, 4.0), uOrbit) * uSizeBoost;
   vCore = core * uPixelRatio;
   vBright = clamp(mix(0.12 + x / 1.8, 0.1 + x / 2.6, uOrbit), 0.0, 1.0) * smoothstep(0.0, 0.25, x);
-  vColor = starColor(aMagColor.yzw);
+  vColor = starColor(aMagColor.yzw) * tint;
+  vColor /= max(1.0, max(vColor.r, max(vColor.g, vColor.b)));
   vSize = max(2.0, vCore * 6.0 + 2.0) + starGlow(x, uPixelRatio, 1.0 - 0.5 * uOrbit);
   gl_PointSize = vSize;
 }`;

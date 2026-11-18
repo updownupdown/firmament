@@ -106,7 +106,9 @@ export function atlasPanel(shell: Shell): AtlasPanel {
     const item = (n: SystemNode, last: boolean) => {
       const obj = n.ref ? u.resolve(n.ref) : null;
       const name = n.name ?? obj?.name ?? n.ref ?? '';
-      const sub = n.note ?? obj?.subtitle ?? '';
+      // Under a belt, its name would repeat on every row: say what kind of body it is instead.
+      const sub = n.note ?? (n.depth === 1 && n.kind === 'dwarf' ? 'Dwarf planet'
+        : n.depth === 1 && n.kind === 'small' ? (n.au < 6 ? 'Asteroid' : 'Icy small world') : obj?.subtitle ?? '');
       const dot = h('span', { class: `sys-dot sys-${n.kind}`, style: n.tint ? `--dot: var(${n.tint})` : null, 'aria-hidden': 'true' });
       const text = [h('span', { class: 'sys-text' }, h('span', { class: 'sys-name' }, name), sub ? h('span', { class: 'sys-sub' }, sub) : null),
         h('span', { class: 'sys-dist' }, n.distance)];

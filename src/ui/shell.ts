@@ -336,10 +336,10 @@ export class Shell {
     if (!Pointing.supported) return null;
     const button = h('button', { class: 'icon-button glass flash-button point-button chrome', type: 'button', onclick: () => {
       if (app.pointing.active) { void app.setPointing(false); this.flash(button, 'Pointing off'); return; }
-      this.flash(button, 'Point at the sky');
       app.setPointing(true).then((result) => {
         if (result === 'denied') this.flash(button, 'No motion access');
         else if (result === 'unsupported') this.flash(button, 'No compass here');
+        else this.flash(button, 'Pointing on');
       });
     } }, h('span', { class: 'flash-label' }), icon('pointing'));
     const sync = () => {

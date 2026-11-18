@@ -129,8 +129,40 @@ float groundProfile(vec3 h) {
 }
 `;
 
-/** Value noise and the Moon's face, shared by both views' body shaders. */
+/** Value noise, surface maps and the Moon's face, shared by both views' body shaders. */
 const SURFACE = `
+uniform sampler2D uMap;     // the body's surface map (equirectangular, longitude 0 in the middle)
+uniform float uMapped;      // 1 once the map has arrived
+uniform sampler2D uRings;   // Saturn's rings: colour and opacity from RING_INNER to RING_OUTER
+uniform float uRingMapped;
+
+// The map at a body-fixed direction (b.z north, b.x the prime meridian, b.y east).
+// Sampled outside any branch so the mipmap level is well defined; of the two
+// possible seams, the one away from this pixel is used, so no line shows.
+vec3 mapAt(vec3 b) {
+  float lon = atan(b.y, b.x + 1e-9);
+  float lat = asin(clamp(b.z, -1.0, 1.0));
+  float u = lon / (2.0 * PI) + 0.5;
+  float u2 = fract(u + 0.5) - 0.5;
+  float uu = fwidth(u) <= fwidth(u2) + 1e-6 ? u : u2;
+  return texture(uMap, vec2(uu, 0.5 - lat / PI)).rgb;
+}
+float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+
+// The rings at radius rho (Saturn radii): rgb colour and opacity, from the map when it is in.
+vec4 ringsAt(float rho) {
+  float t = (rho - 1.166) / (2.330 - 1.166);
+  vec4 m = texture(uRings, vec2(clamp(t, 0.0, 1.0), 0.5));
+  float inside = step(0.0, t) * step(t, 1.0);
+  return vec4(clamp(m.rgb * 1.9, 0.0, 1.0) * vec3(1.0, 0.96, 0.88), m.a * inside);
+}
+
+// Real colours from a map, adjusted per body so they sit with the painted ones.
+vec3 mappedSurface(int kind, vec3 m, vec3 color) {
+  if (kind == 2) return color * m * 1.35;               // the Moon: grey, a little brighter than the map
+  if (kind == 7) return m * 1.1;                        // the Earth
+  return m;
+}
 float vnoise(vec3 p) {
   vec3 i = floor(p), f = fract(p);
   f = f * f * (3.0 - 2.0 * f);
@@ -299,11 +331,27 @@ void main() {
   outColor = vec4(rgb + (hash12(gl_FragCoord.xy) - 0.5) / 255.0, a);
 }`;
 
+/** How a star looks: shared by the sky's and Space view's star shaders. */
+const STAR_LOOK = `
+out float vGlow;    // 0..1 soft bloom around the brightest stars
+// Colour as a long exposure records it: the blackbody hue from B−V with its saturation lifted a
+// little (order and hue unchanged), so orange giants and blue-white stars read at a glance.
+vec3 starColor(vec3 bb) {
+  float lum = dot(bb, vec3(0.2126, 0.7152, 0.0722));
+  return clamp(mix(vec3(lum), bb, 1.4), 0.0, 1.0);
+}
+// The brightest stars bloom softly, as in the eye and in photographs; returns extra sprite size (device px).
+float starGlow(float x, float pixelRatio, float strength) {
+  vGlow = smoothstep(2.5, 6.5, x) * strength;
+  return vGlow * 26.0 * pixelRatio;
+}
+`;
+
 // ---------------------------------------------------------------- stars
 
 export const STAR_ATTRIBUTES = ['aPos', 'aVel', 'aMagColor'];
 
-export const STAR_VERT = HEADER + PROJECT + `
+export const STAR_VERT = HEADER + PROJECT + STAR_LOOK + `
 layout(location = 0) in vec4 aPos;       // parsecs, J2000; w = 1 when the distance is known
 layout(location = 1) in vec3 aVel;       // parsecs per year
 layout(location = 2) in vec4 aMagColor;  // magnitude, r, g, b
@@ -339,8 +387,8 @@ void main() {
   float core = mix(min(0.55 + 0.30 * x + 0.015 * x * x, 6.0), min(0.5 + 0.22 * x + 0.012 * x * x, 4.0), uOrbit) * uSizeBoost;
   vCore = core * uPixelRatio;
   vBright = clamp(mix(0.12 + x / 1.8, 0.1 + x / 2.6, uOrbit), 0.0, 1.0) * smoothstep(0.0, 0.25, x);
-  vColor = aMagColor.yzw;
-  vSize = max(2.0, vCore * 6.0 + 2.0);
+  vColor = starColor(aMagColor.yzw);
+  vSize = max(2.0, vCore * 6.0 + 2.0) + starGlow(x, uPixelRatio, 1.0 - 0.5 * uOrbit);
   gl_PointSize = vSize;
 }`;
 
@@ -349,13 +397,17 @@ in vec3 vColor;
 in float vCore;
 in float vBright;
 in float vSize;
+in float vGlow;
 out vec4 outColor;
 void main() {
   float r = length(gl_PointCoord - 0.5) * vSize;
   float core = exp(-(r * r) / (vCore * vCore));
   float halo = exp(-r / (vCore * 1.1)) * 0.22 * smoothstep(2.0, 5.0, vCore);
+  // A wide, faint bloom in the star's own colour (scattered light), on the brightest few only.
+  float bloom = vGlow * 0.09 * exp(-r / (vCore * 2.0 + 3.0));
   float edge = 1.0 - smoothstep(0.42, 0.5, length(gl_PointCoord - 0.5));
-  vec3 c = mix(vColor, vec3(1.0), core * 0.55) * (core + halo) * vBright * edge;
+  // Only the very centre of a bright star burns out to white; the rest keeps its colour.
+  vec3 c = (mix(vColor, vec3(1.0), core * 0.4) * (core + halo) + vColor * bloom) * vBright * edge;
   outColor = vec4(c, 0.0);
 }`;
 
@@ -550,6 +602,11 @@ void main() {
     ringAlpha = c + b + a;
     float fine = 0.88 + 0.12 * sin(rho * 90.0) * (1.0 - smoothstep(0.02, 0.2, aa));
     ringColor = vec3(0.86, 0.80, 0.66) * fine;
+    if (uRingMapped > 0.5) {
+      vec4 rm = ringsAt(rho);
+      ringColor = rm.rgb;
+      ringAlpha = rm.a * (1.0 - smoothstep(2.269, 2.269 + w, rho));
+    }
     // The globe's shadow falls across the rings.
     float t = dot(q, uSun);
     if (t < 0.0 && length(q - uSun * t) < 1.0) ringColor *= 0.06;
@@ -567,13 +624,15 @@ void main() {
   float disc = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, sqrt(r2));
   vec3 color = sky;
   float alpha = 0.0;
+  // Body-fixed coordinates of this point (clamped to the limb outside the disc, so the map sample is defined everywhere).
+  vec3 n = normalize(vec3(pe, sqrt(max(1.0 - r2, 0.0))) + vec3(0.0, 0.0, 1e-6));
+  vec3 eastAxis = cross(uPole, uPrime);
+  vec3 b = vec3(dot(n, uPrime), dot(n, eastAxis), dot(n, uPole));
+  vec3 mapped = mapAt(b);
+  // Maps fade in once the disc is a few pixels across.
+  float useMap = uMapped * smoothstep(4.0, 12.0, uRadiusPx);
   if (disc > 0.0) {
-    vec3 n = vec3(pe, sqrt(max(1.0 - r2, 0.0)));
-    n = normalize(n);
     float lit = dot(n, uSun);
-    // Body-fixed coordinates of this point.
-    vec3 east = cross(uPole, uPrime);
-    vec3 b = vec3(dot(n, uPrime), dot(n, east), dot(n, uPole));
     float lat = asin(clamp(b.z, -1.0, 1.0));
     vec3 surface = uColor;
     float shade;
@@ -582,6 +641,8 @@ void main() {
       float mu = n.z;
       shade = 0.42 + 0.58 * pow(mu, 0.55);
       surface = mix(vec3(1.0, 0.72, 0.42), vec3(1.0, 0.98, 0.94), shade) * uColor;
+      // Faint mottling and spots from the map; the Sun in white light is nearly featureless.
+      surface *= mix(1.0, 0.95 + 0.09 * smoothstep(0.2, 0.8, luma(mapped)), useMap);
       color = surface * (0.9 + shade * 0.5);
       alpha = disc;
     } else {
@@ -613,6 +674,7 @@ void main() {
       } else {
         shade = max(lit, 0.0) * (0.6 + 0.4 * n.z);
       }
+      surface = mix(surface, mappedSurface(uKind, mapped, uColor), useMap);
       vec3 litColor = surface * shade * 1.25;
       if (uKind == 2) litColor += surface * uEarthshine * (1.0 - smoothstep(-0.05, 0.15, lit));
       if (uKind == 2 && uShadow.z > 0.0) {
@@ -651,7 +713,7 @@ void main() {
 // camera space (x right, y up, looking along −z), relative to the camera, so
 // float32 is precise near whatever the camera is looking at.
 
-export const SPACE_STAR_VERT = HEADER + `
+export const SPACE_STAR_VERT = HEADER + STAR_LOOK + `
 layout(location = 0) in vec4 aPos;
 layout(location = 1) in vec3 aVel;
 layout(location = 2) in vec4 aMagColor;
@@ -677,8 +739,8 @@ void main() {
   float core = min(0.5 + 0.22 * x + 0.012 * x * x, 4.0);
   vCore = core * uPixelRatio;
   vBright = clamp(0.1 + x / 2.6, 0.0, 1.0) * smoothstep(0.0, 0.25, x);
-  vColor = aMagColor.yzw;
-  vSize = max(2.0, vCore * 6.0 + 2.0);
+  vColor = starColor(aMagColor.yzw);
+  vSize = max(2.0, vCore * 6.0 + 2.0) + starGlow(x, uPixelRatio, 0.5);
   gl_PointSize = vSize;
 }`;
 
@@ -725,7 +787,13 @@ uniform float uExtent;  // quad half-size in body radii
 uniform float uPixels;  // body radius in device pixels
 out vec4 outColor;
 
-vec3 surfaceAt(vec3 b, float lat) {
+vec3 surfaceAt(vec3 b, float lat, vec3 mapped) {
+  if (uMapped > 0.5) {
+    vec3 m = mappedSurface(uKind, mapped, uColor);
+    // The Earth keeps a veil of painted cloud; the map has none.
+    if (uKind == 7) m = mix(m, vec3(1.0), smoothstep(0.55, 0.8, fbm(b * 3.5 + 1.0)) * 0.55);
+    return m;
+  }
   if (uKind == 2) return uColor * moonAlbedo(b);
   if (uKind == 3) {
     float bands = 0.5 + 0.5 * sin(lat * 13.0 + 0.6 * sin(lat * 7.0));
@@ -752,23 +820,26 @@ void main() {
   float r = length(p);
   float aa = 1.2 / max(uPixels, 1.0);
   float disc = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, r);
+  vec3 n = normalize(vec3(p / max(r, 1.0), sqrt(max(0.0, 1.0 - r * r))) + vec3(0.0, 0.0, 1e-6));
+  vec3 east = cross(uPole, uPrime);
+  vec3 b = vec3(dot(n, uPrime), dot(n, east), dot(n, uPole));
+  vec3 mapped = mapAt(b);
   if (uKind == 1) {
     float glow = exp(-max(r - 1.0, 0.0) * 1.3) * 0.55 * (1.0 - smoothstep(uExtent * 0.7, uExtent, r));
     float mu = sqrt(max(0.0, 1.0 - r * r));
     vec3 face = mix(vec3(1.0, 0.72, 0.42), vec3(1.0, 0.98, 0.94), 0.42 + 0.58 * pow(mu, 0.55)) * uColor;
+    // Granulation and spots from the map, kept faint: in white light the Sun is nearly featureless.
+    face *= mix(1.0, 0.95 + 0.09 * smoothstep(0.2, 0.8, luma(mapped)), uMapped * smoothstep(6.0, 18.0, uPixels));
     vec3 c = face * disc + vec3(1.0, 0.82, 0.55) * glow * (1.0 - disc);
     outColor = vec4(c, max(disc, glow));
     return;
   }
-  vec3 n = vec3(p, sqrt(max(0.0, 1.0 - r * r)));
   float lit = clamp(dot(n, uLight), 0.0, 1.0);
   vec3 surface = uColor;
   // Surface detail only once the disc is big enough to show it.
   if (uPixels > 6.0 && disc > 0.0) {
-    vec3 east = cross(uPole, uPrime);
-    vec3 b = vec3(dot(n, uPrime), dot(n, east), dot(n, uPole));
     float lat = asin(clamp(b.z, -1.0, 1.0));
-    surface = mix(uColor, surfaceAt(b, lat), smoothstep(6.0, 18.0, uPixels));
+    surface = mix(uColor, surfaceAt(b, lat, mapped), smoothstep(6.0, 18.0, uPixels));
   }
   float shade = uKind == 2 ? smoothstep(-0.02, 0.10, lit) * (0.55 + 0.45 * pow(lit, 0.6)) : pow(lit, 0.75);
   vec3 c = surface * (0.035 + 0.965 * shade) * disc;
@@ -781,13 +852,19 @@ void main() {
     float ring = smoothstep(1.24 - w, 1.24 + w, rr) * (1.0 - smoothstep(2.27 - w, 2.27 + w, rr));
     ring *= 1.0 - 0.75 * smoothstep(1.95 - w, 1.95, rr) * (1.0 - smoothstep(2.03, 2.03 + w, rr));
     ring *= 0.55 + 0.45 * smoothstep(1.5, 1.6, rr);
+    vec3 ringColor = vec3(0.86, 0.78, 0.62) * 0.9;
+    if (uRingMapped > 0.5) {
+      vec4 rm = ringsAt(rr);
+      ring = rm.a * (1.0 - smoothstep(2.27 - w, 2.27 + w, rr));
+      ringColor = rm.rgb;
+    }
     // The globe's shadow falls on the rings behind it.
     vec3 q = vec3(p, pz);
     float along = dot(q, uLight);
     float shadow = along < 0.0 ? smoothstep(0.95, 1.05, length(q - uLight * along)) : 1.0;
     float front = max(step(0.0, pz), 1.0 - disc);
     float ra = ring * front * 0.9;
-    c = c * (1.0 - ra) + vec3(0.86, 0.78, 0.62) * 0.9 * (0.15 + 0.85 * shadow) * ra;
+    c = c * (1.0 - ra) + ringColor * (0.15 + 0.85 * shadow) * ra;
     a = a + ra * (1.0 - a);
   }
   outColor = vec4(c, a);
@@ -872,9 +949,17 @@ uniform vec2 uShift;
 uniform float uDays;       // days since J2000 (TT)
 uniform float uCompressed;
 uniform float uPointSize;
+uniform vec3 uColorA;      // the commoner surface type
+uniform vec3 uColorB;      // the rarer one
+uniform float uShareB;     // fraction of bodies of the rarer type
 out float vFade;
+out vec3 vColor;
 void main() {
   float a = aOrbitA.x, e = aOrbitA.y, inc = aOrbitA.z, node = aOrbitA.w;
+  // Each body keeps its own surface type and brightness (a fixed hash of its index).
+  float h1 = fract(sin(float(gl_VertexID) * 12.9898) * 43758.5453);
+  float h2 = fract(sin(float(gl_VertexID) * 78.233) * 24634.6345);
+  vColor = mix(uColorA, uColorB, step(h1, uShareB)) * (0.65 + 0.7 * h2 * h2);
   float M = 2.0 * PI * fract(aOrbitB.y + aOrbitB.z * uDays);
   float E = M + e * sin(M);
   for (int k = 0; k < 5; k++) E -= (E - e * sin(E) - M) / (1.0 - e * cos(E));
@@ -895,10 +980,11 @@ void main() {
 
 export const POP_FRAG = HEADER + `
 in float vFade;
-uniform vec4 uColor;
+in vec3 vColor;
+uniform float uAlpha;
 out vec4 outColor;
 void main() {
   float r = length(gl_PointCoord - 0.5) * 2.0;
-  float a = uColor.a * vFade * (1.0 - smoothstep(0.4, 1.0, r));
-  outColor = vec4(uColor.rgb * a, a);
+  float a = uAlpha * vFade * (1.0 - smoothstep(0.4, 1.0, r));
+  outColor = vec4(vColor * a, a);
 }`;

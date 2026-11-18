@@ -253,7 +253,17 @@ input[type='range']::-moz-range-thumb { width: 20px; height: 20px; border-radius
 .vb-tile span { font-size: 0.7rem; letter-spacing: -0.01em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vb-tile:hover { background: var(--color-surface-hover); }
 .vb-tile svg { color: var(--color-text-faint); }
+.vb-tile { position: relative; }
+/* On or off at a glance: a lit dot in the corner and a lit tile when on; a hollow ring, a dashed edge and a dimmed icon when off. */
+.vb-tile::after {
+  content: ''; position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border-radius: 50%;
+  border: 1.5px solid var(--color-text-faint); box-sizing: border-box;
+  transition: background var(--duration) var(--ease), border-color var(--duration) var(--ease);
+}
+.vb-tile[aria-pressed='false'] { border-style: dashed; background: transparent; }
+.vb-tile[aria-pressed='false'] svg { opacity: 0.55; }
 .vb-tile[aria-pressed='true'] { background: var(--color-accent-wash); border-color: var(--color-accent-edge); color: var(--color-text); }
+.vb-tile[aria-pressed='true']::after { background: var(--color-accent); border-color: var(--color-accent); box-shadow: 0 0 6px var(--color-accent); }
 .vb-tile[aria-pressed='true'] svg { color: var(--color-accent); }
 .vb-note { margin: 0; padding: 0 var(--space-1); color: var(--color-text-muted); font-size: var(--text-sm); line-height: 1.4; }
 .vb-note.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
@@ -337,11 +347,9 @@ input[type='range']::-moz-range-thumb { width: 20px; height: 20px; border-radius
 .card-title { font-size: var(--text-xl); font-weight: var(--weight-medium); letter-spacing: var(--tracking-tight); line-height: 1.2; }
 .card-subtitle { color: var(--color-text-muted); font-size: var(--text-sm); }
 .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3) var(--space-5); margin: 0; }
-.facts.quick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2) var(--space-4); }
 .fact { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .fact dt { color: var(--color-text-muted); font-size: var(--text-xs); }
 .fact dd { margin: 0; font-size: var(--text-md); font-weight: var(--weight-medium); }
-.facts.quick .fact dd { font-size: var(--text-lg); }
 
 /* ---------------------------------------------------------------- sheets */
 

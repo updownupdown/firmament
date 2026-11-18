@@ -1,15 +1,17 @@
-// Time lives in the top chip: place, date and time with play/pause beside
-// them. Tapping the chip turns the bottom bar into the timeline: tonight from
-// noon to noon with twilight, the Moon and the bright planets, and the night's
-// moments to jump to; zoomed out, a month or a year with its events. Drag the
-// strip to scrub, step to the same time on the next night, month or year, and
-// play. The sky stays in view above it.
+// When: the chip at the top right says the date and time, with a small glyph
+// for whether time is live, running or stopped (not a button). Tapping it drops
+// the When panel down from the top: tonight from noon to noon with twilight
+// behind the Moon and the bright planets; zoomed out, a month or a year with its
+// events. Drag the strip to scrub, jump to a moment from the list, step to the
+// same time on the next night, month or year, play, pick a speed, or type a
+// date. The toolbar stays in view below it.
 
 import type { App } from '../app.ts';
 import { makeFrame, observeBody } from '../astro/ephemeris.ts';
 import { jdNow } from '../astro/time.ts';
 import type { AstroEvent } from '../astro/events.ts';
 import { RATE_STEPS, describeRate } from '../sim/clock.ts';
+import { dateForm } from './panels.ts';
 import { MONTHS_SHORT, calendarNote, formatDate, formatTime, formatYear, localTime } from '../sim/format.ts';
 import { addMonths, monthOf } from '../sim/events.ts';
 import { type TimelineWindow, type TimelineZoom, BRIGHT_PLANETS, nightMoments, nightSpan, planetName, shiftSameTime, timelineWindow, upSpans, withClockOf } from '../sim/timeline.ts';
@@ -30,27 +32,22 @@ const STEP_UNIT: Record<TimelineZoom, 'day' | 'month' | 'year'> = { night: 'day'
 const STEPPING: Record<'month' | 'year', [number, number]> = { month: [1, 350], year: [3, 110] };
 const NIGHT_RATE = 3600;
 
-/** The chip and the time bar. Opening the bar is the shell's call, so it can put the dock away. */
-export function timeChip(app: App, opts: { openPlace: () => void; onToggle: (open: boolean) => void }): { chip: HTMLElement; bar: TimeBar } {
+/** The When chip and its panel. Opening the panel is the shell's call, so it can close whatever else is open. */
+export function timeChip(app: App, opts: { onToggle: (open: boolean) => void }): { chip: HTMLElement; bar: TimeBar } {
   const style = () => ({ hour12: app.store.data.settings.hour12 });
   const site = () => app.site;
   const timeOf = (jd: number) => formatTime(jd, site(), style());
 
   // ------------------------------------------------------------ the chip
-  const place = h('span', { class: 'chip-place' });
-  const when = h('span', { class: 'chip-when' });
+  const state = h('span', { class: 'chip-state', 'aria-hidden': 'true' });
   const note = h('span', { class: 'chip-note' });
-  const opener = h('button', { class: 'chip-open', type: 'button', 'aria-label': 'Time', 'aria-expanded': 'false' },
-    h('span', { class: 'chip-main' }, place, when), note);
-  const togglePlay = () => {
-    stopStepping();
-    app.setRate(app.clock.rate, !app.clock.paused);
-  };
-  const playPause = iconButton('pause', 'Pause time', togglePlay, 'chip-play');
+  const when = h('span', { class: 'chip-value' });
+  const opener = h('button', { class: 'chip glass when-chip chrome', type: 'button', 'aria-expanded': 'false' },
+    h('span', { class: 'chip-glyph' }, icon('clock', 20)),
+    h('span', { class: 'chip-text' }, h('span', { class: 'chip-cap' }, state, note), when));
 
   // ------------------------------------------------------------ the bar's parts
-  const titleText = h('span');
-  const title = h('span', { class: 'tl-title' }, titleText, icon('calendar', 14));
+  const titleText = h('span', { class: 'tl-title' });
   const subtitle = h('span', { class: 'tl-subtitle' });
   const prev = iconButton('back', '', () => step(-1), 'tl-step');
   const next = iconButton('forward', '', () => step(1), 'tl-step');
@@ -63,26 +60,43 @@ export function timeChip(app: App, opts: { openPlace: () => void; onToggle: (ope
   const strip = h('div', {
     class: 'tl-strip', role: 'slider', tabindex: '0', 'aria-label': 'Time', 'aria-valuemin': '0', 'aria-valuemax': '100',
   }, band, lanes, ticks, nowMark, head);
-  const moments = h('div', { class: 'tl-moments', role: 'list' });
+  // Moments and events: one list to jump from, in place of a row of chips.
+  const moments = h('select', { class: 'field tl-jump', 'aria-label': 'Jump to a moment' });
+  moments.addEventListener('change', () => {
+    const t = Number(moments.value);
+    if (Number.isFinite(t) && moments.value !== '') jump(t);
+    moments.value = '';
+  });
   const zoomButtons = ZOOMS.map(([z, label]) => h('button', { type: 'button', onclick: () => setZoom(z) }, label));
   const playButton = iconButton('play', '', () => play(), 'tl-play');
-  const speedButton = h('button', { class: 'tl-speed', type: 'button', 'aria-expanded': 'false', onclick: () => toggleSpeeds() });
-  const speeds = h('div', { class: 'tl-speeds', hidden: true, role: 'group', 'aria-label': 'Speed of time' });
-  const nowButton = h('button', { class: 'pill-button primary tl-now-button', type: 'button', onclick: () => { stopStepping(); app.goToNow(); } }, 'Now');
-  const el = h('section', { class: 'time-bar glass chrome', hidden: true, 'aria-label': 'Time' },
-    h('header', { class: 'tl-header' }, prev,
-      h('button', { class: 'tl-heading', type: 'button', title: 'Go to a date, or change place', onclick: () => opts.openPlace() }, title, subtitle),
-      next),
+  const speed = h('select', { class: 'field tl-speed', 'aria-label': 'Speed of time' },
+    h('optgroup', { label: 'Forwards' }, RATE_STEPS.map((r) => h('option', { value: String(r) }, describeRate(r)))),
+    h('optgroup', { label: 'Backwards' }, RATE_STEPS.map((r) => h('option', { value: String(-r) }, describeRate(-r)))));
+  speed.addEventListener('change', () => { stopStepping(); app.setRate(Number(speed.value), false); });
+  const nowButton = h('button', { class: 'pill-button tl-now-button', type: 'button', onclick: () => { stopStepping(); app.goToNow(); } }, 'Back to now');
+  // The date, written out; tapping it opens the fields to type any date.
+  const dateText = h('span', { class: 'tl-date-text' });
+  const accuracy = h('p', { class: 'hint tl-accuracy' });
+  const form = dateForm(app);
+  form.el.hidden = true;
+  const dateButton = h('button', { class: 'tl-date', type: 'button', 'aria-expanded': 'false', onclick: () => {
+    form.el.hidden = !form.el.hidden;
+    dateButton.setAttribute('aria-expanded', String(!form.el.hidden));
+    if (!form.el.hidden) form.refresh();
+  } }, dateText, icon('pencil', 16));
+  const el = h('section', { class: 'time-bar glass chrome', hidden: true, 'aria-labelledby': 'when-title' },
+    h('header', { class: 'panel-head' },
+      h('h2', { class: 'panel-title', id: 'when-title' }, 'When'),
+      nowButton,
+      iconButton('close', 'Close', () => bar.close(), 'panel-close')),
+    dateButton,
+    accuracy,
+    form.el,
+    h('div', { class: 'tl-zoom segmented', role: 'group', 'aria-label': 'Zoom' }, zoomButtons),
+    h('div', { class: 'tl-header' }, prev, h('div', { class: 'tl-heading' }, titleText, subtitle), next),
     strip,
     moments,
-    speeds,
-    h('div', { class: 'tl-footer' },
-      playButton,
-      h('div', { class: 'tl-zoom', role: 'group', 'aria-label': 'Zoom' }, zoomButtons),
-      speedButton,
-      h('span', { class: 'tl-spacer' }),
-      nowButton,
-      iconButton('close', 'Close the timeline', () => bar.close(), 'tl-icon')));
+    h('div', { class: 'tl-footer' }, playButton, speed));
 
   // ------------------------------------------------------------ state
   let isOpen = false;
@@ -116,7 +130,7 @@ export function timeChip(app: App, opts: { openPlace: () => void; onToggle: (ope
     if (!win) return;
     fill(lanes);
     fill(ticks);
-    fill(moments);
+    fillMoments([]);
     events = [];
     if (zoom === 'night') buildNight();
     else buildCalendar();
@@ -145,7 +159,7 @@ export function timeChip(app: App, opts: { openPlace: () => void; onToggle: (ope
     const planets = n.planets.filter((p) => p.visible && BRIGHT_PLANETS.includes(p.id));
     const [dusk, dawn] = nightSpan(n, w.start, w.end);
     const bodies = [n.moon, ...planets.sort((a, b) => BRIGHT_PLANETS.indexOf(a.id) - BRIGHT_PLANETS.indexOf(b.id))];
-    strip.style.height = `${34 + bodies.length * 11 + 18}px`;
+    strip.style.height = `${8 + bodies.length * 18 + 18}px`;
     fill(lanes, bodies.map((b) => {
       const spans = upSpans(b, w.start, w.end)
         .map(([a, c]) => [Math.max(a, dusk), Math.min(c, dawn)] as [number, number]).filter(([a, c]) => c - a > 1 / 72);
@@ -165,7 +179,7 @@ export function timeChip(app: App, opts: { openPlace: () => void; onToggle: (ope
       const hour = (lt.hour + k) % 24;
       ticks.append(tick(xOf(jd), formatTime(jd, site(), style()).replace(':00', '').replace(/^0(\d)$/, '$1'), hour === 0));
     }
-    fill(moments, nightMoments(n, w.start, w.end).map((m) => momentChip(m.label, timeOf(m.t), m.t, m.body)));
+    fillMoments(nightMoments(n, w.start, w.end).map((m) => [`${m.label} · ${timeOf(m.t)}`, m.t]));
   };
 
   const buildCalendar = () => {
@@ -208,21 +222,24 @@ export function timeChip(app: App, opts: { openPlace: () => void; onToggle: (ope
       events = found.sort((a, b) => a.t - b.t).filter((e) => e.t >= w.start && e.t < w.end && (e.importance >= min || e.kind === 'season' && zoom === 'year'));
       fill(lanes, [...lanes.querySelectorAll<HTMLElement>('.tl-divider')],
         h('div', { class: 'tl-lane tl-events' }, events.map((e) => h('span', { class: `tl-dot imp-${e.importance}`, style: `left:${xOf(e.t)}%`, title: e.title }))));
-      fill(moments, events.map((e) => momentChip(e.title, formatDate(e.t, s, { noYear: true }), e.t, e.bodies[0] ?? 'sun')));
-      if (pending > 0) moments.append(h('span', { class: 'tl-empty' }, 'Finding more…'));
-      else if (!events.length) moments.append(h('span', { class: 'tl-empty' }, zoom === 'month' ? 'No major events this month.' : 'No major events this year.'));
+      fillMoments(events.map((e) => [`${formatDate(e.t, s, { noYear: true })} · ${e.title}`, e.t]),
+        pending > 0 ? 'Finding more events…' : events.length ? null : zoom === 'month' ? 'No major events this month' : 'No major events this year');
     };
     for (const k of months) {
       app.events.month(k).then(show).catch(() => {
-        if (win === forWindow) fill(moments, h('span', { class: 'tl-empty' }, 'Events could not be worked out.'));
+        if (win === forWindow) fillMoments([], 'Events could not be worked out');
       });
     }
-    moments.append(h('span', { class: 'tl-empty' }, 'Finding events…'));
+    fillMoments([], 'Finding events…');
   };
 
-  const momentChip = (label: string, at: string, t: number, body: string) =>
-    h('button', { class: 'tl-moment', type: 'button', role: 'listitem', dataset: { body }, onclick: () => jump(t) },
-      h('span', { class: 'tl-dot-small' }), label, h('b', null, at));
+  /** The jump list: a title line, then each moment or event. */
+  const fillMoments = (items: [string, number][], empty: string | null = null) => {
+    const head = empty ?? (zoom === 'night' ? 'Jump to a moment tonight' : zoom === 'month' ? 'Jump to an event this month' : 'Jump to an event this year');
+    fill(moments, h('option', { value: '' }, head), items.map(([label, t]) => h('option', { value: String(t) }, label)));
+    moments.value = '';
+    moments.disabled = !items.length;
+  };
 
   // ------------------------------------------------------------ reading it out
   const renderHeading = () => {
@@ -273,7 +290,12 @@ export function timeChip(app: App, opts: { openPlace: () => void; onToggle: (ope
     fill(playButton, icon(running ? 'pause' : 'play'));
     playButton.setAttribute('aria-label', running ? 'Pause' : zoom === 'night' ? 'Play the night' : zoom === 'month' ? 'Play night by night' : 'Play the year');
     playButton.title = playButton.getAttribute('aria-label')!;
-    speedButton.textContent = !app.clock.paused && app.clock.rate !== 1 ? describeRate(app.clock.rate) : 'Speed';
+    if (document.activeElement !== speed) speed.value = String(app.clock.rate);
+    dateText.textContent = `${formatDate(jd, site(), { weekday: true })} · ${timeOf(jd)}`;
+    const acc = app.clock.accuracy;
+    accuracy.textContent = acc.level === 'precise' ? '' : acc.detail;
+    accuracy.hidden = !accuracy.textContent;
+    if (!form.el.hidden) form.refresh();
   };
 
   // ------------------------------------------------------------ doing things
@@ -359,22 +381,6 @@ export function timeChip(app: App, opts: { openPlace: () => void; onToggle: (ope
     app.setTime(app.clock.jdUT + d);
   });
 
-  // ------------------------------------------------------------ speeds (for anyone who wants a rate)
-  const renderSpeeds = () => {
-    const c = app.clock, sign = c.rate < 0 ? -1 : 1;
-    fill(speeds,
-      h('button', { class: 'chip-button', type: 'button', 'aria-pressed': String(sign < 0), onclick: () => { stopStepping(); app.setRate(-Math.abs(c.rate), false); renderSpeeds(); } }, icon('back', 14), 'Backward'),
-      RATE_STEPS.map((r) => h('button', {
-        class: 'chip-button', type: 'button', 'aria-pressed': String(!c.paused && Math.abs(c.rate) === r),
-        onclick: () => { stopStepping(); app.setRate(r * sign, false); renderSpeeds(); },
-      }, describeRate(r))));
-  };
-  const toggleSpeeds = () => {
-    speeds.hidden = !speeds.hidden;
-    speedButton.setAttribute('aria-expanded', String(!speeds.hidden));
-    if (!speeds.hidden) renderSpeeds();
-  };
-
   // ------------------------------------------------------------ opening and closing
   const bar: TimeBar = {
     el,
@@ -393,8 +399,8 @@ export function timeChip(app: App, opts: { openPlace: () => void; onToggle: (ope
       if (!isOpen) return;
       isOpen = false;
       el.hidden = true;
-      speeds.hidden = true;
-      speedButton.setAttribute('aria-expanded', 'false');
+      form.el.hidden = true;
+      dateButton.setAttribute('aria-expanded', 'false');
       opener.setAttribute('aria-expanded', 'false');
       stopStepping();
       opts.onToggle(false);
@@ -405,20 +411,25 @@ export function timeChip(app: App, opts: { openPlace: () => void; onToggle: (ope
   // ------------------------------------------------------------ keeping it current
   const updateChip = () => {
     const c = app.clock, jd = c.jdUT, s = site();
-    place.textContent = s.name;
-    // This year needs no year; any other does, and then the weekday makes way for it.
+    // This year needs no year; any other does. The weekday is in the When panel.
     const thisYear = localTime(jd, s).year === localTime(jdNow(), s).year;
-    when.textContent = `${formatDate(jd, s, { weekday: thisYear, noYear: thisYear })} · ${timeOf(jd)}`;
-    const pace = stepTimer ? (zoom === 'month' ? 'Night by night' : 'Through the year') : c.paused ? 'Paused' : c.rate === 1 ? '' : describeRate(c.rate);
-    const parts = [pace, app.clock.accuracy.label, calendarNote(jd, s)].filter(Boolean);
-    note.textContent = parts.join(' · ');
-    note.hidden = parts.length === 0;
-    note.classList.toggle('only-pace', !!pace && parts.length === 1);
+    const text = `${formatDate(jd, s, { noYear: thisYear })} · ${timeOf(jd)}`;
+    when.textContent = text;
+    // A glyph for the state, not a button: live, running at some pace, or stopped.
     const running = !c.paused || stepTimer !== 0;
-    fill(playPause, icon(running ? 'pause' : 'play'));
-    const label = running ? 'Pause time' : 'Run time';
-    playPause.setAttribute('aria-label', label);
-    playPause.title = label;
+    const live = c.live;
+    const mode = live ? 'live' : running ? (c.rate < 0 ? 'back' : 'run') : 'stop';
+    if (state.dataset.mode !== mode) {
+      state.dataset.mode = mode;
+      fill(state, mode === 'live' ? null : icon(mode === 'stop' ? 'pause' : mode === 'back' ? 'slower' : 'play', 10));
+    }
+    const pace = stepTimer ? (zoom === 'month' ? 'Night by night' : 'Through the year') : live ? 'Now' : running ? describeRate(c.rate) : '';
+    // The pace, or else the calendar in use (Julian, before 1582). How accurate the sky is shows in the panel.
+    const cal = calendarNote(jd, s);
+    note.textContent = pace || cal || 'When';
+    note.classList.toggle('warn', !pace && !!cal);
+    const label = `When: ${text}${live ? ', now' : running ? `, running at ${describeRate(c.rate)}` : ', stopped'}. Open the timeline.`;
+    opener.setAttribute('aria-label', label);
   };
   const update = () => {
     updateChip();
@@ -432,7 +443,6 @@ export function timeChip(app: App, opts: { openPlace: () => void; onToggle: (ope
     }
     ensureWindow();
     renderHead();
-    if (!speeds.hidden) renderSpeeds();
   };
   for (const e of ['second', 'time', 'settings'] as const) app.on(e, update);
   app.on('site', () => { if (isOpen) ensureWindow(true); update(); });
@@ -445,5 +455,5 @@ export function timeChip(app: App, opts: { openPlace: () => void; onToggle: (ope
   });
   updateChip();
 
-  return { chip: h('div', { class: 'chip glass' }, opener, playPause), bar };
+  return { chip: opener, bar };
 }

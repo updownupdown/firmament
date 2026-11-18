@@ -1,7 +1,8 @@
 // A concept page in the Atlas: a long read with "Try it" buttons that set the
 // sky up to show the idea, diagrams opened on request, and questions to check
 // yourself. Nothing gates reading on. The first Try it remembers your own sky,
-// and "Back to your sky" puts it back.
+// and "Back to your sky" puts it back. While a Try it is on the sky, the focus
+// card says so and leads back to the page, or home.
 
 import type { Concept, ConceptBlock } from '../atlas/concepts.ts';
 import { type Verdict, checkTask } from '../learn/tasks.ts';
@@ -28,16 +29,13 @@ export function conceptPages(shell: Shell, redraw: () => void): ConceptPages {
   const at = (key: string) => { let s = state.get(key); if (!s) state.set(key, (s = {})); return s; };
   /** The reader's own place and view, from before the first Try it. */
   let home: Scene | null = null;
-  /** On a phone a Try it steps back to the sky; this pill leads back to the page. */
-  let reading: Concept | null = null;
-  const pillLabel = h('span', null);
-  const pill = h('button', { class: 'pill-button glass chrome reading-pill', type: 'button', onclick: () => { if (reading) shell.openAtlas({ concept: reading.id }); } },
-    icon('book', 16), pillLabel);
-  shell.root.append(pill);
-  const setReading = (c: Concept | null) => {
-    reading = c;
-    pillLabel.textContent = c ? `Back to “${c.title}”` : '';
-    if (c) document.documentElement.dataset.reading = c.id; else delete document.documentElement.dataset.reading;
+  /** A Try it on the sky: the focus card shows it until the reader goes home. */
+  const setReading = (c: Concept | null, b?: { label: string; note: string }) => {
+    shell.setTrying(c && b ? {
+      concept: c.id, title: c.title, label: b.label, note: b.note,
+      article: () => shell.openAtlas({ concept: c.id }),
+      home: () => { pages.goHome(); redraw(); },
+    } : null);
   };
 
   const remember = () => {
@@ -57,8 +55,8 @@ export function conceptPages(shell: Shell, redraw: () => void): ConceptPages {
   const tryIt = (c: Concept, b: Extract<ConceptBlock, { kind: 'try' }>) =>
     h('div', { class: 'card concept-try' },
       h('button', { class: 'pill-button primary', type: 'button', onclick: () => {
-        setReading(c);
         stage(b.scene, true);
+        setReading(c, b);
         redraw();
       } }, icon(b.scene.camera?.mode === 'space' ? 'orbit' : 'sky', 16), b.label),
       h('p', { class: 'hint' }, b.note));

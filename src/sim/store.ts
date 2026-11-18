@@ -17,8 +17,6 @@ export interface Settings {
   reducedMotion: boolean;
   /** Design direction chosen by the owner or the player. */
   theme: string;
-  /** Lumen, the optional guide: not yet offered, turned on, or turned off. Off until the player opts in. */
-  guide: 'unset' | 'on' | 'off';
 }
 
 export interface StoreData {
@@ -36,7 +34,7 @@ export function defaultData(): StoreData {
     version: STORE_VERSION,
     settings: {
       layers: { ...DEFAULT_LAYERS }, culture: 'western', bortle: 4, hour12: false,
-      nightVision: false, reducedMotion: false, theme: 'default', guide: 'unset',
+      nightVision: false, reducedMotion: false, theme: 'default',
     },
     site: null, recentSites: [], seen: [],
   };
@@ -60,15 +58,20 @@ export function migrate(raw: unknown): StoreData {
   return {
     version: STORE_VERSION,
     settings: {
-      ...base.settings, ...settings,
+      ...base.settings, ...withoutGuide(settings),
       layers: { ...base.settings.layers, ...(settings.layers ?? {}) },
       bortle: Math.min(9, Math.max(1, Math.round(Number(settings.bortle ?? base.settings.bortle)) || base.settings.bortle)),
-      guide: settings.guide === 'on' || settings.guide === 'off' ? settings.guide : 'unset',
     },
     site: validSite(r.site) ? r.site : null,
     recentSites: Array.isArray(r.recentSites) ? r.recentSites.filter(validSite).slice(0, 8) : [],
     seen: Array.isArray(r.seen) ? r.seen.filter((s) => typeof s === 'string') : [],
   };
+}
+
+/** Lumen, the old optional guide, is gone; its setting is dropped. */
+function withoutGuide(settings: Partial<Settings>): Partial<Settings> {
+  const { guide: _, ...rest } = settings as Partial<Settings> & { guide?: unknown };
+  return rest;
 }
 
 function validSite(s: unknown): s is Site {

@@ -1,8 +1,6 @@
-// What Lumen, the optional guide, has to say: one line of science and one of
-// story (myth, history or how other peoples saw it) for the things Tonight
-// points at, and how long the light from what you tapped has been travelling.
+// Lore for the Atlas: one line of science and one of story (myth, history or
+// how other peoples saw it) for the planets, bright stars and constellations.
 
-import { AU_KM } from '../astro/math.ts';
 import type { SkyObject, Universe } from './universe.ts';
 
 export interface Lore {
@@ -11,9 +9,6 @@ export interface Lore {
   /** Myth, history or how other cultures saw it. */
   story?: string;
 }
-
-const C_KM_S = 299792.458;
-const LY_PER_PC = 3.26156;
 
 /** Stories for solar system bodies. Science for these comes from the object card's blurb. */
 export const BODY_STORIES: Record<string, string> = {
@@ -106,7 +101,7 @@ export const CONSTELLATION_LORE: Record<string, Lore> = {
   Car: { science: 'Holds Canopus and the Carina Nebula, where Eta Carinae, a giant unstable star, flared up in the 1840s.', story: 'The keel of the Argo, Jason\'s ship, which the old sky held as one huge constellation.' },
 };
 
-/** Lumen's lines for an object. */
+/** The lore for an object, shown on its Atlas page. */
 export function loreFor(u: Universe, obj: SkyObject, bodyScience: (o: SkyObject) => string | null): Lore {
   if (obj.body) return { science: bodyScience(obj) ?? undefined, story: BODY_STORIES[obj.ref] };
   if (obj.starIndex !== undefined) {
@@ -115,24 +110,4 @@ export function loreFor(u: Universe, obj: SkyObject, bodyScience: (o: SkyObject)
   }
   if (obj.constellation?.iau && obj.ref.startsWith('con:western:')) return CONSTELLATION_LORE[obj.constellation.iau] ?? {};
   return {};
-}
-
-/** When the light reaching you now set out, in words. */
-export function lightNote(u: Universe, obj: SkyObject): string | null {
-  if (obj.body) {
-    const seconds = (obj.body.dist * AU_KM) / C_KM_S;
-    const when = seconds < 90 ? `${seconds.toFixed(1)} seconds` : seconds < 5400 ? `${Math.round(seconds / 60)} minutes` : `${(seconds / 3600).toFixed(1)} hours`;
-    return `The light you see now left ${obj.name} ${when} ago.`;
-  }
-  if (obj.starIndex !== undefined && u.stars.dist[obj.starIndex] > 0) {
-    const ly = u.stars.dist[obj.starIndex] * LY_PER_PC;
-    const year = new Date((u.frame.jdUT - 2440587.5) * 86400000).getUTCFullYear() - ly;
-    if (ly < 120) return `That light left ${obj.name} about ${Math.round(ly)} years ago, around ${Math.round(year)}.`;
-    if (ly < 2500) {
-      const when = year > 0 ? `around AD ${Math.round(year / 10) * 10}` : `around ${Math.round(-year / 100) * 100} BC`;
-      return `That light set out about ${Math.round(ly / 10) * 10} years ago, ${when}.`;
-    }
-    return `That light has travelled about ${Math.round(ly / 100) * 100} years to reach you.`;
-  }
-  return null;
 }

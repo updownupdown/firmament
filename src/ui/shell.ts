@@ -467,8 +467,10 @@ export class Shell {
       subtitle.textContent = obj.region ? obj.subtitle
         : app.mode === 'space' && obj.body
         ? (obj.kind === 'sun' ? obj.subtitle : `${obj.subtitle} · ${formatDistanceAU(obj.body.r)} from the Sun`)
+        : app.universe.voyage ? obj.subtitle
         : `${obj.subtitle} · ${whereNow(app.universe, obj, app.layers.atmosphere)}`;
-      const space = app.mode === 'space';
+      // Out in space or among the stars there is no horizon to measure from.
+      const space = app.mode === 'space' || !!app.universe.voyage;
       fill(quick, factList(quickFacts(app.universe, obj).filter((f) => !space || f.label !== 'Altitude')));
       // Lumen, when it is on, says how old the light is.
       const note = app.store.data.settings.guide === 'on' && !space ? lightNote(app.universe, obj) : null;

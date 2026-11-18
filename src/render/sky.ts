@@ -11,7 +11,7 @@ import {
   C_AU_PER_DAY, DEG, type Mat3, type Vec3, add, angleBetween, apply, clamp, cross, dot, fromSpherical, identity,
   mulAll, normalize, rotX, scale, sub, transpose,
 } from '../astro/math.ts';
-import { blackbodyRGB, temperatureFromBV } from '../astro/stars.ts';
+import { SUN_ABSOLUTE_MAG, blackbodyRGB, temperatureFromBV } from '../astro/stars.ts';
 import { J2000 } from '../astro/time.ts';
 import type { Boundaries, Constellation, Dso } from '../data/types.ts';
 import type { LayerFlags } from '../sim/scene.ts';
@@ -59,7 +59,7 @@ export interface DrawnBody {
   alt: number;
 }
 
-const WORLD_INDEX = { earth: 0, moon: 1, mars: 2 } as const;
+const WORLD_INDEX = { earth: 0, moon: 1, mars: 2, star: 1 } as const;
 const LAND: Record<string, Vec3> = { earth: [0.30, 0.36, 0.24], moon: [0.42, 0.42, 0.40], mars: [0.62, 0.36, 0.22] };
 const smoothstep01 = (x: number): number => { const t = clamp(x, 0, 1); return t * t * (3 - 2 * t); };
 
@@ -393,7 +393,8 @@ export class SkyRenderer {
 
   /** The air counts once the camera is down in it, and the Moon has none. */
   private air(opts: SkyOptions): boolean {
-    return opts.layers.atmosphere && this.height < 0.004 && this.universe.world !== 'moon';
+    const w = this.universe.world;
+    return opts.layers.atmosphere && this.height < 0.004 && w !== 'moon' && w !== 'star';
   }
 
   render(opts: SkyOptions): void {
@@ -433,7 +434,9 @@ export class SkyRenderer {
     }
 
     // 2. Lines. Charted lines fade out as the camera leaves the ground: Space view has none.
-    const chartFade = 1 - smoothstep01(this.height / 0.02);
+    // Among the stars the constellations come apart, so the charted lines go too.
+    const voyage = u.voyage;
+    const chartFade = voyage ? 0 : 1 - smoothstep01(this.height / 0.02);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     const lines = this.common(this.lineProgram)
       .v2('uViewport', this.canvas.width, this.canvas.height).f('uYears', u.years);
@@ -483,13 +486,23 @@ export class SkyRenderer {
     gl.blendFunc(gl.ONE, gl.ONE);
     const stars = this.common(this.starProgram)
       .m3('uJ2000ToHorizon', f.j2000ToHorizon).f('uYears', u.years).v3('uAberration', aberration)
-      .f('uLimitMag', c.limitMag).f('uExtinction', c.extinction).f('uPixelRatio', dpr).f('uSizeBoost', 1).f('uOrbit', orbit);
+      .f('uLimitMag', c.limitMag).f('uExtinction', c.extinction).f('uPixelRatio', dpr).f('uSizeBoost', 1).f('uOrbit', orbit)
+      .v3('uObserver', voyage ?? [0, 0, 0]);
     // The catalog is sorted by magnitude, so only the stars that can show are sent.
-    this.stars.drawPoints(this.countBrighter(c.limitMag + 0.5));
+    // Out among the stars a faint star can be close and bright, so all of them are sent.
+    this.stars.drawPoints(voyage ? undefined : this.countBrighter(c.limitMag + 0.5));
     this.drawTycho(c.limitMag);
 
-    this.drawn = this.placeBodies(c);
+    // Out among the stars the planets are lost in the Sun's glare; the Sun is one more star.
+    this.drawn = voyage ? [] : this.placeBodies(c);
     const points: number[] = [];
+    if (voyage) {
+      const d = Math.hypot(voyage[0], voyage[1], voyage[2]);
+      if (d > 1e-6) {
+        const dir = scale(voyage, -1 / d);
+        points.push(dir[0], dir[1], dir[2], 0, 0, 0, 0, SUN_ABSOLUTE_MAG + 5 * Math.log10(d / 10), 1, 0.93, 0.82);
+      }
+    }
     for (const d of this.drawn) {
       if (d.id === 'sun' || d.id === 'moon') continue;
       // Fade the point out as the disc takes over.
@@ -512,10 +525,10 @@ export class SkyRenderer {
 
     // 5. Discs, far to near.
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    this.drawBodies(c, opts);
+    if (!voyage) this.drawBodies(c, opts);
 
     // 6. Ground.
-    if (opts.layers.ground || this.height > 0) {
+    if ((opts.layers.ground || this.height > 0) && !voyage) {
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       const e = BODIES.earth, days = f.jdTT - J2000;
       const pole = fromSpherical(e.poleRa, e.poleDec);

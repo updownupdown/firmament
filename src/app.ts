@@ -2,7 +2,7 @@
 // settings. Sections of the UI read from it and call its methods; "show me"
 // anywhere means `app.apply(scene)`.
 
-import { DEG, apply, clamp, transpose } from './astro/math.ts';
+import { DEG, type Vec3, apply, clamp, scale, transpose } from './astro/math.ts';
 import { jdNow } from './astro/time.ts';
 import { type CoreData, loadBoundaries, loadCulture, loadFaintStars, loadTychoBand, loadTychoIndex } from './data/load.ts';
 import { ASCENT_SECONDS, type SkyPose, ascentPose, matchingFov, nadirAzimuth, orbitAngles } from './render/ascent.ts';
@@ -29,6 +29,11 @@ export type AppEvent =
   /** About once a second of real time, for clocks and live readouts. */
   | 'second'
   | 'select' | 'settings' | 'site' | 'section' | 'time' | 'data' | 'mode' | 'pointing' | 'measure';
+
+/** How far star travel reaches: about 100 light years, where catalogue distances are good to a few percent. */
+export const MAX_TRIP_PC = 30.7;
+/** How far short of a star a trip stops, parsecs (about 400 AU). */
+const STOP_SHORT_PC = 0.002;
 
 const DEFAULT_SITE: Site = (() => {
   const p = PLACES[0];
@@ -414,7 +419,7 @@ export class App {
 
   /** Lifting off or landing: the view is flying itself. */
   get flying(): boolean {
-    return this.transit !== null || this.descending;
+    return this.transit !== null || this.descending || this.travel !== null;
   }
 
   /**
@@ -428,11 +433,12 @@ export class App {
     if (mode === 'space') { void this.setPointing(false); this.stopMeasure(); }
     const away = this.universe.away;
     if (mode === 'space' && away) {
-      // Off from another world: straight into orbit around it, and home is the Earth again.
+      // Off from another world: straight into orbit around it (from the stars, back over the Solar System), and home is the Earth again.
       this.universe.setAway(null);
       this.mode = 'space';
       this.universe.update(this.clock.jdUT);
-      this.space.place(away.world, this.space.framingDistance(away.world) * 3);
+      if (away.world === 'star') this.space.place('sun', 4.2);
+      else this.space.place(away.world, this.space.framingDistance(away.world) * 3);
       this.emitPlace();
       return;
     }
@@ -463,7 +469,10 @@ export class App {
   /** Where the camera is, in words: "Toronto, Earth", "Orbiting Mars", "Above the Solar System". */
   viewpoint(): { label: string; place: 'ground' | 'orbit'; body: string; away: boolean } {
     const away = this.universe.away;
-    if (this.mode === 'sky' && away) return { label: `${away.name}, ${WORLD_NAMES[away.world]}`, place: 'ground', body: away.world, away: true };
+    if (this.mode === 'sky' && away?.world === 'star') {
+      return { label: this.travel ? 'Between the stars' : `Near ${away.name}`, place: 'ground', body: away.ref ?? 'sun', away: true };
+    }
+    if (this.mode === 'sky' && away) return { label: `${away.name}, ${WORLD_NAMES[away.world as 'moon' | 'mars']}`, place: 'ground', body: away.world, away: true };
     if (this.mode === 'sky') return { label: `${this.site.name}, Earth`, place: 'ground', body: 'earth', away: false };
     const focus = this.space.camera.focus;
     if (focus === 'sun') return { label: this.space.camera.dist > 0.05 ? 'Above the Solar System' : 'Near the Sun', place: 'orbit', body: 'sun', away: false };
@@ -473,7 +482,69 @@ export class App {
 
   /** Can the camera fly out to circle this in Space view? */
   canFlyTo(ref: string): boolean {
+    if (ref.startsWith('star')) return this.starTrip(ref) !== null;
     return ref.startsWith('region:') || this.space.bodies.some((b) => b.id === ref);
+  }
+
+  /** Stars close enough to fly to: a measured distance within about 100 light years. */
+  private starTrip(ref: string): { i: number; at: Vec3; name: string } | null {
+    const o = this.universe.resolve(ref);
+    const i = o?.starIndex;
+    if (!o || i === undefined) return null;
+    const pc = this.universe.stars.dist[i];
+    if (!(pc > 0) || pc > MAX_TRIP_PC) return null;
+    const dir = this.universe.stars.at(i, this.universe.years).dir;
+    // Stop a few hundred AU short, so the star shines as a sun with its neighbours around it.
+    const at = scale(dir, Math.max(0, pc - STOP_SHORT_PC));
+    return { i, at, name: o.name };
+  }
+
+  /** A trip between the stars in progress. */
+  private travel: { from: Vec3; to: Vec3; t: number; duration: number; ref: string; name: string } | null = null;
+
+  private flyToStar(ref: string): void {
+    const trip = this.starTrip(ref);
+    if (!trip) return;
+    const start = () => {
+      const from = this.universe.voyage ?? [0, 0, 0];
+      const ly = Math.hypot(trip.at[0] - from[0], trip.at[1] - from[1], trip.at[2] - from[2]) * 3.2616;
+      this.travel = { from, to: trip.at, t: 0, duration: this.reducedMotion ? 0.01 : 4 + 1.5 * Math.log10(1 + ly), ref, name: trip.name };
+      // Face the way you are going, and keep it centred as it grows.
+      this.camera.track = () => this.aim(ref);
+      this.camera.flyTo({ ...(this.aim(ref) ?? {}), fov: 70 * DEG }, 0.8);
+      this.emit('mode');
+    };
+    if (this.universe.voyage && this.mode === 'sky') { start(); return; }
+    // Leaving the Solar System: a fade, and then out among the stars from the Sun.
+    this.cut(() => {
+      void this.setPointing(false);
+      this.stopMeasure();
+      this.mode = 'sky';
+      this.renderer.height = 0;
+      this.renderer.projection.lens = 0.5;
+      this.universe.setAway({ world: 'star', name: 'Sun', at: [0, 0, 0] });
+      this.emitPlace();
+      start();
+    });
+  }
+
+  private stepTravel(dt: number): void {
+    const tr = this.travel!;
+    tr.t = Math.min(1, tr.t + dt / tr.duration);
+    const t = tr.t, e = t < 0.5 ? 4 * t ** 3 : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    const at: Vec3 = [0, 1, 2].map((k) => tr.from[k] + (tr.to[k] - tr.from[k]) * e) as Vec3;
+    this.universe.setAway({ world: 'star', name: tr.name, at, ref: tr.ref });
+    this.invalidate();
+    if (t < 1) return;
+    this.travel = null;
+    // Arrived: turn round to find the Sun among the stars.
+    const d = Math.hypot(...at);
+    this.camera.track = null;
+    if (d > 0) {
+      const h = this.universe.horizontal(scale(at, -1 / d));
+      this.camera.flyTo({ az: h.az, alt: h.alt, fov: 80 * DEG }, 2.2);
+    }
+    this.emit('mode');
   }
 
   /** Can the camera land on this world? */
@@ -521,6 +592,7 @@ export class App {
   /** Fly out to circle an object in Space view. */
   flyToObject(ref: string): void {
     if (!this.canFlyTo(ref) || this.flying) return;
+    if (ref.startsWith('star')) { this.flyToStar(ref); return; }
     if (ref.startsWith('region:')) { this.centre(ref); this.select(ref); return; }
     if (this.mode === 'sky') { this.setMode('space', ref, true); return; }
     this.space.setFocus(ref);
@@ -744,6 +816,7 @@ export class App {
       }
       let moved = space ? this.space.camera.tick(dt) : this.camera.tick(dt);
       if (this.transit) { this.stepTransit(dt); moved = true; }
+      if (this.travel) { this.stepTravel(dt); moved = true; }
       this.sinceDraw += dt;
       // The sky turns 15 arcseconds a second: redraw once it has moved a third of a pixel.
       const drift = (0.3 * this.renderer.projection.pixelAngle) / (7.3e-5 * Math.max(1, Math.abs(this.clock.rate)));

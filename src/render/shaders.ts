@@ -315,12 +315,14 @@ uniform float uExtinction;  // magnitudes per airmass, 0 without air
 uniform float uPixelRatio;
 uniform float uSizeBoost;
 uniform float uOrbit;       // 0 on the ground, 1 drawn as Space view draws its stars (lifting off)
+uniform vec3 uObserver;     // where the observer is among the stars, parsecs from the Sun (zero at home)
 out vec3 vColor;
 out float vCore;    // core radius in device pixels
 out float vBright;  // 0..1 peak intensity
 out float vSize;    // sprite size in device pixels
 void main() {
-  vec3 p = aPos.xyz + aVel * uYears;
+  // Stars with a known distance are seen from the observer, and brighten or fade with the new distance.
+  vec3 p = aPos.xyz + aVel * uYears - (aPos.w > 0.5 ? uObserver : vec3(0.0));
   float r = length(p);
   float mag = aMagColor.x;
   if (aPos.w > 0.5) mag += 5.0 * log(r / length(aPos.xyz)) / log(10.0);

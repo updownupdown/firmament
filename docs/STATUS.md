@@ -355,6 +355,20 @@ unresolved stars, not catalog stars, so they cannot be picked.
   Sky, or Home to (the viewpoint chip), comes back. Tests in
   `sim/worlds.test.ts` (the Earth fixed high over Tranquility Base, the
   Earth's phase from the Moon, a Martian sol, the Sun's size from Mars).
+- Star travel (phase 5): Fly to it on any star with a measured distance
+  within 30.7 pc (`MAX_TRIP_PC`, about 100 ly). A fade takes the observer out
+  of the Solar System (`Universe.away = { world: 'star', at }`, parsecs from
+  the Sun), then `App.stepTravel` eases `at` to a few hundred AU short of the
+  star while the view keeps it centred, and on arrival turns round to the Sun.
+  `StarCatalog.at(i, years, from)`, `Universe.starDirection`/`starMag` and the
+  star shader's `uObserver` see every star with a distance from there and
+  re-light it; stars without one stay put as a backdrop. Among the stars
+  celestial north is up, there is no ground or air, the charted lines and
+  constellation names go (they come apart), and the Sun is drawn as one more
+  star of magnitude 4.83 + 5 log10(d / 10 pc) with a label. Tested: from
+  Alpha Centauri the Sun is magnitude 0.47 at RA 2h 40m, Dec +60.8° in
+  Cassiopeia (`sim/travel.test.ts`). Home to (the viewpoint chip) or Sky
+  comes back; going to Space from there lands over the Solar System.
   `ZoomPast` in `render/camera.ts` needs a deliberate push, so resting on a
   limit never switches views. Zoom input is ignored while lifting off.
 - Compressed scale in Space view: layer `compressed`, switched by the pill

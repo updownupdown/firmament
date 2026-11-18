@@ -51,7 +51,7 @@ export function collectLabels(r: SkyRenderer, layers: LayerFlags, selectedRef: s
   const items: LabelItem[] = [];
   const marked = new Set(highlight);
   if (selectedRef) marked.add(selectedRef);
-  const floor = layers.ground ? -0.3 * DEG : -90 * DEG;
+  const floor = layers.ground && !u.voyage ? -0.3 * DEG : -90 * DEG;
   const m = u.frame.j2000ToHorizon;
   const place = (dir: Vec3): { x: number; y: number } | null => {
     const h = apply(m, dir);
@@ -60,7 +60,15 @@ export function collectLabels(r: SkyRenderer, layers: LayerFlags, selectedRef: s
     return s && s.onScreen ? s : null;
   };
 
-  if (layers.cardinals && layers.ground) {
+  const voyage = u.voyage;
+  if (voyage) {
+    // The Sun, now one star among many.
+    const d = Math.hypot(voyage[0], voyage[1], voyage[2]);
+    const s = d > 1e-6 ? place([-voyage[0] / d, -voyage[1] / d, -voyage[2] / d]) : null;
+    if (s) items.push({ key: 'sun', text: 'Sun', x: s.x, y: s.y, kind: 'body', priority: 900, offset: 8 });
+  }
+
+  if (layers.cardinals && layers.ground && !voyage) {
     for (const [text, az] of CARDINALS) {
       const s = p.projectCamera(apply(p.view, fromAzAlt(az * DEG, 0)));
       if (s && s.onScreen) {
@@ -97,14 +105,14 @@ export function collectLabels(r: SkyRenderer, layers: LayerFlags, selectedRef: s
       if (!meta.n || i >= u.stars.count) continue;
       const ref = starRef(u.stars, i);
       const sel = marked.has(ref);
-      if (u.stars.mag[i] > limit && !sel) continue;
+      if ((u.voyage ? u.starMag(i) : u.stars.mag[i]) > limit && !sel) continue;
       const s = place(u.starDirection(i));
       if (!s) continue;
       items.push({ key: ref, text: meta.n, x: s.x, y: s.y, kind: 'star', priority: 500 - u.stars.mag[i] * 10, offset: 7, selected: sel });
     }
   }
 
-  if (layers.constellationLabels && layers.lines && p.fov > 12 * DEG) {
+  if (layers.constellationLabels && layers.lines && p.fov > 12 * DEG && !voyage) {
     for (const con of constellationCentres(u)) {
       const s = place(con.dir);
       if (s) items.push({ key: con.ref, text: con.name, x: s.x, y: s.y, kind: 'con', priority: marked.has(con.ref) ? 700 : 300, offset: 0, centred: true, selected: marked.has(con.ref) });

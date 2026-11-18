@@ -47,6 +47,15 @@
   --plot-sight: rgba(157, 180, 255, 0.75);
   --plot-height: 280px;
 
+  /* Timeline band: daylight, the twilights, darkness and moonlight; planet colours. */
+  --tl-day: #4f6fa8;
+  --tl-civil: #34497e;
+  --tl-nautical: #1c2850;
+  --tl-dark: #080c1a;
+  --tl-moonlit: #8d9cc4;
+  --tl-venus: #f3ead2;
+  --tl-jupiter: #ffc79a;
+
   /* Star lab: element colours (read as classes .el-H etc.) and nebula tints. */
   --el-h: #7fb2ff;
   --el-he: #f0c27a;

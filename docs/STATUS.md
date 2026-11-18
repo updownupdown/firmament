@@ -234,11 +234,21 @@ only stars a magnitude above the limit, so what is picked is visible.
 magnitude, eclipse dimming and the deep-sky limit, split out of `sky.ts` so
 labels, picking and tests use it without the renderer.
 
-**Time chip** (`src/ui/timebar.ts`): the top chip shows place and time with
-play/pause beside them. Tapping it drops the time panel: Now, direction, the
-`RATE_STEPS` as a grid, date and time fields in the place's local time, quick
-jumps, and a link to Place and time. The panel sits outside the glass chip
-because `backdrop-filter` would trap a fixed element inside it. Years outside 1 to 9999 go through Place and time.
+**Time chip and timeline** (`src/ui/timebar.ts`, `src/sim/timeline.ts`; owner's
+choice from the 2026-11-18 controls study, option B): the top chip shows place
+and time with play/pause. Tapping it turns the bottom bar into the timeline
+(`data-bar="time"` on the root hides the dock; on phones an object card moves
+under the top bar and shrinks). Zooms: **Night** is noon to noon (`timelineWindow`)
+with a twilight band, up-lanes for the Moon and the visible bright planets
+(clipped to sunset–sunrise, `nightSpan`) and moment chips (`nightMoments`: sunset,
+dark, rises, sets, best, dawn, sunrise); play runs 1 h/s and stops at sunrise.
+**Month** is the calendar month with a moonlight band (Moon illumination at
+22:00 each day) and events of importance ≥ 1; **Year** shows importance ≥ 2 and
+seasons, filled month by month from `EventService`. Zoomed out, dragging and play
+keep the clock time (`withClockOf`, `shiftSameTime`), stepping a day per beat so
+the sky does not spin. ‹ › step to the same time on the next night, month or year.
+The heading opens Place and time (date fields, any year). "Speed" opens the
+`RATE_STEPS` and direction for anyone who wants a rate.
 
 **Picking**: tapping a label picks what it names (`LabelLayer.hit`). The
 nearest-object pick leans toward bright and named stars, and toward

@@ -16,7 +16,7 @@ import { placeTimePanel, settingsPanel } from './panels.ts';
 import { tonightPanel } from './tonight.ts';
 import { type StarLabPanel, starLabPanel } from './starlab.ts';
 import { type StarSeed, starSeed } from '../sim/starlink.ts';
-import { timeChip } from './timebar.ts';
+import { type TimeBar, timeChip } from './timebar.ts';
 
 /** The four places in the dock. */
 type Place = 'sky' | 'space' | 'tonight' | 'atlas';
@@ -46,6 +46,7 @@ export class Shell {
   private readonly journey: JourneyPlayer;
   private readonly starLab: StarLabPanel;
   private readonly atlas: AtlasPanel;
+  private timeBar!: TimeBar;
 
   constructor(app: App, root: HTMLElement) {
     this.app = app;
@@ -76,7 +77,7 @@ export class Shell {
     if (point) root.append(point);
     root.append(this.scaleButton());
     const measure = measureTool(app);
-    root.append(measure.layer, this.topBar(), measure.banner, this.reticle(), this.objectCard(), this.journey.el, this.dock(), this.sheetEl, this.toastEl, this.stillHint(), nightVision);
+    root.append(measure.layer, this.topBar(), measure.banner, this.reticle(), this.objectCard(), this.journey.el, this.dock(), this.timeBar.el, this.sheetEl, this.toastEl, this.stillHint(), nightVision);
 
     const syncSettings = () => {
       const s = app.store.data.settings;
@@ -93,6 +94,7 @@ export class Shell {
       if (e.key === 'Escape') {
         if (app.still) app.setStill(false);
         else if (this.sheet) this.closeSheet();
+        else if (this.timeBar.open) this.timeBar.close();
         else if (app.measure) app.stopMeasure();
         else if (app.selected) app.select(null);
       } else if (e.key === '/' && !isTyping(e)) {
@@ -117,6 +119,7 @@ export class Shell {
   openSheet(id: Exclude<SheetId, null>): void {
     const panel = this.panels[id];
     if (this.sheet !== id) this.lastFocus = document.activeElement as HTMLElement | null;
+    this.timeBar.close();
     this.sheet = id;
     this.sheetTitle.textContent = panel.title;
     fill(this.sheetBody, panel.el);
@@ -154,6 +157,7 @@ export class Shell {
   /** Begin or resume a journey, with the sky in view. */
   startJourney(id: string): void {
     this.closeSheet();
+    this.timeBar.close();
     this.journey.start(id);
   }
 
@@ -179,11 +183,18 @@ export class Shell {
   // ---------------------------------------------------------------- top bar
 
   private topBar(): HTMLElement {
-    const { chip, panel } = timeChip(this.app, () => this.openSheet('place'));
+    const { chip, bar } = timeChip(this.app, {
+      openPlace: () => this.openSheet('place'),
+      onToggle: (open) => {
+        if (open) this.closeSheet();
+        if (open) document.documentElement.dataset.bar = 'time';
+        else delete document.documentElement.dataset.bar;
+      },
+    });
+    this.timeBar = bar;
     return h('div', { class: 'top-bar chrome' }, chip,
       iconButton('search', 'Search the Atlas', () => this.openAtlas({ search: true }), 'glass'),
-      iconButton('sliders', 'View and settings', () => this.openSheet('settings'), 'glass'),
-      panel);
+      iconButton('sliders', 'View and settings', () => this.openSheet('settings'), 'glass'));
   }
 
   /** Phone pointing: only offered on devices that can do it. */

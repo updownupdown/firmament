@@ -5,7 +5,9 @@
 
 import type { App } from '../app.ts';
 import type { TripTarget } from '../learn/trip.ts';
+import { type SlingshotLab, slingshotLab } from './slingshot.ts';
 import { type TripPlanner, tripPlanner } from './trip.ts';
+import { type WhatIfLab, whatIfLab } from './whatif.ts';
 import { Pointing } from '../render/pointing.ts';
 import { formatDistanceAU } from '../sim/format.ts';
 import { lightNote } from '../sim/lore.ts';
@@ -157,6 +159,16 @@ export class Shell {
   openTrip(target?: TripTarget): void {
     this.trip ??= tripPlanner(this);
     this.trip.open(target);
+  }
+
+  private slingshot: SlingshotLab | null = null;
+  private whatIf: WhatIfLab | null = null;
+
+  /** Open a lab that runs in Space view. */
+  openLab(lab: 'trip' | 'slingshot' | 'whatif'): void {
+    if (lab === 'trip') this.openTrip();
+    else if (lab === 'slingshot') (this.slingshot ??= slingshotLab(this)).open();
+    else (this.whatIf ??= whatIfLab(this)).open();
   }
 
   /** Open the Atlas at an entry, a category, or its search field. */

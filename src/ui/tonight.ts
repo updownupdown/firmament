@@ -85,7 +85,7 @@ export function tonightPanel(shell: Shell): Panel {
     h('div', { class: 'lumen-actions' },
       h('button', { class: 'pill-button primary', type: 'button', onclick: () => setGuide('on') }, 'Turn on Lumen'),
       h('button', { class: 'pill-button', type: 'button', onclick: () => setGuide('off') }, 'No thanks')),
-    h('p', { class: 'hint' }, 'You can change this any time in View.'));
+    h('p', { class: 'hint' }, 'You can change this any time in Settings.'));
 
   const promptCard = (prompt: Prompt) => {
     const show = h('button', { class: 'pill-button primary', type: 'button', onclick: () => shell.show(prompt.scene) }, 'Show me');
@@ -111,7 +111,9 @@ export function tonightPanel(shell: Shell): Panel {
     const prompt = list.length ? (list[0].scene.time && (events ?? []).some((e) => e.importance >= 2 && Math.abs(e.t - t.anchor - 0.5) < 0.75) ? list[0] : list[dayNumber % list.length]) : null;
 
     const tw = t.twilight;
-    const darkTitle = t.darkness === 'dark' && t.darkFrom !== null && t.darkUntil !== null ? `${time(t.darkFrom)} – ${time(t.darkUntil)}`
+    // Two halves that wrap as a pair, so a 12-hour clock's longer times fit the tile.
+    const darkTitle = t.darkness === 'dark' && t.darkFrom !== null && t.darkUntil !== null
+      ? [h('span', null, `${time(t.darkFrom)} –`), ' ', h('span', null, time(t.darkUntil))]
       : t.darkness === 'polar-night' ? 'All day' : t.darkness === 'twilight' ? 'Twilight all night' : 'No night';
     const darkSub = tw.sunset !== null ? `Sunset ${time(tw.sunset)}`
       : t.darkness === 'day' ? 'The Sun does not set' : 'The Sun does not rise';

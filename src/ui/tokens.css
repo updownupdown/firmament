@@ -47,6 +47,20 @@
   --plot-sight: rgba(157, 180, 255, 0.75);
   --plot-height: 280px;
 
+  /* Solar system list in the Atlas: a dot's colour per body. */
+  --sys-sun: #ffd27a;
+  --sys-mercury: #b8b1a8;
+  --sys-venus: #f3ead2;
+  --sys-earth: #7fb2ff;
+  --sys-mars: #ff8a65;
+  --sys-jupiter: #ffc79a;
+  --sys-saturn: #f0d79a;
+  --sys-uranus: #a8e3e8;
+  --sys-neptune: #7d9cff;
+  --sys-small: #9aa3b5;
+  --sys-rail: rgba(255, 255, 255, 0.14);
+  --dock-height: 60px;
+
   /* Timeline band: daylight, the twilights, darkness and moonlight; planet colours. */
   --tl-day: #4f6fa8;
   --tl-civil: #34497e;

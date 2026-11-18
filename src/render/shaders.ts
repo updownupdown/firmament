@@ -247,6 +247,7 @@ void main() {
 }`;
 
 export const GROUND_FRAG = HEADER + UNPROJECT + SKY + GROUND_PROFILE + SURFACE + `
+const float GROUND_VEIL = 0.8;  // the ground's opacity standing on it
 uniform float uPixelAngle;
 uniform float uHeight;   // camera height above the ground, Earth radii (0 standing on it)
 uniform vec3 uPole;      // the Earth's north pole, horizon frame
@@ -268,7 +269,8 @@ void main() {
   float hills = 1.0 - smoothstep(edge - uPixelAngle, edge + uPixelAngle, alt);
   if (uHeight <= 0.0) {
     if (hills <= 0.0) discard;
-    outColor = vec4(land + (hash12(gl_FragCoord.xy) - 0.5) / 255.0, hills);
+    // Standing on it, the ground is a veil: what is below the horizon shows through faintly.
+    outColor = vec4(land + (hash12(gl_FragCoord.xy) - 0.5) / 255.0, hills * GROUND_VEIL);
     return;
   }
   // Rising: the Earth as a globe of radius 1 below an eye 1 + height from its centre.
@@ -276,7 +278,7 @@ void main() {
   float rise = smoothstep(0.0, 0.002, uHeight);
   float limb = -acos(1.0 / (1.0 + uHeight));
   float globe = 1.0 - smoothstep(limb - uPixelAngle, limb + uPixelAngle, alt);
-  float cover = mix(hills, globe, rise);
+  float cover = mix(hills * GROUND_VEIL, globe, rise);
   vec3 o = vec3(0.0, 0.0, 1.0 + uHeight);
   float b = dot(o, h);
   float d2 = b * b - dot(o, o) + 1.0;

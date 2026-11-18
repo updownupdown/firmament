@@ -143,9 +143,10 @@ chosen by the owner on 2026-11-16)
   900 px. On a phone the bottom holds one bar: the dock, or the object card in
   its place while something is selected, or the journey card during a journey
   (then the object card moves under the top bar). `Esc` closes, `/` searches, space pauses.
-- `panels.ts`: search; view settings (layer toggles, sky culture, Bortle slider,
-  night vision, 12-hour clock, reduced motion, share link, Still mode, credits
-  rendered from `ATTRIBUTION.md`); place and time (city search, geolocation,
+- `panels.ts`: Settings (the gear in the top bar: Lumen, night vision, 12-hour
+  clock, reduced motion, share link, Still mode, install, credits rendered from
+  `ATTRIBUTION.md`; nothing that the View bar holds); `LAYER_GROUPS` and
+  `BORTLE` for the View bar; place and time (city search, geolocation,
   coordinates, date fields with AD/BC down to the clock's limits).
 - `tonight.ts`: daily prompt with "Show me" (big events first, otherwise one of
   the bright planets, the Moon or the best-placed constellation, chosen by day
@@ -178,8 +179,14 @@ sheet and a "Back to …" pill (`data-reading`) leads back to the page.
   `flyby.ts`; `sandbox.ts` on `astro/nbody.ts`). Diagrams: `ui/plot.ts`
   dispatches to `plot-orbits`, `plot-fix`, `plot-flyby`, `plot-sandbox`;
   shared canvas helpers in `ui/plot-kit.ts`; colours are `--plot-*` tokens.
-- Atlas tabs: Objects, Concepts (by group), Labs (Star lab plus concepts with
-  `lab` set). Search finds concepts (`concept:<id>`); an entry page lists the
+- Atlas tabs: Solar system (the front page: `atlas/system.ts` `SOLAR_SYSTEM`,
+  Sun to Oort cloud in order, not to scale, moons and belt members indented under
+  their parent, a dot per body sized by kind; tested to resolve and run outward),
+  Objects (category tiles one to a row), Concepts (by group, each with an icon:
+  `CONCEPT_ICONS` in `ui/atlas.ts`, falling back to `GROUP_ICONS`, so give new
+  concepts an icon there), Labs (Star lab plus concepts with `lab` set). The
+  sheet header holds the back arrow while a page is open (`Panel.depth` /
+  `goBack`), so it never scrolls away. Search finds concepts (`concept:<id>`); an entry page lists the
   concepts whose `related` names it. Stored journey progress is dropped by
   the store's migration.
 
@@ -256,13 +263,36 @@ the sky does not spin. ‹ › step to the same time on the next night, month or
 The heading opens Place and time (date fields, any year). "Speed" opens the
 `RATE_STEPS` and direction for anyone who wants a rate.
 
-**View chips** (`src/ui/viewbar.ts`, `src/sim/looks.ts`; option B of the same
-study): the View button turns the bottom bar into one row of layer chips under
-tabs (Looks, Sky, Guides, Ground; in Space view one Space tab), so each switch is
-seen working. Looks (`LOOKS`: Naked eye, Stargazer = the defaults, Planets, Star
-chart, Navigator) set every sky layer and leave Space layers alone. More opens
-the full View sheet. Only one bottom bar (time or view) is open at a time
+**View bar** (`src/ui/viewbar.ts`, `src/sim/looks.ts`; option B of the same
+study, made taller on 2026-11-18 at James's request): the View button sits at the
+bottom right (above the dock on phones; hidden while a sheet, a selection or a
+bottom bar is up there) and turns the bottom bar into tabs (Looks, Sky, Guides,
+Ground with the light-pollution slider, Culture with the sky-culture picker; in
+Space view one Space tab) over tiles four to a row, two rows tall, so each
+switch is seen working. Looks (`LOOKS`: Naked eye, Stargazer = the defaults,
+Planets, Star chart, Navigator) set every sky layer and leave Space layers
+alone. Only one bottom bar (time or view) is open at a time
 (`Shell.barToggled`); opening a sheet or a journey closes them.
+
+**Search** (`src/ui/search.ts`, 2026-11-18): its own overlay from the search
+button or `/`, the only place the field takes focus (the Atlas no longer has a
+field, so the phone keyboard stays down when it opens). Before typing it shows a
+few suggestions. A result turns the sky to the object (`Shell.showObject`; belts
+and clouds go to Space view); its book button, and any result that is a page
+(concept, category, shower, culture), opens the Atlas.
+
+**Back button** (`src/ui/back.ts`, `Shell.back`): every layer that opens (sheet,
+Atlas page, search, time or view bar, selection, lab card, Still mode) pushes a
+history entry carrying its depth, and Back closes the topmost; the app is only
+left when nothing is open. Layers closed from the UI drop their entry with
+`dropLast`/`dropAll` (a quiet `history.go`, with pushes held until it lands).
+
+**Flash buttons**: the phone-pointing button (icon `pointing`) and Space view's
+scale switch (icons `spread` / `squeeze`) are round icon buttons that widen for
+about two seconds with a word on the new state (`Shell.flash`), instead of a toast.
+
+**Ground veil**: standing on the Earth the ground is drawn at 80% opacity
+(`GROUND_VEIL` in `GROUND_FRAG`), so lines below the horizon show faintly.
 
 **Picking**: tapping a label picks what it names (`LabelLayer.hit`). The
 nearest-object pick leans toward bright and named stars, and toward
@@ -354,9 +384,8 @@ star clouds warm and the thin band cool.
 Moon's) as seen from the observer, coloured by planet; the selected body's
 orbit is drawn in the accent colour.
 
-**View panel**: layers are icon tiles in groups (On the sky, Guides, Air and
-ground, Space view), then cards for light pollution, sky culture, comfort and
-more.
+**Settings and View**: Settings (gear) and View (bottom right) are separate
+since 2026-11-18; see View bar above.
 
 **Offline**: `public/sw.js` precaches every file of a build, serves `data/`
 cache-first and everything else network-first, and is registered from

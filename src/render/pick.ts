@@ -18,7 +18,7 @@ const STRIDE = 11;
  */
 export function pick(r: SkyRenderer, layers: LayerFlags, x: number, y: number, radius = 36, prefer: ReadonlySet<string> = new Set()): string | null {
   const u = r.universe, p = r.projection, c = r.conditions;
-  const floor = layers.ground ? -0.5 * DEG : -90 * DEG;
+  const floor = layers.ground && !u.voyage ? -0.5 * DEG : -90 * DEG;
   let best: string | null = null;
   let bestScore = radius;
   const consider = (ref: string, sx: number, sy: number, bonus: number, reach = 0) => {

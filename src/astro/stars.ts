@@ -9,6 +9,9 @@
 import { type Vec3, fromSpherical } from './math.ts';
 
 const MAS = Math.PI / (180 * 3600 * 1000);
+/** The Sun's absolute visual magnitude: how bright it would look from 10 parsecs. */
+export const SUN_ABSOLUTE_MAG = 4.83;
+
 export const KMS_TO_PC_PER_YEAR = 1.0227121650537077e-6;
 
 export interface StarMeta {
@@ -113,10 +116,15 @@ export class StarCatalog {
     return { pos: [u[0] * r, u[1] * r, u[2] * r], vel, hasDistance };
   }
 
-  /** Direction (J2000 unit vector) and magnitude `years` after J2000, by linear space motion. */
-  at(i: number, years: number): { dir: Vec3; mag: number } {
+  /**
+   * Direction (J2000 unit vector) and magnitude `years` after J2000, by linear
+   * space motion, seen from `from` (parsecs from the Sun; the Sun by default).
+   * Stars without a distance stay where they are, as if infinitely far.
+   */
+  at(i: number, years: number, from?: Vec3): { dir: Vec3; mag: number } {
     const { pos, vel, hasDistance } = this.spaceMotion(i);
     const p: Vec3 = [pos[0] + vel[0] * years, pos[1] + vel[1] * years, pos[2] + vel[2] * years];
+    if (from && hasDistance) { p[0] -= from[0]; p[1] -= from[1]; p[2] -= from[2]; }
     const r = Math.hypot(p[0], p[1], p[2]);
     const r0 = hasDistance ? this.dist[i] : 1;
     return { dir: [p[0] / r, p[1] / r, p[2] / r], mag: this.mag[i] + (hasDistance ? 5 * Math.log10(r / r0) : 0) };

@@ -30,6 +30,11 @@ export interface Site {
   tz: string;
 }
 
+/** Away from home: standing on the Moon or Mars, or out among the stars at `at` parsecs from the Sun (J2000). */
+export type Away =
+  | { world: 'moon' | 'mars'; name: string; lat: number; lon: number }
+  | { world: 'star'; name: string; at: Vec3; ref?: string };
+
 export function earthSite(site: Site): EarthSite {
   return { lat: site.lat * DEG, lon: site.lon * DEG, height: site.height };
 }
@@ -113,8 +118,13 @@ export class Universe {
 
   site: Site;
   cultureId = 'western';
-  /** Standing somewhere other than home, on the Moon or Mars; null at home on the Earth. */
-  away: { world: Exclude<World, 'earth'>; name: string; lat: number; lon: number } | null = null;
+  /** Standing somewhere other than home, on the Moon or Mars, or out among the stars; null at home on the Earth. */
+  away: Away | null = null;
+
+  /** Where the observer is among the stars, parsecs from the Sun (J2000); null within the Solar System. */
+  get voyage(): Vec3 | null {
+    return this.away?.world === 'star' ? this.away.at : null;
+  }
 
   /** Per-instant state, rebuilt by `update`. */
   frame!: Frame;
@@ -165,7 +175,7 @@ export class Universe {
   }
 
   /** The world the observer stands on. */
-  get world(): World {
+  get world(): World | 'star' {
     return this.away?.world ?? 'earth';
   }
 
@@ -178,17 +188,22 @@ export class Universe {
   /** Recompute everything for an instant. Cheap to call again with the same instant. */
   update(jdUT: number): void {
     const a = this.away;
-    const stamp = `${jdUT}|${this.site.lat}|${this.site.lon}|${this.site.height}|${a ? `${a.world}|${a.lat}|${a.lon}` : ''}`;
+    const where = !a ? '' : a.world === 'star' ? `star|${a.at.join(',')}` : `${a.world}|${a.lat}|${a.lon}`;
+    const stamp = `${jdUT}|${this.site.lat}|${this.site.lon}|${this.site.height}|${where}`;
     if (stamp === this.stamp) return;
     this.stamp = stamp;
-    const f = a
-      ? makeWorldFrame(this.eph, jdUT, a.world, { lat: a.lat * DEG, lon: a.lon * DEG, height: 0 })
-      : makeFrame(this.eph, jdUT, earthSite(this.site));
+    let f: Frame;
+    if (a && a.world !== 'star') f = makeWorldFrame(this.eph, jdUT, a.world, { lat: a.lat * DEG, lon: a.lon * DEG, height: 0 });
+    else {
+      f = makeFrame(this.eph, jdUT, earthSite(this.site));
+      // Among the stars there is no horizon: celestial north is up, and the Sun's motion no longer matters.
+      if (a) f = { ...f, j2000ToHorizon: [1, 0, 0, 0, 1, 0, 0, 0, 1], dateToHorizon: transposeRows(f.j2000ToDate), earthVel: [0, 0, 0] };
+    }
     this.frame = f;
     this.years = (f.jdTT - J2000) / 365.25;
     this.bodies.clear();
     for (const id of TRACKED_BODIES) this.bodies.set(id, observeBody(this.eph, f, id));
-    if (a) {
+    if (a && a.world !== 'star') {
       // The Earth joins the sky; the ground underfoot leaves it (straight down, no size, too faint to draw).
       this.bodies.set('earth', observeBody(this.eph, f, 'earth'));
       const self = this.bodies.get(a.world)!;
@@ -220,7 +235,12 @@ export class Universe {
 
   /** Apparent direction of a catalog star now (space motion and aberration applied). */
   starDirection(i: number): Vec3 {
-    return aberrate(this.stars.at(i, this.years).dir, this.frame.earthVel);
+    return aberrate(this.stars.at(i, this.years, this.voyage ?? undefined).dir, this.frame.earthVel);
+  }
+
+  /** A catalog star's magnitude from where the observer is. */
+  starMag(i: number): number {
+    return this.stars.at(i, this.years, this.voyage ?? undefined).mag;
   }
 
   /** Keep a Tycho-2 band so its stars can be picked and named. */
@@ -286,7 +306,7 @@ export class Universe {
       const name = this.stars.label(i);
       const des = designation(meta);
       const subtitle = meta?.n && des ? des : meta?.c ? `Star in ${genitive(meta.c)}` : 'Star';
-      return { ref: starRef(this.stars, i), kind: 'star', name, subtitle, dir: this.starDirection(i), mag: this.stars.at(i, this.years).mag, starIndex: i };
+      return { ref: starRef(this.stars, i), kind: 'star', name, subtitle, dir: this.starDirection(i), mag: this.starMag(i), starIndex: i };
     }
     if (ref.startsWith('tyc:')) {
       const [b, i] = ref.slice(4).split(':').map(Number);

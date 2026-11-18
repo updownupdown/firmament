@@ -300,6 +300,17 @@ unresolved stars, not catalog stars, so they cannot be picked.
   lift-off carries on. Landing first swings Space view round over home
   (`SpaceCamera.flyToPose`), then runs the climb backwards to the pose the
   sky had when it left. Scenes, links and reduced motion still cut straight.
+- Viewpoint (`src/ui/viewpoint.ts`, `App.viewpoint`): a chip under the time
+  chip says where the camera is ("Toronto, Earth", "Orbiting Mars", "Above
+  the Solar System"); Space view's scale switch sits beside it. Tapping it
+  offers Land in (home), Fly out over the Solar System, the last three worlds
+  orbited, and the verbs for the selection. The verbs (`verbsFor`) also
+  replace the object card's Zoom in: Look at it (`App.lookAt`: lands first
+  when in space, then centres and frames), Fly to it (`App.flyToObject`:
+  any Space view body or region; stars come with star travel) and Stand on
+  it (`App.canStandOn`: the Earth for now; the Moon and Mars next). The
+  verb that keeps you where you are leads; on narrow phones the others show
+  only their icons.
   `ZoomPast` in `render/camera.ts` needs a deliberate push, so resting on a
   limit never switches views. Zoom input is ignored while lifting off.
 - Compressed scale in Space view: layer `compressed`, switched by the pill

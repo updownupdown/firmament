@@ -410,8 +410,8 @@ export class Shell {
       return b;
     };
     const el = h('nav', { class: 'dock glass chrome', 'aria-label': 'Places' },
-      make('sky', 'Sky', 'sky', () => { this.closeSheet(); app.setMode('sky'); }),
-      make('space', 'Space', 'orbit', () => { this.closeSheet(); app.setMode('space'); }),
+      make('sky', 'Sky', 'sky', () => { this.closeSheet(); app.setMode('sky', undefined, true); }),
+      make('space', 'Space', 'orbit', () => { this.closeSheet(); app.setMode('space', undefined, true); }),
       make('tonight', 'Tonight', 'moon', () => this.openSheet('tonight')),
       make('atlas', 'Atlas', 'book', () => this.openSheet('atlas')));
     app.on('mode', () => {

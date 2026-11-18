@@ -13,6 +13,7 @@ const PROJECT = `
 uniform mat3 uView;      // horizon -> camera
 uniform vec2 uScale;     // NDC per unit of the stereographic plane
 uniform float uRefract;  // 1 when the atmosphere bends light
+uniform float uLens;     // 0.5 stereographic (on the ground) .. 1 perspective (in orbit)
 
 float skyRefraction(float alt) {
   float d = alt / DEG;
@@ -32,6 +33,13 @@ vec3 refractDir(vec3 h) {
 
 // Camera-frame unit vector -> clip space. Points near straight-behind are pushed off screen.
 vec4 projectCamera(vec3 c) {
+  if (uLens > 0.5) {
+    float s = length(c.xy);
+    float th = atan(s, -c.z);
+    if (th * uLens > 1.45) return vec4(3.0, 3.0, 3.0, 1.0);
+    vec2 xy = s > 1e-9 ? c.xy * (tan(uLens * th) / uLens / s) : vec2(0.0);
+    return vec4(xy * uScale, 0.0, 1.0);
+  }
   if (c.z > 0.98) return vec4(3.0, 3.0, 3.0, 1.0);
   return vec4(2.0 * c.xy / (1.0 - c.z) * uScale, 0.0, 1.0);
 }
@@ -46,9 +54,10 @@ uniform vec3 uMoonDir;         // horizon frame
 uniform float uMoonLight;      // 0..1 moonlight reaching the ground
 uniform float uLightPollution; // 0 (pristine) .. 1 (inner city)
 uniform float uAtmosphere;     // 0 turns the air off
+uniform float uAir;            // 1 on the ground, fading to 0 as the camera rises out of the air
 
 vec3 skyColor(vec3 h) {
-  if (uAtmosphere < 0.5) return vec3(0.0, 0.001, 0.004);
+  if (uAtmosphere < 0.5 || uAir <= 0.0) return vec3(0.0, 0.001, 0.004);
   float mu = max(h.z, 0.0);
   float hz = pow(1.0 - mu, 3.0);
   float s = uSunAlt / DEG;
@@ -93,7 +102,7 @@ vec3 skyColor(vec3 h) {
 
   // Below the horizon (only seen with the ground hidden) fade toward black.
   c *= mix(1.0, 0.45, smoothstep(0.0, -0.35, h.z));
-  return c;
+  return mix(vec3(0.0, 0.001, 0.004), c, uAir);
 }
 
 float hash12(vec2 p) {
@@ -112,6 +121,66 @@ float groundProfile(vec3 h) {
 }
 `;
 
+/** Value noise and the Moon's face, shared by both views' body shaders. */
+const SURFACE = `
+float vnoise(vec3 p) {
+  vec3 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float n = dot(i, vec3(1.0, 57.0, 113.0));
+  vec4 a = fract(sin(vec4(n, n + 1.0, n + 57.0, n + 58.0)) * 43758.5453);
+  vec4 b = fract(sin(vec4(n + 113.0, n + 114.0, n + 170.0, n + 171.0)) * 43758.5453);
+  vec4 m = mix(a, b, f.z);
+  vec2 q = mix(m.xz, m.yw, f.x);
+  return mix(q.x, q.y, f.y);
+}
+float fbm(vec3 p) {
+  return vnoise(p) * 0.5 + vnoise(p * 2.1) * 0.27 + vnoise(p * 4.3) * 0.15 + vnoise(p * 8.9) * 0.08;
+}
+
+// A soft-edged spot on a sphere: 1 inside angular radius r (degrees) of (lon, lat) in degrees.
+float spot(vec3 n, float lon, float lat, float r) {
+  float lo = lon * DEG, la = lat * DEG;
+  vec3 c = vec3(cos(la) * cos(lo), cos(la) * sin(lo), sin(la));
+  float ang = acos(clamp(dot(n, c), -1.0, 1.0)) / DEG;
+  // Ragged, soft edges: real maria are not circles.
+  ang += (fbm(n * 3.2 + lon) - 0.5) * r * 1.1;
+  return 1.0 - smoothstep(r * 0.5, r * 1.2, ang);
+}
+
+// The Earth's oceans, land, ice caps and clouds, in body coordinates (b.z north).
+vec3 earthSurface(vec3 b, float lat) {
+  float land = smoothstep(0.50, 0.56, fbm(b * 2.2 + 7.0));
+  vec3 c = mix(vec3(0.07, 0.20, 0.45), vec3(0.22, 0.36, 0.16), land);
+  c = mix(c, vec3(0.95), smoothstep(1.15, 1.35, abs(lat)));
+  return mix(c, vec3(1.0), smoothstep(0.52, 0.75, fbm(b * 3.5 + 1.0)) * 0.8);
+}
+
+float moonAlbedo(vec3 b) {
+  // Maria as dark patches in selenographic coordinates (longitude east positive, as seen from Earth).
+  float m = 0.0;
+  m = max(m, spot(b, -16.0, 34.0, 19.0));   // Imbrium
+  m = max(m, spot(b, 18.0, 27.0, 11.5));    // Serenitatis
+  m = max(m, spot(b, 31.0, 8.0, 13.5));     // Tranquillitatis
+  m = max(m, spot(b, 59.0, 17.0, 8.5));     // Crisium
+  m = max(m, spot(b, 51.0, -7.0, 10.5));    // Fecunditatis
+  m = max(m, spot(b, 35.0, -15.0, 6.5));    // Nectaris
+  m = max(m, spot(b, -15.0, -20.0, 12.0));  // Nubium
+  m = max(m, spot(b, -39.0, -24.0, 7.0));   // Humorum
+  m = max(m, spot(b, -52.0, 20.0, 21.0));   // Procellarum
+  m = max(m, spot(b, -42.0, -2.0, 15.0));   // Procellarum (south)
+  m = max(m, spot(b, 0.0, 57.0, 7.0));      // Frigoris
+  m = max(m, spot(b, -24.0, 57.0, 7.0));
+  m = max(m, spot(b, 22.0, 56.0, 7.0));
+  m = max(m, spot(b, 6.0, 12.0, 7.0));      // Vaporum
+  float rough = fbm(b * 5.0);
+  float albedo = mix(0.80 + 0.22 * rough, 0.50 + 0.16 * rough, m);
+  albedo += 0.12 * spot(b, -11.0, -43.0, 2.6);   // Tycho
+  albedo += 0.08 * spot(b, -20.0, 10.0, 2.2);    // Copernicus
+  albedo += 0.08 * spot(b, -47.0, 24.0, 1.6);    // Aristarchus
+  return albedo;
+}
+`;
+
 // ---------------------------------------------------------------- full-screen sky
 
 export const SKY_VERT = HEADER + `
@@ -126,8 +195,15 @@ void main() {
 const UNPROJECT = `
 uniform mat3 uViewT;   // camera -> horizon
 uniform vec2 uScale;
+uniform float uLens;
 vec3 pixelDirection(vec2 ndc) {
   vec2 p = ndc / uScale;
+  if (uLens > 0.5) {
+    float r = length(p);
+    float th = atan(uLens * r) / uLens;
+    vec2 xy = r > 1e-9 ? p * (sin(th) / r) : vec2(0.0);
+    return uViewT * vec3(xy, -cos(th));
+  }
   float r2 = dot(p, p);
   vec3 c = vec3(4.0 * p, r2 - 4.0) / (r2 + 4.0);
   return uViewT * c;
@@ -162,25 +238,53 @@ void main() {
   outColor = vec4(c, 1.0);
 }`;
 
-export const GROUND_FRAG = HEADER + UNPROJECT + SKY + GROUND_PROFILE + `
+export const GROUND_FRAG = HEADER + UNPROJECT + SKY + GROUND_PROFILE + SURFACE + `
 uniform float uPixelAngle;
+uniform float uHeight;   // camera height above the ground, Earth radii (0 standing on it)
+uniform vec3 uPole;      // the Earth's north pole, horizon frame
+uniform vec3 uPrime;     // its prime meridian, horizon frame
 in vec2 vNdc;
 out vec4 outColor;
 void main() {
   vec3 h = pixelDirection(vNdc);
   float alt = asin(clamp(h.z, -1.0, 1.0));
-  float edge = groundProfile(h);
-  float cover = 1.0 - smoothstep(edge - uPixelAngle, edge + uPixelAngle, alt);
-  if (cover <= 0.0) discard;
   // The land takes a little colour from the sky above it and darkens toward the feet.
   // Lit by the whole sky overhead, not by the glow at the horizon.
   vec3 overhead = skyColor(vec3(0.0, 0.0, 1.0));
   float luma = dot(overhead, vec3(0.3, 0.5, 0.2));
   vec3 land = vec3(0.008, 0.010, 0.014) + vec3(0.30, 0.36, 0.24) * luma * 0.6 + overhead * 0.04;
-  float depth = smoothstep(0.0, -0.6, h.z);
-  land *= mix(1.0, 0.55, depth);
-  land += (hash12(gl_FragCoord.xy) - 0.5) / 255.0;
-  outColor = vec4(land, cover);
+  land *= mix(1.0, 0.55, smoothstep(0.0, -0.6, h.z));
+  float edge = groundProfile(h);
+  float hills = 1.0 - smoothstep(edge - uPixelAngle, edge + uPixelAngle, alt);
+  if (uHeight <= 0.0) {
+    if (hills <= 0.0) discard;
+    outColor = vec4(land + (hash12(gl_FragCoord.xy) - 0.5) / 255.0, hills);
+    return;
+  }
+  // Rising: the Earth as a globe of radius 1 below an eye 1 + height from its centre.
+  // The horizon drops to the limb, a circle of constant altitude.
+  float rise = smoothstep(0.0, 0.002, uHeight);
+  float limb = -acos(1.0 / (1.0 + uHeight));
+  float globe = 1.0 - smoothstep(limb - uPixelAngle, limb + uPixelAngle, alt);
+  float cover = mix(hills, globe, rise);
+  vec3 o = vec3(0.0, 0.0, 1.0 + uHeight);
+  float b = dot(o, h);
+  float d2 = b * b - dot(o, o) + 1.0;
+  vec3 n = normalize(o + h * (-b - sqrt(max(d2, 0.0))));
+  vec3 east = cross(uPole, uPrime);
+  vec3 q = vec3(dot(n, uPrime), dot(n, east), dot(n, uPole));
+  float lit = clamp(dot(n, uSunDir), 0.0, 1.0);
+  vec3 seen = earthSurface(q, asin(clamp(q.z, -1.0, 1.0))) * (0.035 + 0.965 * pow(lit, 0.75));
+  vec3 col = mix(land, seen, smoothstep(0.0, 0.01, uHeight));
+  // The thin blue line of the air along the limb, on the day side, fading once well clear of it.
+  float closest = b < 0.0 ? sqrt(max(dot(o, o) - b * b, 0.0)) : length(o);
+  vec3 under = normalize(o - h * min(b, 0.0));
+  float day = smoothstep(-0.15, 0.35, dot(under, uSunDir));
+  float glow = exp(-max(closest - 1.0, 0.0) / 0.012) * day * smoothstep(0.003, 0.03, uHeight) * (1.0 - smoothstep(1.0, 5.0, uHeight)) * 0.75;
+  float a = cover + glow * (1.0 - cover);
+  if (a <= 0.002) discard;
+  vec3 rgb = (col * cover + vec3(0.32, 0.55, 1.0) * glow * (1.0 - cover)) / a;
+  outColor = vec4(rgb + (hash12(gl_FragCoord.xy) - 0.5) / 255.0, a);
 }`;
 
 // ---------------------------------------------------------------- stars
@@ -198,6 +302,7 @@ uniform float uLimitMag;
 uniform float uExtinction;  // magnitudes per airmass, 0 without air
 uniform float uPixelRatio;
 uniform float uSizeBoost;
+uniform float uOrbit;       // 0 on the ground, 1 drawn as Space view draws its stars (lifting off)
 out vec3 vColor;
 out float vCore;    // core radius in device pixels
 out float vBright;  // 0..1 peak intensity
@@ -217,9 +322,9 @@ void main() {
   float x = uLimitMag - mag;
   if (x <= 0.0) { gl_Position = vec4(3.0, 3.0, 3.0, 1.0); gl_PointSize = 1.0; return; }
   gl_Position = projectCamera(uView * h);
-  float core = min(0.55 + 0.30 * x + 0.015 * x * x, 6.0) * uSizeBoost;
+  float core = mix(min(0.55 + 0.30 * x + 0.015 * x * x, 6.0), min(0.5 + 0.22 * x + 0.012 * x * x, 4.0), uOrbit) * uSizeBoost;
   vCore = core * uPixelRatio;
-  vBright = clamp(0.12 + x / 1.8, 0.0, 1.0) * smoothstep(0.0, 0.25, x);
+  vBright = clamp(mix(0.12 + x / 1.8, 0.1 + x / 2.6, uOrbit), 0.0, 1.0) * smoothstep(0.0, 0.25, x);
   vColor = aMagColor.yzw;
   vSize = max(2.0, vCore * 6.0 + 2.0);
   gl_PointSize = vSize;
@@ -264,8 +369,10 @@ void main() {
   vec3 ca = toCamera(aA, aVelA);
   vec3 cb = toCamera(aB, aVelB);
   if (ca.z > 0.9 || cb.z > 0.9) { gl_Position = vec4(3.0, 3.0, 3.0, 1.0); return; }
-  vec2 a = projectCamera(ca).xy * uViewport * 0.5;
-  vec2 b = projectCamera(cb).xy * uViewport * 0.5;
+  vec4 pa = projectCamera(ca), pb = projectCamera(cb);
+  if (pa.z > 1.0 || pb.z > 1.0) { gl_Position = vec4(3.0, 3.0, 3.0, 1.0); return; }
+  vec2 a = pa.xy * uViewport * 0.5;
+  vec2 b = pb.xy * uViewport * 0.5;
   vec2 along = b - a;
   float len = length(along);
   vec2 dir = len > 1e-4 ? along / len : vec2(1.0, 0.0);
@@ -355,58 +462,6 @@ void main() {
   vNdc = uCentre + aCorner * uHalf;
   gl_Position = vec4(vNdc, 0.0, 1.0);
 }`;
-
-/** Value noise and the Moon's face, shared by both views' body shaders. */
-const SURFACE = `
-float vnoise(vec3 p) {
-  vec3 i = floor(p), f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  float n = dot(i, vec3(1.0, 57.0, 113.0));
-  vec4 a = fract(sin(vec4(n, n + 1.0, n + 57.0, n + 58.0)) * 43758.5453);
-  vec4 b = fract(sin(vec4(n + 113.0, n + 114.0, n + 170.0, n + 171.0)) * 43758.5453);
-  vec4 m = mix(a, b, f.z);
-  vec2 q = mix(m.xz, m.yw, f.x);
-  return mix(q.x, q.y, f.y);
-}
-float fbm(vec3 p) {
-  return vnoise(p) * 0.5 + vnoise(p * 2.1) * 0.27 + vnoise(p * 4.3) * 0.15 + vnoise(p * 8.9) * 0.08;
-}
-
-// A soft-edged spot on a sphere: 1 inside angular radius r (degrees) of (lon, lat) in degrees.
-float spot(vec3 n, float lon, float lat, float r) {
-  float lo = lon * DEG, la = lat * DEG;
-  vec3 c = vec3(cos(la) * cos(lo), cos(la) * sin(lo), sin(la));
-  float ang = acos(clamp(dot(n, c), -1.0, 1.0)) / DEG;
-  // Ragged, soft edges: real maria are not circles.
-  ang += (fbm(n * 3.2 + lon) - 0.5) * r * 1.1;
-  return 1.0 - smoothstep(r * 0.5, r * 1.2, ang);
-}
-
-float moonAlbedo(vec3 b) {
-  // Maria as dark patches in selenographic coordinates (longitude east positive, as seen from Earth).
-  float m = 0.0;
-  m = max(m, spot(b, -16.0, 34.0, 19.0));   // Imbrium
-  m = max(m, spot(b, 18.0, 27.0, 11.5));    // Serenitatis
-  m = max(m, spot(b, 31.0, 8.0, 13.5));     // Tranquillitatis
-  m = max(m, spot(b, 59.0, 17.0, 8.5));     // Crisium
-  m = max(m, spot(b, 51.0, -7.0, 10.5));    // Fecunditatis
-  m = max(m, spot(b, 35.0, -15.0, 6.5));    // Nectaris
-  m = max(m, spot(b, -15.0, -20.0, 12.0));  // Nubium
-  m = max(m, spot(b, -39.0, -24.0, 7.0));   // Humorum
-  m = max(m, spot(b, -52.0, 20.0, 21.0));   // Procellarum
-  m = max(m, spot(b, -42.0, -2.0, 15.0));   // Procellarum (south)
-  m = max(m, spot(b, 0.0, 57.0, 7.0));      // Frigoris
-  m = max(m, spot(b, -24.0, 57.0, 7.0));
-  m = max(m, spot(b, 22.0, 56.0, 7.0));
-  m = max(m, spot(b, 6.0, 12.0, 7.0));      // Vaporum
-  float rough = fbm(b * 5.0);
-  float albedo = mix(0.80 + 0.22 * rough, 0.50 + 0.16 * rough, m);
-  albedo += 0.12 * spot(b, -11.0, -43.0, 2.6);   // Tycho
-  albedo += 0.08 * spot(b, -20.0, 10.0, 2.2);    // Copernicus
-  albedo += 0.08 * spot(b, -47.0, 24.0, 1.6);    // Aristarchus
-  return albedo;
-}
-`;
 
 export const BODY_FRAG = HEADER + UNPROJECT + SKY + SURFACE + `
 // Kinds: 0 plain, 1 Sun, 2 Moon, 3 Jupiter, 4 Saturn, 5 Mars, 6 glare only, 7 Earth, 8 comet coma, 9 corona
@@ -674,12 +729,7 @@ vec3 surfaceAt(vec3 b, float lat) {
     vec3 c = mix(vec3(0.86, 0.50, 0.30), vec3(0.50, 0.27, 0.18), smoothstep(0.45, 0.68, f));
     return mix(c, vec3(0.96, 0.95, 0.93), smoothstep(1.28, 1.40, abs(lat)));
   }
-  if (uKind == 7) {
-    float land = smoothstep(0.50, 0.56, fbm(b * 2.2 + 7.0));
-    vec3 c = mix(vec3(0.07, 0.20, 0.45), vec3(0.22, 0.36, 0.16), land);
-    c = mix(c, vec3(0.95), smoothstep(1.15, 1.35, abs(lat)));
-    return mix(c, vec3(1.0), smoothstep(0.52, 0.75, fbm(b * 3.5 + 1.0)) * 0.8);
-  }
+  if (uKind == 7) return earthSurface(b, lat);
   return uColor;
 }
 

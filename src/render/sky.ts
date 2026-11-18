@@ -59,12 +59,16 @@ export interface DrawnBody {
   alt: number;
 }
 
+const smoothstep01 = (x: number): number => { const t = clamp(x, 0, 1); return t * t * (3 - 2 * t); };
+
 export class SkyRenderer {
   readonly canvas: HTMLCanvasElement;
   readonly gl: WebGL2RenderingContext;
   readonly projection = new SkyProjection();
   readonly universe: Universe;
   pixelRatio = 1;
+  /** Height of the camera above the ground while lifting off or landing, Earth radii (0 standing on it). */
+  height = 0;
   conditions!: SkyConditions;
   /** Bodies as drawn in the last frame, for labels and picking. */
   drawn: DrawnBody[] = [];
@@ -370,26 +374,34 @@ export class SkyRenderer {
     return p.use()
       .m3('uView', pr.view)
       .v2('uScale', (pr.scale * 2) / pr.width, (pr.scale * 2) / pr.height)
-      .f('uRefract', pr.refraction ? 1 : 0);
+      .f('uRefract', pr.refraction ? 1 : 0).f('uLens', pr.lens);
   }
 
   private skyUniforms(p: Program, c: SkyConditions, opts: SkyOptions): Program {
     const pr = this.projection;
     return p.use()
       .m3('uViewT', transpose(pr.view))
-      .v2('uScale', (pr.scale * 2) / pr.width, (pr.scale * 2) / pr.height)
+      .v2('uScale', (pr.scale * 2) / pr.width, (pr.scale * 2) / pr.height).f('uLens', pr.lens)
       .v3('uSunDir', c.sunDir).f('uSunAlt', c.sunAltEffective).f('uSunVisible', c.sunVisible)
       .v3('uMoonDir', c.moonDir).f('uMoonLight', c.moonLight)
       .f('uLightPollution', (clamp(opts.bortle, 1, 9) - 1) / 8)
-      .f('uAtmosphere', opts.layers.atmosphere ? 1 : 0);
+      .f('uAtmosphere', opts.layers.atmosphere ? 1 : 0).f('uAir', 1 - smoothstep01(this.height / 0.004));
+  }
+
+  /** The air counts once the camera is down in it. */
+  private air(opts: SkyOptions): boolean {
+    return opts.layers.atmosphere && this.height < 0.004;
   }
 
   render(opts: SkyOptions): void {
     const gl = this.gl, u = this.universe, pr = this.projection, f = u.frame;
     this.resize();
-    pr.refraction = opts.layers.atmosphere;
+    pr.refraction = this.air(opts) && this.height === 0;
     pr.update();
-    const c = skyConditions(u, { bortle: opts.bortle, atmosphere: opts.layers.atmosphere, fov: pr.fov });
+    const c = skyConditions(u, { bortle: opts.bortle, atmosphere: this.air(opts), fov: pr.fov });
+    // Climbing toward orbit, the stars settle to the way Space view draws them.
+    const orbit = this.height > 0 ? smoothstep01(Math.log(this.height / 0.004) / Math.log(1500)) : 0;
+    if (orbit > 0) c.limitMag += (6.3 - c.limitMag) * orbit;
     this.conditions = c;
     this.syncFigures(opts.highlightConstellation ?? null);
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
@@ -413,17 +425,18 @@ export class SkyRenderer {
       const zoom = clamp(Math.pow((90 * DEG) / pr.fov, 0.75), 1, 5);
       this.common(this.milkyStarProgram)
         .m3('uJ2000ToHorizon', f.j2000ToHorizon).v3('uAberration', aberration)
-        .f('uGain', mwGain * 0.2 * zoom).f('uPixelRatio', dpr).f('uAtmosphere', opts.layers.atmosphere ? 1 : 0);
+        .f('uGain', mwGain * 0.2 * zoom).f('uPixelRatio', dpr).f('uAtmosphere', this.air(opts) ? 1 : 0);
       this.milkyStars.drawPoints();
     }
 
-    // 2. Lines.
+    // 2. Lines. Charted lines fade out as the camera leaves the ground: Space view has none.
+    const chartFade = 1 - smoothstep01(this.height / 0.02);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     const lines = this.common(this.lineProgram)
       .v2('uViewport', this.canvas.width, this.canvas.height).f('uYears', u.years);
     const [lr, lg, lb] = opts.lineColor;
     const drawLines = (mesh: Mesh, frame: Mat3, alpha: number, width: number, moving: boolean, refract: boolean, rgb = opts.lineColor) => {
-      lines.m3('uFrame', frame).v4('uColor', rgb[0], rgb[1], rgb[2], alpha).f('uWidth', width * dpr)
+      lines.m3('uFrame', frame).v4('uColor', rgb[0], rgb[1], rgb[2], alpha * chartFade).f('uWidth', width * dpr)
         .v3('uAberration', moving ? aberration : [0, 0, 0]).f('uRefract', refract && pr.refraction ? 1 : 0)
         .f('uYears', moving ? u.years : 0);
       mesh.drawQuads();
@@ -467,7 +480,7 @@ export class SkyRenderer {
     gl.blendFunc(gl.ONE, gl.ONE);
     const stars = this.common(this.starProgram)
       .m3('uJ2000ToHorizon', f.j2000ToHorizon).f('uYears', u.years).v3('uAberration', aberration)
-      .f('uLimitMag', c.limitMag).f('uExtinction', c.extinction).f('uPixelRatio', dpr).f('uSizeBoost', 1);
+      .f('uLimitMag', c.limitMag).f('uExtinction', c.extinction).f('uPixelRatio', dpr).f('uSizeBoost', 1).f('uOrbit', orbit);
     // The catalog is sorted by magnitude, so only the stars that can show are sent.
     this.stars.drawPoints(this.countBrighter(c.limitMag + 0.5));
     this.drawTycho(c.limitMag);
@@ -486,7 +499,7 @@ export class SkyRenderer {
     this.bodyPoints.drawPoints();
 
     // 4. Deep-sky markers.
-    if (opts.layers.dsos) {
+    if (opts.layers.dsos && chartFade > 0.99) {
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       this.common(this.markerProgram)
         .m3('uJ2000ToHorizon', f.j2000ToHorizon).f('uLimitMag', dsoLimit(c, pr.fov)).f('uPixelRatio', dpr)
@@ -499,9 +512,15 @@ export class SkyRenderer {
     this.drawBodies(c, opts);
 
     // 6. Ground.
-    if (opts.layers.ground) {
+    if (opts.layers.ground || this.height > 0) {
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-      this.skyUniforms(this.groundProgram, c, opts).f('uPixelAngle', pr.pixelAngle / dpr);
+      const e = BODIES.earth, days = f.jdTT - J2000;
+      const pole = fromSpherical(e.poleRa, e.poleDec);
+      const node = normalize(cross([0, 0, 1], pole));
+      const w = e.w0 + e.wRate * days;
+      const prime = add(scale(node, Math.cos(w)), scale(cross(pole, node), Math.sin(w)));
+      this.skyUniforms(this.groundProgram, c, opts).f('uPixelAngle', pr.pixelAngle / dpr)
+        .f('uHeight', this.height).v3('uPole', apply(f.j2000ToHorizon, pole)).v3('uPrime', apply(f.j2000ToHorizon, prime));
       this.quad.drawQuads(1);
     }
     this.dirty = false;
@@ -591,10 +610,10 @@ export class SkyRenderer {
         // Glare that reads as "too bright to look at", reddening toward the horizon.
         const low = clamp(d.alt / (12 * DEG), 0, 1);
         color = [1, 0.55 + 0.42 * low, 0.25 + 0.65 * low];
-        glare = c.sunVisible * (opts.layers.atmosphere ? 0.55 + 0.45 * low : 1);
+        glare = c.sunVisible * (this.air(opts) ? 0.55 + 0.45 * low : 1);
         extent = Math.max(1.15, 150 / Math.max(d.radiusPx, 0.01));
       } else if (id === 'moon') {
-        glare = opts.layers.atmosphere ? 0.22 * body.illum * (1 - clamp((rDev - 6) / 30, 0, 1)) * (c.shadow ? c.shadow.uncovered : 1) : 0;
+        glare = this.air(opts) ? 0.22 * body.illum * (1 - clamp((rDev - 6) / 30, 0, 1)) * (c.shadow ? c.shadow.uncovered : 1) : 0;
         extent = Math.max(1.15, glare > 0 ? 60 / Math.max(d.radiusPx, 0.01) : 0);
         color = [0.93, 0.91, 0.86];
       } else if (small) {

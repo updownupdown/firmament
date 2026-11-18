@@ -67,6 +67,13 @@ export class SkyProjection {
   width = 1;
   height = 1;
   refraction = true;
+  /**
+   * The lens: 0.5 is the stereographic projection used on the ground, 1 the
+   * perspective (gnomonic) projection of Space view. In between, a point θ
+   * from the centre lands tan(lens·θ)/lens from it, so lifting off can blend
+   * one into the other with the stars sliding smoothly.
+   */
+  lens = 0.5;
 
   view: Mat3 = viewMatrix(this.az, this.alt);
   private viewT: Mat3 = transpose(this.view);
@@ -80,7 +87,8 @@ export class SkyProjection {
     this.az = ((this.az % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
     this.view = viewMatrix(this.az, this.alt);
     this.viewT = transpose(this.view);
-    this.scale = Math.min(this.width, this.height) / 2 / (2 * Math.tan(this.fov / 4));
+    this.lens = clamp(this.lens, 0.5, 1);
+    this.scale = Math.min(this.width, this.height) / 2 / (Math.tan(this.lens * this.fov / 2) / this.lens);
   }
 
   /** Angle on the sky covered by one CSS pixel at the centre of the view. */
@@ -90,6 +98,14 @@ export class SkyProjection {
 
   /** Project a camera-frame unit vector. Null when it is too close to straight behind. */
   projectCamera(c: Vec3): Projected | null {
+    if (this.lens > 0.5) {
+      const s = Math.hypot(c[0], c[1]);
+      const th = Math.atan2(s, -c[2]);
+      if (th * this.lens > 1.45) return null;
+      const k = s > 1e-12 ? (Math.tan(this.lens * th) / this.lens / s) * this.scale : this.scale;
+      const x = this.width / 2 + c[0] * k, y = this.height / 2 - c[1] * k;
+      return { x, y, onScreen: x >= 0 && x <= this.width && y >= 0 && y <= this.height };
+    }
     if (c[2] > 0.98) return null;
     const k = (2 / (1 - c[2])) * this.scale;
     const x = this.width / 2 + c[0] * k;
@@ -106,8 +122,16 @@ export class SkyProjection {
   unproject(x: number, y: number): Vec3 {
     const px = (x - this.width / 2) / this.scale;
     const py = (this.height / 2 - y) / this.scale;
-    const r2 = px * px + py * py;
-    const c: Vec3 = [(4 * px) / (r2 + 4), (4 * py) / (r2 + 4), (r2 - 4) / (r2 + 4)];
+    let c: Vec3;
+    if (this.lens > 0.5) {
+      const r = Math.hypot(px, py);
+      const th = Math.atan(this.lens * r) / this.lens;
+      const k = r > 1e-12 ? Math.sin(th) / r : 1;
+      c = [px * k, py * k, -Math.cos(th)];
+    } else {
+      const r2 = px * px + py * py;
+      c = [(4 * px) / (r2 + 4), (4 * py) / (r2 + 4), (r2 - 4) / (r2 + 4)];
+    }
     const h = apply(this.viewT, c);
     return this.refraction ? unrefractVector(h) : h;
   }

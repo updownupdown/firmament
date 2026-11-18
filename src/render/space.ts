@@ -61,7 +61,12 @@ export class SpaceCamera implements Controllable {
   view: Mat3 = [1, 0, 0, 0, 1, 0, 0, 0, 1];
   private velYaw = 0;
   private velPitch = 0;
-  private flight: { from: number; to: number; t: number; duration: number; glide?: Vec3; then?: number } | null = null;
+  private flight: {
+    from: number; to: number; t: number; duration: number; glide?: Vec3; then?: number;
+    /** Swinging round to new orbit angles on the way. */
+    turn?: { yaw0: number; pitch0: number; yaw1: number; pitch1: number };
+    done?: () => void;
+  } | null = null;
 
   constructor() {
     this.update();
@@ -117,6 +122,21 @@ export class SpaceCamera implements Controllable {
     this.flight = { from: this.dist, to, t: 0, duration };
   }
 
+  /** Ease the distance and the orbit angles together, then call `done`. */
+  flyToPose(yaw: number, pitch: number, dist: number, duration: number, done?: () => void): void {
+    const to = clamp(dist, MIN_DIST, MAX_DIST);
+    this.velYaw = this.velPitch = 0;
+    if (this.reducedMotion || duration <= 0) {
+      this.yaw = yaw; this.pitch = pitch; this.dist = to; this.flight = null;
+      this.update();
+      done?.();
+      return;
+    }
+    const yaw0 = this.yaw;
+    const d = Math.atan2(Math.sin(yaw - yaw0), Math.cos(yaw - yaw0));
+    this.flight = { from: this.dist, to, t: 0, duration, turn: { yaw0, pitch0: this.pitch, yaw1: yaw0 + d, pitch1: pitch }, done };
+  }
+
   /**
    * Pull back from close above one body to a wide view centred on another.
    * `shift` is the starting body's position minus the final centre's. The
@@ -133,6 +153,8 @@ export class SpaceCamera implements Controllable {
   }
 
   drag(dx: number, dy: number, dt: number): void {
+    // A landing on its way down is not stopped by a stray drag.
+    if (this.flight?.done) return;
     const k = 0.006;
     this.yaw -= dx * k;
     this.pitch += dy * k;
@@ -147,8 +169,8 @@ export class SpaceCamera implements Controllable {
   }
 
   zoom(factor: number): void {
-    // Let a lift-off finish: the wheel that started it is usually still turning.
-    if (this.flight?.glide) return;
+    // Let a lift-off or landing finish: the wheel that started it is usually still turning.
+    if (this.flight?.glide || this.flight?.done) return;
     this.flight = null;
     if (this.zoomPast.feed(factor > 1 && this.dist <= Math.max(MIN_DIST, this.floor) * 1.001, Math.log(factor))) return;
     this.dist = clamp(this.dist / factor, Math.max(MIN_DIST, Math.min(this.floor, this.dist)), MAX_DIST);
@@ -182,9 +204,15 @@ export class SpaceCamera implements Controllable {
       const e = f.t < 0.5 ? 4 * f.t ** 3 : 1 - Math.pow(-2 * f.t + 2, 3) / 2;
       this.dist = Math.exp(Math.log(f.from) + (Math.log(f.to) - Math.log(f.from)) * e);
       if (f.glide) this.offset = f.t >= 1 ? [0, 0, 0] : scale(f.glide, 1 - (this.dist / f.to) ** 2);
+      if (f.turn) {
+        this.yaw = f.turn.yaw0 + (f.turn.yaw1 - f.turn.yaw0) * e;
+        this.pitch = f.turn.pitch0 + (f.turn.pitch1 - f.turn.pitch0) * e;
+      }
       if (f.t >= 1) {
         this.flight = null;
+        if (f.turn) this.offset = [0, 0, 0];
         if (f.then !== undefined) this.flyTo(f.then, 2);
+        if (f.done) { this.update(); f.done(); }
       }
       changed = true;
     }
@@ -448,6 +476,16 @@ export class SpaceRenderer {
   }
 
   /** Begin above the Earth and pull back to a view centred on `target`. */
+  /** How far from the Earth's centre a lift-off begins, AU. */
+  get liftOffStart(): number {
+    return Math.max(3e-4, this.radiusOf(this.byId.get('earth')!) * 7);
+  }
+
+  /** True radius of the Earth, AU. */
+  get earthRadius(): number {
+    return BODIES.earth.radiusEq / AU_KM;
+  }
+
   liftOff(target: string): void {
     this.updatePositions();
     const id = this.bodies.some((b) => b.id === target) ? target : 'sun';
@@ -455,8 +493,7 @@ export class SpaceRenderer {
     cam.focus = id;
     cam.floor = this.floorFor(id);
     const to = id === 'sun' ? 4.2 : Math.max(0.03, this.framingDistance(id) * 6);
-    const earth = this.byId.get('earth')!;
-    cam.liftOff(sub(this.positions.get('earth')!, this.positions.get(id)!), Math.max(3e-4, this.radiusOf(earth) * 7), id === 'earth' ? Math.max(0.012, this.framingDistance('earth') * 3) : to);
+    cam.liftOff(sub(this.positions.get('earth')!, this.positions.get(id)!), this.liftOffStart, id === 'earth' ? Math.max(0.012, this.framingDistance('earth') * 3) : to);
     cam.update();
   }
 

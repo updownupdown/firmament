@@ -289,6 +289,17 @@ unresolved stars, not catalog stars, so they cannot be picked.
   `App.measure` holds the two ends; Escape or the banner's close stops it.
 - Zoom out past the widest sky (a few wheel notches, a firm pinch, or `-`)
   lifts off into Space; zoom into the Earth past its floor lands again.
+  Both, and the dock's Sky and Space, fly one unbroken path
+  (`render/ascent.ts`, `App.setMode(mode, target, fly)`): the sky view rises
+  along the local vertical (`SkyRenderer.height`, Earth radii), the horizon
+  drops to the limb of a globe drawn in `GROUND_FRAG` with the same
+  `earthSurface` as Space view, the air and the charted lines fade, the view
+  turns to look straight down and `SkyProjection.lens` blends stereographic
+  (0.5) into perspective (1). At `liftOffStart` (3e-4 AU from the centre) it
+  matches Space view's camera star for star (tested), and Space view's
+  lift-off carries on. Landing first swings Space view round over home
+  (`SpaceCamera.flyToPose`), then runs the climb backwards to the pose the
+  sky had when it left. Scenes, links and reduced motion still cut straight.
   `ZoomPast` in `render/camera.ts` needs a deliberate push, so resting on a
   limit never switches views. Zoom input is ignored while lifting off.
 - Compressed scale in Space view: layer `compressed`, switched by the pill

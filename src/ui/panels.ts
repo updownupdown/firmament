@@ -2,6 +2,7 @@
 // When). The layer lists here also feed the View panel (viewbar.ts), which owns
 // everything about what the sky shows.
 
+import { picker } from './menu.ts';
 import { DEG } from '../astro/math.ts';
 import { fetchText } from '../data/load.ts';
 import { JD_MAX, JD_MIN } from '../sim/clock.ts';
@@ -234,12 +235,12 @@ export function placeForm(app: App, onChosen: (site: Site) => void): { el: HTMLE
 /** Typing a date and time: any year, AD or BC, to the clock's limits. */
 export function dateForm(app: App): { el: HTMLElement; refresh: () => void } {
   const year = h('input', { class: 'field', type: 'number', min: '1', max: '99000', step: '1', inputmode: 'numeric', 'aria-label': 'Year' });
-  const era = h('select', { class: 'field', 'aria-label': 'Era' }, h('option', { value: 'ad' }, 'AD'), h('option', { value: 'bc' }, 'BC'));
-  const month = h('select', { class: 'field', 'aria-label': 'Month' }, MONTHS.map((m, i) => h('option', { value: String(i + 1) }, m)));
+  const era = picker({ label: 'Era', className: 'wide', items: [{ value: 'ad', label: 'AD' }, { value: 'bc', label: 'BC' }], onPick: () => applyTime() });
+  const month = picker({ label: 'Month', className: 'wide', items: MONTHS.map((m, i) => ({ value: String(i + 1), label: m })), onPick: () => applyTime() });
   const day = h('input', { class: 'field', type: 'number', min: '1', max: '31', step: '1', inputmode: 'numeric', 'aria-label': 'Day' });
   const hour = h('input', { class: 'field', type: 'number', min: '0', max: '23', step: '1', inputmode: 'numeric', 'aria-label': 'Hour, 0 to 23' });
   const minute = h('input', { class: 'field', type: 'number', min: '0', max: '59', step: '1', inputmode: 'numeric', 'aria-label': 'Minute' });
-  const timeFields = [year, era, month, day, hour, minute];
+  const timeFields: HTMLElement[] = [year, day, hour, minute];
   const timeNote = h('p', { class: 'hint' });
   const timeStatus = h('p', { class: 'hint', role: 'status' });
 
@@ -247,7 +248,7 @@ export function dateForm(app: App): { el: HTMLElement; refresh: () => void } {
     const lt = localTime(app.clock.jdUT, app.site);
     const acc = app.clock.accuracy;
     timeNote.textContent = `${formatYear(lt.year)} · ${formatZone(lt.offset)}${lt.calendar === 'julian' ? ' · Julian calendar' : ''}. ${acc.detail}`;
-    if (timeFields.includes(document.activeElement as HTMLInputElement)) return;
+    if (timeFields.includes(document.activeElement as HTMLElement)) return;
     year.value = String(lt.year > 0 ? lt.year : 1 - lt.year);
     era.value = lt.year > 0 ? 'ad' : 'bc';
     month.value = String(lt.month);
@@ -272,10 +273,10 @@ export function dateForm(app: App): { el: HTMLElement; refresh: () => void } {
   const el = h('div', { class: 'date-form' },
     h('div', { class: 'date-row' },
       h('label', null, h('span', { class: 'hint' }, 'Day'), day),
-      h('label', { class: 'grow2' }, h('span', { class: 'hint' }, 'Month'), month),
+      h('label', { class: 'grow2' }, h('span', { class: 'hint' }, 'Month'), month.el),
       h('label', { class: 'grow2' }, h('span', { class: 'hint' }, 'Year'), year)),
     h('div', { class: 'date-row' },
-      h('label', null, h('span', { class: 'hint' }, 'Era'), era),
+      h('label', null, h('span', { class: 'hint' }, 'Era'), era.el),
       h('label', null, h('span', { class: 'hint' }, 'Hour'), hour),
       h('label', null, h('span', { class: 'hint' }, 'Minute'), minute)),
     timeStatus, timeNote);

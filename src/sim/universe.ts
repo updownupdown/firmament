@@ -4,15 +4,15 @@
 
 import { BODIES, type SolarBodyId } from '../astro/bodies.ts';
 import {
-  type ApparentBody, type EarthSite, type Ephemeris, type Frame,
-  SOLAR_BODIES, aberrate, makeFrame, observeBody, raDecOfDate,
+  type ApparentBody, type EarthSite, type Ephemeris, type Frame, type World,
+  SOLAR_BODIES, aberrate, makeFrame, makeWorldFrame, observeBody, raDecOfDate,
 } from '../astro/ephemeris.ts';
 import { bodyRiseSet, starRiseSet, type RiseSet } from '../astro/events.ts';
 import { azAlt, refractionFromTrue } from '../astro/frames.ts';
 import { GALILEAN, galileanMoons } from '../astro/galilean.ts';
 import { SMALL_BODIES } from '../astro/kepler.ts';
 import { REGIONS, type Region, regionById } from '../astro/populations.ts';
-import { AU_KM, DEG, type Vec3, add, apply, fromSpherical, norm, normalize, scale } from '../astro/math.ts';
+import { AU_KM, DEG, type Vec3, add, apply, fromSpherical, norm, normalize, scale, transpose as transposeRows } from '../astro/math.ts';
 import { type StarCatalog, designation, genitive } from '../astro/stars.ts';
 import { TYCHO_KEEP, type TychoBand } from '../astro/tycho.ts';
 import { J2000 } from '../astro/time.ts';
@@ -76,7 +76,7 @@ const GALILEAN_MAG0 = [5.02, 5.29, 4.61, 5.65];
 const JUPITER_RADIUS_AU = BODIES.jupiter.radiusEq / AU_KM;
 
 const PLANET_BLURBS: Record<string, string> = {
-  sun: 'Our star', moon: "Earth's moon", mercury: 'Planet', venus: 'Planet', mars: 'Planet', jupiter: 'Planet',
+  sun: 'Our star', moon: "Earth's moon", earth: 'Our home planet', mercury: 'Planet', venus: 'Planet', mars: 'Planet', jupiter: 'Planet',
   saturn: 'Planet', uranus: 'Planet', neptune: 'Planet', pluto: 'Dwarf planet',
 };
 
@@ -113,6 +113,8 @@ export class Universe {
 
   site: Site;
   cultureId = 'western';
+  /** Standing somewhere other than home, on the Moon or Mars; null at home on the Earth. */
+  away: { world: Exclude<World, 'earth'>; name: string; lat: number; lon: number } | null = null;
 
   /** Per-instant state, rebuilt by `update`. */
   frame!: Frame;
@@ -162,16 +164,36 @@ export class Universe {
     this.update(this.frame.jdUT);
   }
 
+  /** The world the observer stands on. */
+  get world(): World {
+    return this.away?.world ?? 'earth';
+  }
+
+  /** Stand on the Moon or Mars at a place (degrees, planetocentric, east longitude), or come home with null. */
+  setAway(away: Universe['away']): void {
+    this.away = away;
+    this.update(this.frame.jdUT);
+  }
+
   /** Recompute everything for an instant. Cheap to call again with the same instant. */
   update(jdUT: number): void {
-    const stamp = `${jdUT}|${this.site.lat}|${this.site.lon}|${this.site.height}`;
+    const a = this.away;
+    const stamp = `${jdUT}|${this.site.lat}|${this.site.lon}|${this.site.height}|${a ? `${a.world}|${a.lat}|${a.lon}` : ''}`;
     if (stamp === this.stamp) return;
     this.stamp = stamp;
-    const f = makeFrame(this.eph, jdUT, earthSite(this.site));
+    const f = a
+      ? makeWorldFrame(this.eph, jdUT, a.world, { lat: a.lat * DEG, lon: a.lon * DEG, height: 0 })
+      : makeFrame(this.eph, jdUT, earthSite(this.site));
     this.frame = f;
     this.years = (f.jdTT - J2000) / 365.25;
     this.bodies.clear();
     for (const id of TRACKED_BODIES) this.bodies.set(id, observeBody(this.eph, f, id));
+    if (a) {
+      // The Earth joins the sky; the ground underfoot leaves it (straight down, no size, too faint to draw).
+      this.bodies.set('earth', observeBody(this.eph, f, 'earth'));
+      const self = this.bodies.get(a.world)!;
+      this.bodies.set(a.world, { ...self, dir: apply(transposeRows(f.j2000ToHorizon), [0, 0, -1]), radius: 0, mag: 99 });
+    }
     this.addGalileanMoons(f);
   }
 
@@ -308,7 +330,8 @@ export class Universe {
   /** Where a J2000 direction sits above the observer's horizon. */
   horizontal(dir: Vec3): Horizontal {
     const [az, alt] = azAlt(apply(this.frame.j2000ToHorizon, dir));
-    return { az, alt, altApparent: alt + (alt > -2 * DEG ? refractionFromTrue(alt) : 0) };
+    // Only the Earth's air bends light enough to matter.
+    return { az, alt, altApparent: alt + (alt > -2 * DEG && !this.away ? refractionFromTrue(alt) : 0) };
   }
 
   /** Right ascension and declination of date, radians. */
@@ -319,7 +342,8 @@ export class Universe {
   /** Rise, transit and set of an object in the 24 hours from `jd0` (UT). */
   riseSet(ref: string, jd0: number): RiseSet | null {
     const obj = this.resolve(ref);
-    if (!obj) return null;
+    // Rising and setting are worked out for the Earth's turning only.
+    if (!obj || this.away) return null;
     const site = earthSite(this.site);
     if (obj.body && !GALILEAN.some((m) => m.id === ref)) return bodyRiseSet(this.eph, site, jd0, ref);
     if (obj.body) return bodyRiseSet(this.eph, site, jd0, 'jupiter');

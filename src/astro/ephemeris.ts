@@ -3,7 +3,7 @@
 
 import {
   AU_KM, C_AU_PER_DAY, DEG, type Mat3, type Vec3,
-  add, angleBetween, apply, dot, mulAll, norm, normalize, rotZ, scale, sub, transpose, fromSpherical,
+  add, angleBetween, apply, dot, mulAll, norm, normalize, rotZ, scale, sub, transpose, fromSpherical, cross,
 } from './math.ts';
 import {
   type Nutation, equatorToHorizonMatrix, gast, nutation, nutationMatrix, observerGeocentric, precessionMatrix,
@@ -12,7 +12,7 @@ import { Elp } from './moon.ts';
 import { Vsop87, type PlanetName } from './vsop87.ts';
 import { BODIES, type SolarBodyId, illuminatedFraction, visualMagnitude } from './bodies.ts';
 import { plutoPosition, SMALL_BODIES, type SmallBody, stateFromElements } from './kepler.ts';
-import { ttFromUt } from './time.ts';
+import { J2000, ttFromUt } from './time.ts';
 
 export const SOLAR_BODIES: SolarBodyId[] = [
   'sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto',
@@ -82,7 +82,12 @@ export interface Frame {
   /** Observer's geocentric position, J2000 frame, AU. */
   observerGeo: Vec3;
   site: EarthSite;
+  /** The world the observer stands on. Off the Earth, `observerGeo` is the observer relative to the Earth's centre, `earthVel` the observer's own velocity and `site` planetocentric. */
+  world: World;
 }
+
+/** Worlds you can stand on. */
+export type World = 'earth' | 'moon' | 'mars';
 
 export function makeFrame(eph: Ephemeris, jdUT: number, site: EarthSite): Frame {
   const jdTT = ttFromUt(jdUT);
@@ -98,7 +103,40 @@ export function makeFrame(eph: Ephemeris, jdUT: number, site: EarthSite): Frame 
   const observerGeo = scale(apply(transpose(j2000ToDate), obsDate), 1 / AU_KM);
   return {
     jdUT, jdTT, nut, j2000ToDate, gast: g, last, dateToHorizon, j2000ToHorizon,
-    earth: eph.earth(jdTT), earthVel: eph.earthVelocity(jdTT), observerGeo, site,
+    earth: eph.earth(jdTT), earthVel: eph.earthVelocity(jdTT), observerGeo, site, world: 'earth',
+  };
+}
+
+/** Where a world's prime meridian points (J2000 unit vector), from its IAU pole and rotation. */
+export function primeMeridian(id: SolarBodyId, jdTT: number): { pole: Vec3; prime: Vec3 } {
+  const b = BODIES[id];
+  const pole = fromSpherical(b.poleRa, b.poleDec);
+  const node = normalize(cross([0, 0, 1], pole));
+  const w = b.w0 + b.wRate * (jdTT - J2000);
+  return { pole, prime: add(scale(node, Math.cos(w)), scale(cross(pole, node), Math.sin(w))) };
+}
+
+/**
+ * A frame for an observer standing on the Moon or Mars, at planetocentric
+ * latitude and east longitude `site` (radians). The horizon frame comes from
+ * the world's pole and rotation; everything else is as seen from there.
+ */
+export function makeWorldFrame(eph: Ephemeris, jdUT: number, world: 'moon' | 'mars', site: EarthSite): Frame {
+  const base = makeFrame(eph, jdUT, { lat: 0, lon: 0, height: 0 });
+  const { pole, prime } = primeMeridian(world, base.jdTT);
+  const meridian90 = cross(pole, prime);
+  const cl = Math.cos(site.lat);
+  const up = add(add(scale(prime, cl * Math.cos(site.lon)), scale(meridian90, cl * Math.sin(site.lon))), scale(pole, Math.sin(site.lat)));
+  const east = normalize(cross(pole, up));
+  const north = cross(up, east);
+  const j2000ToHorizon: Mat3 = [-north[0], -north[1], -north[2], east[0], east[1], east[2], up[0], up[1], up[2]];
+  const centre = world === 'moon' ? add(base.earth, eph.moonGeo(base.jdTT)) : eph.helio('mars', base.jdTT);
+  const here = add(centre, scale(up, (BODIES[world].radius + site.height / 1000) / AU_KM));
+  return {
+    ...base, site, world,
+    j2000ToHorizon, dateToHorizon: mulAll(j2000ToHorizon, transpose(base.j2000ToDate)),
+    observerGeo: sub(here, base.earth),
+    earthVel: world === 'moon' ? base.earthVel : eph.vsop.velocity('mars', base.jdTT),
   };
 }
 

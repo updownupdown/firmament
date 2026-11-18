@@ -72,12 +72,12 @@ export function collectLabels(r: SkyRenderer, layers: LayerFlags, selectedRef: s
   if (layers.planetLabels) {
     const names: Record<string, string> = {};
     for (const d of r.drawn) {
-      const isSolar = (SOLAR_BODIES as string[]).includes(d.id);
+      const isSolar = (SOLAR_BODIES as string[]).includes(d.id) || d.id === 'earth';
       const moon = GALILEAN.find((g) => g.id === d.id);
       if (!d.screen || !d.screen.onScreen || d.alt < floor) continue;
       const sel = marked.has(d.id);
       if (!sel) {
-        if (d.body.mag > c.limitMag + 0.5 && d.id !== 'sun' && d.id !== 'moon') continue;
+        if (d.body.mag > c.limitMag + 0.5 && d.id !== 'sun' && d.id !== 'moon' && d.id !== 'earth') continue;
         // Jupiter's moons only once they separate from the planet's glare.
         if (moon && p.fov > 3 * DEG) continue;
         if (!isSolar && !moon && d.body.mag > c.limitMag - 1) continue;

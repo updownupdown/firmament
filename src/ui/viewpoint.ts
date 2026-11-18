@@ -19,7 +19,8 @@ export function verbsFor(app: App, ref: string): Verb[] {
   const region = ref.startsWith('region:');
   const obj = app.universe.resolve(ref);
   // Looking at a belt or cloud from the ground shows nothing: it is seen from outside.
-  if (!region && obj && ref !== 'earth') out.push({ id: 'look', label: 'Look at it', glyph: 'eye', run: () => app.lookAt(ref) });
+  const underfoot = app.mode === 'sky' && ref === app.universe.world;
+  if (!region && obj && !underfoot) out.push({ id: 'look', label: 'Look at it', glyph: 'eye', run: () => app.lookAt(ref) });
   if (app.canFlyTo(ref)) out.push({ id: 'fly', label: 'Fly to it', glyph: 'rocket', run: () => app.flyToObject(ref) });
   if (app.canStandOn(ref)) out.push({ id: 'stand', label: 'Stand on it', glyph: 'globe', run: () => app.standOn(ref) });
   return out;
@@ -42,7 +43,7 @@ export function viewpointChip(app: App, extra: HTMLElement[] = []): HTMLElement 
   const render = () => {
     const v = app.viewpoint();
     const items: HTMLElement[] = [];
-    if (v.place !== 'ground') items.push(item('globe', `Land in ${app.site.name}`, () => app.land()));
+    if (v.place !== 'ground' || v.away) items.push(item('globe', `${v.away ? 'Home to' : 'Land in'} ${app.site.name}`, () => app.land()));
     if (v.body !== 'sun' || v.place === 'ground') items.push(item('orbit', 'Fly out over the Solar System', () => app.flyToObject('sun')));
     for (const id of recent) {
       if (id === v.body && v.place === 'orbit') continue;

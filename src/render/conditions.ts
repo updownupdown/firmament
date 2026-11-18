@@ -70,7 +70,8 @@ export function skyConditions(u: Universe, opts: { bortle: number; atmosphere: b
   // Near the point opposite the Sun, the Moon may be in the Earth's shadow.
   const shadow = angleBetween(moon.dir, scale(sun.dir, -1)) < 3 * DEG ? earthShadowAt(u.eph, u.frame.jdUT) : null;
   const eclipsed = shadow && shadow.separation < shadow.penumbra + shadow.moonRadius ? shadow : null;
-  const moonLight = Math.pow(moon.illum, 1.6) * moonUp * (eclipsed ? 0.03 + 0.97 * eclipsed.uncovered : 1);
+  // Only the Earth's own Moon is bright enough to light the sky, and only from the Earth.
+  const moonLight = u.world !== 'earth' ? 0 : Math.pow(moon.illum, 1.6) * moonUp * (eclipsed ? 0.03 + 0.97 * eclipsed.uncovered : 1);
   const zoomGain = clamp(1.7 * Math.log2((70 * DEG) / opts.fov), -0.6, 6.5);
   let nakedEyeLimit: number;
   if (opts.atmosphere) {

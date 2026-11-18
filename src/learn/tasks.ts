@@ -1,8 +1,6 @@
-// Journeys: short guided investigations. A journey is a list of steps; a step
-// has words, usually a Scene to show, and sometimes a task to do before moving
-// on. Nothing here touches the DOM, so journeys can be checked in tests.
+// Questions and diagrams for the Atlas concepts. Nothing here touches the DOM,
+// so the answers can be checked in tests.
 
-import type { Scene } from '../sim/scene.ts';
 import type { Universe } from '../sim/universe.ts';
 
 export type Task =
@@ -12,13 +10,13 @@ export type Task =
   /** Type a number. `answer` may be read off the simulated sky at the moment of checking. */
   | { kind: 'number'; prompt: string; answer: number | ((u: Universe) => number); tolerance: number; unit: string; hint?: string; explain?: string }
   /**
-   * Do something on the step's diagram. The diagram measures how far off the
+   * Do something on the concept's diagram. The diagram measures how far off the
    * attempt is (in its own units: AU for a tap, degrees for a launch date) and
    * submits that; within `tolerance` counts.
    */
   | { kind: 'plot'; prompt: string; tolerance: number; hint?: string; explain?: string };
 
-/** A diagram drawn in the journey card, worked out from the ephemeris (see orbits.ts). */
+/** A diagram drawn in a concept, worked out from the ephemeris (see orbits.ts). */
 export type Plot =
   /** Two sightings of Mars one Martian year apart, and the lines of sight from the Earth. */
   | { kind: 'triangulate'; jd: number }
@@ -26,33 +24,12 @@ export type Plot =
   | { kind: 'mars-orbit'; jd0: number; count: number }
   /** A Hohmann transfer to Mars with a launch-date slider (`from`…`to`, starting at `start`). */
   | { kind: 'transfer'; from: number; to: number; start: number }
-  /** A chart of the ocean with the circles of position of two stars, measured at the scene's moment. */
   /** The planets from above under gravity alone, with a choice of Jupiter's mass or a passing star. */
   | { kind: 'sandbox'; controls: 'none' | 'jupiter' | 'star' }
+  /** A chart of the ocean with the circles of position of two stars, measured at the sky's current moment and place. */
   | { kind: 'star-fix'; stars: [string, string] }
   /** A spacecraft swinging past Jupiter, with a side and a closest approach to choose. */
   | { kind: 'flyby' };
-
-export interface Step {
-  title: string;
-  text: string;
-  scene?: Scene;
-  plot?: Plot;
-  task?: Task;
-}
-
-/** How the list groups journeys, in this order. */
-export const JOURNEY_THEMES = ['Find your way', 'Through time', 'Great discoveries', 'Into space'] as const;
-export type JourneyTheme = (typeof JOURNEY_THEMES)[number];
-
-export interface Journey {
-  id: string;
-  theme: JourneyTheme;
-  title: string;
-  summary: string;
-  minutes: number;
-  steps: Step[];
-}
 
 export interface Verdict {
   ok: boolean;
@@ -80,43 +57,4 @@ export function checkTask(task: Task, value: string | number, u: Universe): Verd
   const ok = Math.abs(x - answer) <= task.tolerance;
   if (ok) return { ok, message: task.explain ?? 'Right.' };
   return { ok, message: task.hint ?? (x < answer ? 'Too low. Try again.' : 'Too high. Try again.') };
-}
-
-/** Where someone is in a journey. */
-export class JourneyRun {
-  readonly journey: Journey;
-  index: number;
-  /** Whether the current step's task has been done (steps without a task count as done). */
-  solved: boolean;
-
-  constructor(journey: Journey, index = 0) {
-    this.journey = journey;
-    this.index = Math.min(Math.max(0, index), journey.steps.length - 1);
-    this.solved = !this.step.task;
-  }
-
-  get step(): Step {
-    return this.journey.steps[this.index];
-  }
-
-  get last(): boolean {
-    return this.index === this.journey.steps.length - 1;
-  }
-
-  answer(value: string | number, u: Universe): Verdict {
-    const task = this.step.task;
-    if (!task) return { ok: true, message: '' };
-    const v = checkTask(task, value, u);
-    if (v.ok) this.solved = true;
-    return v;
-  }
-
-  go(delta: number): boolean {
-    const next = this.index + delta;
-    if (next < 0 || next >= this.journey.steps.length) return false;
-    if (delta > 0 && !this.solved) return false;
-    this.index = next;
-    this.solved = !this.step.task;
-    return true;
-  }
 }

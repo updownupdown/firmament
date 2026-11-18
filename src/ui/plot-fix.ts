@@ -1,9 +1,9 @@
 // A navigator's chart: the circles of position of two stars, measured at the
-// moment the journey shows, and the ship where they cross.
+// moment the concept shows, and the ship where they cross.
 
 import type { App } from '../app.ts';
 import { DEG } from '../astro/math.ts';
-import { type GeoPoint, circleOfPosition, fixFromTwo, geoDistance, groundPoint, nauticalMiles } from '../journeys/navigation.ts';
+import { type GeoPoint, circleOfPosition, fixFromTwo, geoDistance, groundPoint, nauticalMiles } from '../learn/navigation.ts';
 import { formatLatLon } from '../sim/format.ts';
 import { h } from './dom.ts';
 import { type PlotView, palette, prepare } from './plot-kit.ts';

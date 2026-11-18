@@ -1,5 +1,5 @@
 // Persistence: one versioned JSON document in localStorage holding settings,
-// the observer's place and journey progress.
+// the observer's place and the hints already shown.
 
 import { DEFAULT_LAYERS, type LayerFlags } from './scene.ts';
 import { type Site } from './universe.ts';
@@ -21,21 +21,12 @@ export interface Settings {
   guide: 'unset' | 'on' | 'off';
 }
 
-export interface JourneyProgress {
-  /** Index of the furthest step reached. */
-  step: number;
-  done: boolean;
-  /** Answers the player gave, by step id. */
-  answers?: Record<string, string | number>;
-}
-
 export interface StoreData {
   version: number;
   settings: Settings;
   site: Site | null;
   /** Places the player has used, most recent first. */
   recentSites: Site[];
-  journeys: Record<string, JourneyProgress>;
   /** First-run hints already shown. */
   seen: string[];
 }
@@ -47,7 +38,7 @@ export function defaultData(): StoreData {
       layers: { ...DEFAULT_LAYERS }, culture: 'western', bortle: 4, hour12: false,
       nightVision: false, reducedMotion: false, theme: 'default', guide: 'unset',
     },
-    site: null, recentSites: [], journeys: {}, seen: [],
+    site: null, recentSites: [], seen: [],
   };
 }
 
@@ -76,7 +67,6 @@ export function migrate(raw: unknown): StoreData {
     },
     site: validSite(r.site) ? r.site : null,
     recentSites: Array.isArray(r.recentSites) ? r.recentSites.filter(validSite).slice(0, 8) : [],
-    journeys: r.journeys && typeof r.journeys === 'object' ? r.journeys : {},
     seen: Array.isArray(r.seen) ? r.seen.filter((s) => typeof s === 'string') : [],
   };
 }
@@ -131,10 +121,6 @@ export class Store {
       d.site = site;
       d.recentSites = [site, ...d.recentSites.filter((s) => s.name !== site.name || s.lat !== site.lat || s.lon !== site.lon)].slice(0, 8);
     });
-  }
-
-  setJourney(id: string, progress: JourneyProgress): void {
-    this.update((d) => { d.journeys[id] = progress; });
   }
 
   /** Marks a one-time hint as shown. Returns true the first time. */

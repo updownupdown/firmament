@@ -1,7 +1,7 @@
 # Firmament architecture
 
 Firmament is a planetarium and solar system simulator you can play: the real
-sky for any time and place, plus journeys and a daily guide
+sky for any time and place, plus an Atlas of objects and concepts and a daily guide
 built on top of one shared simulation. It is a web app only (no native or watch
 apps), deployed to GitHub Pages.
 
@@ -25,12 +25,12 @@ src/
   sim/       the Universe service: clock, observer, body positions, queries
   render/    WebGL2 renderer: sky view and space view
   ui/        app shell, sections, panels, design tokens
-  journeys/  journey definitions (data + small checker functions)
-  atlas/     the Atlas: categories of objects and the article texts (no DOM)
+  learn/     physics behind the diagrams and sandboxes, tasks and their checker (no DOM)
+  atlas/     the Atlas: categories, articles, concepts and fixed moments (no DOM)
   data/      typed loaders for the generated assets in public/data
 ```
 
-Dependencies flow downward only: `ui`, `journeys` and `atlas` use `sim` (and `ui` uses `render`);
+Dependencies flow downward only: `ui`, `learn` and `atlas` use `sim` (and `ui` uses `render`);
 `render` uses `sim`; `sim` uses `astro`. `astro` imports nothing else.
 
 ### 1. `astro` — the simulation core
@@ -115,7 +115,7 @@ interface Scene {
 }
 ```
 
-Every Tonight prompt, journey step, event in the calendar and shared
+Every Tonight prompt, concept Try it button, event in the calendar and shared
 link (encoded in the URL hash) is a Scene. "Show me" means `app.apply(scene)`.
 
 ### 5. App shell and sections
@@ -144,10 +144,10 @@ separate pages.
   scale, out to the Oort cloud, with the belts and clouds of small bodies.
 
 Navigation is a dock with Sky, Space, Tonight and Atlas (see the Atlas plan in `docs/STATUS.md`); Space is reached from
-Sky by zooming out or from a button, and is also used by journeys.
+Sky by zooming out or from a button, and is also used by concepts.
 
-Persistence is `localStorage` with a versioned schema: settings, observer
-and journey progress. (An observing log with "I saw it" was built and later
+Persistence is `localStorage` with a versioned schema: settings, the observer's place
+and hints already shown. (An observing log with "I saw it" was built and later
 removed at the owner's request, 2026-11-17.)
 
 ### 6. Data pipeline

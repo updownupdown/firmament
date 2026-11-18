@@ -13,7 +13,7 @@ const STRIDE = 11;
 /**
  * Reference of the object nearest to a screen point, or null if nothing is
  * close. A tap rarely lands exactly on a star, so bright and named stars pull
- * harder than faint ones, and anything in `prefer` (a journey's target) pulls
+ * harder than faint ones, and anything in `prefer` (such as a question's answer) pulls
  * hardest of all.
  */
 export function pick(r: SkyRenderer, layers: LayerFlags, x: number, y: number, radius = 36, prefer: ReadonlySet<string> = new Set()): string | null {

@@ -1,6 +1,6 @@
 // The app shell: the living sky behind, a top bar whose chip holds the time,
 // and one bar at the bottom: the dock of four places (Sky, Space, Tonight,
-// Atlas), or the object card or journey step in its place. One sheet at a time
+// Atlas), or the object card in its place. One sheet at a time
 // holds everything else.
 
 import type { App } from '../app.ts';
@@ -10,7 +10,6 @@ import { lightNote } from '../sim/lore.ts';
 import { h, fill, icon, iconButton, lumenGlyph, swipeToDismiss } from './dom.ts';
 import { blurb, detailFacts, quickFacts, riseSetFacts, whereNow } from './facts.ts';
 import { type AtlasPanel, atlasPanel } from './atlas.ts';
-import { type JourneyPlayer, journeyPlayer } from './journeys.ts';
 import { measureTool } from './measure.ts';
 import { placeTimePanel, settingsPanel } from './panels.ts';
 import { tonightPanel } from './tonight.ts';
@@ -44,7 +43,6 @@ export class Shell {
   private readonly toastEl: HTMLElement;
   private toastTimer = 0;
   private lastFocus: HTMLElement | null = null;
-  private readonly journey: JourneyPlayer;
   private readonly starLab: StarLabPanel;
   private readonly atlas: AtlasPanel;
   private timeBar!: TimeBar;
@@ -73,13 +71,12 @@ export class Shell {
     this.toastEl.addEventListener('pointerleave', () => {
       if (!this.toastEl.hidden) this.toastTimer = window.setTimeout(() => this.hideToast(), 2500);
     });
-    this.journey = journeyPlayer(this);
     const nightVision = h('div', { class: 'night-vision', 'aria-hidden': 'true' });
     const point = this.pointButton();
     if (point) root.append(point);
     root.append(this.scaleButton());
     const measure = measureTool(app);
-    root.append(measure.layer, this.topBar(), measure.banner, this.reticle(), this.objectCard(), this.journey.el, this.dock(), this.timeBar.el, this.viewBar.el, this.sheetEl, this.toastEl, this.stillHint(), nightVision);
+    root.append(measure.layer, this.topBar(), measure.banner, this.reticle(), this.objectCard(), this.dock(), this.timeBar.el, this.viewBar.el, this.sheetEl, this.toastEl, this.stillHint(), nightVision);
 
     const syncSettings = () => {
       const s = app.store.data.settings;
@@ -155,13 +152,6 @@ export class Shell {
   /** Open the Atlas at an entry, a category, or its search field. */
   openAtlas(target: Parameters<AtlasPanel['show']>[0]): void {
     this.atlas.show(target);
-  }
-
-  /** Begin or resume a journey, with the sky in view. */
-  startJourney(id: string): void {
-    this.closeSheet();
-    this.closeBars();
-    this.journey.start(id);
   }
 
   /** Apply a scene; on a phone, step back to the sky so it can be seen. */
@@ -389,7 +379,7 @@ export class Shell {
 
   private dockButtons: Partial<Record<Place, HTMLButtonElement>> = {};
 
-  /** The four places: the sky from the ground, space, tonight's guide, and the Atlas (objects, labs and journeys). */
+  /** The four places: the sky from the ground, space, tonight's guide, and the Atlas (objects, concepts and labs). */
   private dock(): HTMLElement {
     const app = this.app;
     const make = (place: Place, label: string, glyph: string, onClick: () => void) => {

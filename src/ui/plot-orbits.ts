@@ -1,9 +1,9 @@
 // The solar system from above, drawn on a 2D canvas from the geometry in
-// journeys/orbits.ts: Kepler's triangulation, Mars's orbit from fixes, and the
+// learn/orbits.ts: Kepler's triangulation, Mars's orbit from fixes, and the
 // Mars transfer. Each reports a "miss" (AU for a tap, degrees for a launch date).
 
-import type { Plot } from '../journeys/engine.ts';
-import { type MarsFix, type Transfer, type Vec2, MARS_YEAR, eclipticXY, hohmann, marsFix, marsTrack, transferPoint } from '../journeys/orbits.ts';
+import type { Plot } from '../learn/tasks.ts';
+import { type MarsFix, type Transfer, type Vec2, MARS_YEAR, eclipticXY, hohmann, marsFix, marsTrack, transferPoint } from '../learn/orbits.ts';
 import { formatDate } from '../sim/format.ts';
 import type { App } from '../app.ts';
 import { h } from './dom.ts';

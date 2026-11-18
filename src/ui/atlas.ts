@@ -215,21 +215,23 @@ export function atlasPanel(shell: Shell): AtlasPanel {
 
   const readingFor = (obj: SkyObject) => {
     const article = articleFor(obj.ref);
+    const lore = loreFor(u, obj, blurb);
+    const story = lore.story ? h('section', { class: 'atlas-section' }, h('h4', { class: 'atlas-section-title' }, 'The story'), h('p', null, lore.story)) : null;
     if (article) {
       return [
         h('p', { class: 'atlas-lede' }, article.lede),
         article.sections.map((s) => h('section', { class: 'atlas-section' },
           h('h4', { class: 'atlas-section-title' }, s.title), s.paragraphs.map((p) => h('p', null, p)))),
+        story,
         sources(article.sources),
       ];
     }
-    const lore = loreFor(u, obj, blurb);
     const about = blurb(obj);
     const paras = [about, lore.science && lore.science !== about ? lore.science : null].filter((p): p is string => !!p);
     if (!paras.length && !lore.story) return [];
     return [
       paras.length ? h('section', { class: 'atlas-section' }, h('h4', { class: 'atlas-section-title' }, 'About'), paras.map((p) => h('p', null, p))) : null,
-      lore.story ? h('section', { class: 'atlas-section' }, h('h4', { class: 'atlas-section-title' }, 'The story'), h('p', null, lore.story)) : null,
+      story,
     ];
   };
 

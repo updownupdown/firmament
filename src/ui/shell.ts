@@ -1,11 +1,15 @@
-// The app shell: the living sky behind, a top bar whose chip holds the time
-// (with search and settings beside it), and one bar at the bottom: the dock
-// of three places (Sky, Tonight, Atlas; Space is reached by flying), or the
-// object card, the timeline or the view switches in its place. The View
-// button sits at the bottom right. One sheet at a time holds everything else.
-// Back (the phone's or the browser's) closes whatever was opened last; see back.ts.
+// The app shell: the living sky behind, and the same three places on every
+// screen. At the top, Where and When: two chips that open the Where panel (every
+// vantage, each labelled with the view it gives) and the When panel (the
+// timeline, dropping down from the top). At the bottom, one toolbar (Search,
+// Tonight, Atlas, View, Point, Settings). Just above it, the focus card: what
+// you are looking at (an object, or a concept you are trying), with Atlas as its
+// one labelled button, every other action named in its ⋯ menu, and × to let
+// go. Messages appear in one place, under the chips. One sheet at a time holds
+// everything else. Back (the phone's or the browser's) closes whatever was
+// opened last; see back.ts.
 
-import { verbsFor, viewpointChip } from './viewpoint.ts';
+import { verbsFor } from './viewpoint.ts';
 import type { App } from '../app.ts';
 import type { TripTarget } from '../learn/trip.ts';
 import { type SlingshotLab, slingshotLab } from './slingshot.ts';
@@ -16,22 +20,33 @@ import { Pointing } from '../render/pointing.ts';
 import { BackStack } from './back.ts';
 import { type SearchOverlay, searchOverlay } from './search.ts';
 import { formatDistanceAU } from '../sim/format.ts';
-import { lightNote } from '../sim/lore.ts';
-import { h, fill, icon, iconButton, lumenGlyph, swipeToDismiss } from './dom.ts';
-import { blurb, detailFacts, quickFacts, riseSetFacts, whereNow } from './facts.ts';
+import { h, fill, icon, iconButton, swipeToDismiss } from './dom.ts';
+import { quickFacts, riseSetFacts, whereNow } from './facts.ts';
 import { type AtlasPanel, atlasPanel } from './atlas.ts';
 import { measureTool } from './measure.ts';
-import { placeTimePanel, settingsPanel } from './panels.ts';
+import { settingsPanel, share } from './panels.ts';
+import { whereChip, wherePanel } from './where.ts';
+import { TRIP_TARGETS } from '../learn/trip.ts';
 import { tonightPanel } from './tonight.ts';
 import { type StarLabPanel, starLabPanel } from './starlab.ts';
 import { type StarSeed, starSeed } from '../sim/starlink.ts';
 import { type TimeBar, timeChip } from './timebar.ts';
 import { type ViewBar, viewBar } from './viewbar.ts';
 
-/** The places in the dock. */
-type Place = 'sky' | 'tonight' | 'atlas';
+/** The toolbar's items. */
+type Tool = 'search' | 'tonight' | 'atlas' | 'view' | 'point' | 'settings';
 
-export type SheetId = 'atlas' | 'settings' | 'place' | 'tonight' | 'stars' | null;
+export type SheetId = 'atlas' | 'settings' | 'where' | 'tonight' | 'stars' | null;
+
+/** A concept's Try it that is showing on the sky: the focus card leads back to the page, or home. */
+export interface Trying {
+  concept: string;
+  title: string;
+  label: string;
+  note: string;
+  article: () => void;
+  home: () => void;
+}
 
 export interface Panel {
   title: string;
@@ -72,7 +87,7 @@ export class Shell {
     this.panels = {
       atlas: (this.atlas = atlasPanel(this)),
       settings: settingsPanel(this),
-      place: placeTimePanel(this),
+      where: wherePanel(this),
       tonight: tonightPanel(this),
       stars: (this.starLab = starLabPanel(this)),
     };
@@ -91,14 +106,13 @@ export class Shell {
       if (!this.toastEl.hidden) this.toastTimer = window.setTimeout(() => this.hideToast(), 2500);
     });
     const nightVision = h('div', { class: 'night-vision', 'aria-hidden': 'true' });
-    const point = this.pointButton();
-    if (point) root.append(point);
-    root.append(viewpointChip(app, [this.scaleButton()]));
     const measure = measureTool(app);
     this.search = searchOverlay(this, (open) => {
       if (open) { this.closeBars(); this.back.push('search', () => this.search.close()); } else this.back.dropLast('search');
+      this.syncTools();
     });
-    root.append(measure.layer, this.topBar(), measure.banner, this.reticle(), this.objectCard(), this.dock(), this.viewButton(), this.timeBar.el, this.viewBar.el, this.sheetEl, this.search.el, this.toastEl, this.stillHint(), nightVision);
+    root.append(measure.layer, this.topBar(), measure.banner, this.reticle(), this.focusCard(), this.toolbar(), this.timeBar.el, this.viewBar.el, this.sheetEl, this.search.el, this.toastEl, this.stillHint(), nightVision);
+    this.watchPointing();
 
     // Back steps out of a selection and of Still mode too.
     app.on('select', () => {
@@ -167,7 +181,7 @@ export class Shell {
     this.sheetBody.scrollTop = 0;
     (panel.focus ?? this.sheetTitle).focus({ preventScroll: true });
     this.app.setSection(id === 'tonight' || id === 'atlas' ? id : 'sky');
-    this.syncDock();
+    this.syncTools();
     this.syncSheetHeader();
   }
 
@@ -205,7 +219,7 @@ export class Shell {
     this.sheetEl.hidden = true;
     delete document.documentElement.dataset.sheet;
     this.app.setSection('sky');
-    this.syncDock();
+    this.syncTools();
     (this.lastFocus?.isConnected ? this.lastFocus : this.app.canvas).focus({ preventScroll: true });
   }
 
@@ -263,12 +277,13 @@ export class Shell {
     if (matchMedia('(max-width: 899px)').matches) this.closeSheet();
   }
 
-  toast(message: string): void {
-    fill(this.toastEl, h('span', { class: 'toast-text' }, message), iconButton('close', 'Dismiss', () => this.hideToast(), 'toast-close'));
+  /** The one place for messages: under the Where and When chips. A newer message replaces the last. */
+  toast(message: string, glyph?: string): void {
+    fill(this.toastEl, glyph ? icon(glyph, 16) : null, h('span', { class: 'toast-text' }, message), iconButton('close', 'Dismiss', () => this.hideToast(), 'toast-close'));
     this.toastEl.hidden = false;
     clearTimeout(this.toastTimer);
-    // Longer notes (Lumen's) stay up long enough to read.
-    this.toastTimer = window.setTimeout(() => this.hideToast(), 3200 + message.length * 35);
+    // Longer notes stay up long enough to read.
+    this.toastTimer = window.setTimeout(() => this.hideToast(), 2600 + message.length * 35);
   }
 
   private hideToast(): void {
@@ -292,6 +307,7 @@ export class Shell {
       delete root.dataset.bar;
       this.back.dropLast('bar');
     }
+    this.syncTools();
   }
 
   private closeBars(): void {
@@ -299,88 +315,91 @@ export class Shell {
     this.viewBar.close();
   }
 
-  // ---------------------------------------------------------------- top bar
+  // ---------------------------------------------------------------- top bar: Where and When
 
   private topBar(): HTMLElement {
-    const { chip, bar } = timeChip(this.app, {
-      openPlace: () => this.openSheet('place'),
-      onToggle: (open) => this.barToggled('time', open),
-    });
+    const { chip, bar } = timeChip(this.app, { onToggle: (open) => this.barToggled('time', open) });
     this.timeBar = bar;
     this.viewBar = viewBar(this.app, { onToggle: (open) => this.barToggled('view', open) });
-    return h('div', { class: 'top-bar chrome' }, chip,
-      iconButton('search', 'Search', () => this.openSearch(), 'glass'),
-      iconButton('gear', 'Settings', () => (this.sheet === 'settings' ? this.closeSheet() : this.openSheet('settings')), 'glass'));
+    const where = whereChip(this.app, () => (this.sheet === 'where' ? this.closeSheet() : this.openSheet('where')));
+    return h('div', { class: 'top-bar' }, where, chip);
   }
 
-  /** The View button, bottom right: layers, looks, light pollution and sky culture in the bottom bar. */
-  private viewButton(): HTMLElement {
-    return iconButton('sliders', 'View', () => (this.viewBar.open ? this.viewBar.close() : this.viewBar.show()), 'glass view-button chrome');
-  }
+  // ---------------------------------------------------------------- toolbar
 
-  /**
-   * A round icon button that widens for a moment to say what it just did,
-   * in place of a toast.
-   */
-  private flash(button: HTMLElement, text: string): void {
-    const label = button.querySelector('.flash-label') as HTMLElement;
-    label.textContent = text;
-    button.classList.add('flashing');
-    clearTimeout(Number(button.dataset.flashTimer ?? 0));
-    button.dataset.flashTimer = String(window.setTimeout(() => button.classList.remove('flashing'), 2200));
-  }
+  private tools: Partial<Record<Tool, HTMLButtonElement>> = {};
 
-  /** Phone pointing: only offered on devices that can do it. */
-  private pointButton(): HTMLElement | null {
+  /** One row of labelled tools at the bottom. Each opens its panel, or closes it again. */
+  private toolbar(): HTMLElement {
     const app = this.app;
-    if (!Pointing.supported) return null;
-    const button = h('button', { class: 'icon-button glass flash-button point-button chrome', type: 'button', onclick: () => {
-      if (app.pointing.active) { void app.setPointing(false); this.flash(button, 'Pointing off'); return; }
-      app.setPointing(true).then((result) => {
-        if (result === 'denied') this.flash(button, 'No motion access');
-        else if (result === 'unsupported') this.flash(button, 'No compass here');
-        else this.flash(button, 'Pointing on');
-      });
-    } }, h('span', { class: 'flash-label' }), icon('pointing'));
-    const sync = () => {
-      const on = app.pointing.active;
-      const label = on ? 'Stop following the phone' : 'Point your phone at the sky';
-      button.setAttribute('aria-label', label);
-      button.setAttribute('aria-pressed', String(on));
-      button.title = label;
-      button.hidden = app.mode === 'space';
+    const make = (tool: Tool, label: string, glyph: string, onClick: () => void) => {
+      const b = h('button', { class: 'tool', type: 'button', onclick: onClick }, icon(glyph, 20), h('span', null, label));
+      this.tools[tool] = b;
+      return b;
     };
-    app.on('pointing', sync);
-    app.on('mode', sync);
-    sync();
-    return button;
+    const sheet = (id: Exclude<SheetId, null>) => () => (this.sheet === id ? this.closeSheet() : this.openSheet(id));
+    const el = h('nav', { class: 'toolbar glass chrome', 'aria-label': 'Tools' },
+      make('search', 'Search', 'search', () => this.openSearch()),
+      make('tonight', 'Tonight', 'moon', sheet('tonight')),
+      make('atlas', 'Atlas', 'book', sheet('atlas')),
+      make('view', 'View', 'sliders', () => (this.viewBar.open ? this.viewBar.close() : this.viewBar.show())),
+      Pointing.supported ? make('point', 'Point', 'pointing', () => this.togglePointing()) : null,
+      make('settings', 'Settings', 'gear', sheet('settings')));
+    app.on('mode', () => {
+      document.documentElement.dataset.mode = app.mode;
+      this.syncTools();
+    });
+    app.on('pointing', () => this.syncTools());
+    document.documentElement.dataset.mode = app.mode;
+    this.syncTools();
+    return el;
   }
 
-  /** Space view: true or compressed distances and sizes. The icon shows which; the name shows for a moment after a switch. */
-  private scaleButton(): HTMLElement {
+  private syncTools(): void {
+    if (!this.viewBar) return;
+    const root = document.documentElement;
+    const on: Record<Tool, boolean> = {
+      search: 'search' in root.dataset,
+      tonight: this.sheet === 'tonight',
+      atlas: this.sheet === 'atlas' || this.sheet === 'stars',
+      view: this.viewBar.open,
+      point: this.app.pointing.active,
+      settings: this.sheet === 'settings',
+    };
+    for (const [tool, button] of Object.entries(this.tools) as [Tool, HTMLButtonElement][]) {
+      button.setAttribute('aria-pressed', String(on[tool]));
+    }
+    const point = this.tools.point;
+    if (point) {
+      point.hidden = this.app.mode === 'space';
+      point.setAttribute('aria-label', on.point ? 'Stop following the phone' : 'Point your phone at the sky');
+    }
+  }
+
+  // ---------------------------------------------------------------- phone pointing
+
+  private togglePointing(): void {
     const app = this.app;
-    const glyph = h('span', { class: 'flash-icon' });
-    const button = h('button', { class: 'icon-button glass flash-button scale-button chrome', type: 'button', onclick: () => {
-      app.setLayer('compressed', !app.layers.compressed);
-      this.flash(button, app.layers.compressed ? 'Compressed scale' : 'True scale');
-    } }, glyph, h('span', { class: 'flash-label' }));
-    let shown: boolean | null = null;
-    const sync = () => {
-      const on = app.layers.compressed;
-      if (on !== shown) fill(glyph, icon(on ? 'squeeze' : 'spread'));
-      shown = on;
-      const label = on ? 'Compressed scale: switch to true scale' : 'True scale: switch to compressed scale';
-      button.setAttribute('aria-label', label);
-      button.title = label;
-      button.hidden = app.mode !== 'space';
-    };
-    app.on('settings', sync);
-    app.on('mode', sync);
-    sync();
-    return button;
+    if (app.pointing.active) { void app.setPointing(false); return; }
+    app.setPointing(true).then((result) => {
+      if (result === 'denied') this.toast('No motion access. Allow it in your browser’s settings to point the phone.', 'pointing');
+      else if (result === 'unsupported') this.toast('This device has no compass to point with.', 'pointing');
+    });
   }
 
-  // ---------------------------------------------------------------- object card
+  /** Every change of pointing, however it came about (the tool, a drag, a jump), says so in the message slot. */
+  private watchPointing(): void {
+    const app = this.app;
+    let was = app.pointing.active;
+    app.on('pointing', () => {
+      const now = app.pointing.active;
+      if (now === was) return;
+      was = now;
+      this.toast(now ? 'Pointing on: move your phone around the sky' : 'Pointing off', 'pointing');
+    });
+  }
+
+  // ---------------------------------------------------------------- the focus card: what you are looking at
 
   private reticle(): HTMLElement {
     const app = this.app;
@@ -397,72 +416,104 @@ export class Shell {
     return el;
   }
 
-  private objectCard(): HTMLElement {
+  private trying: Trying | null = null;
+  private renderFocus: () => void = () => {};
+
+  /** A concept's Try it is on the sky (or not any more). */
+  setTrying(t: Trying | null): void {
+    this.trying = t;
+    if (t) document.documentElement.dataset.reading = t.concept; else delete document.documentElement.dataset.reading;
+    this.renderFocus();
+  }
+
+  private focusCard(): HTMLElement {
     const app = this.app;
+    // A concept being tried.
+    const tryCap = h('span', { class: 'card-label focus-try-cap' });
+    const tryTitle = h('p', { class: 'focus-try-title' });
+    const tryNote = h('p', { class: 'focus-try-note' });
+    const trySection = h('div', { class: 'focus-try', hidden: true },
+      h('div', { class: 'focus-try-head' },
+        h('span', { class: 'focus-try-glyph' }, icon('book', 18)),
+        h('div', { class: 'focus-try-text' }, tryCap, tryTitle, tryNote),
+        iconButton('close', 'Leave the concept and go back to your sky', () => this.trying?.home(), 'outlined focus-close')),
+      h('div', { class: 'focus-try-actions' },
+        h('button', { class: 'pill-button primary', type: 'button', onclick: () => this.trying?.article() }, icon('book', 16), 'Back to the article'),
+        h('button', { class: 'pill-button', type: 'button', onclick: () => this.trying?.home() }, 'Back to my sky')));
+
+    // An object.
     const title = h('h2', { class: 'card-title' });
     const subtitle = h('p', { class: 'card-subtitle' });
     const quick = h('dl', { class: 'facts quick' });
-    const more = h('div', { class: 'card-more', hidden: true });
-    const lumen = h('p', { class: 'card-lumen', hidden: true });
-    const detailsLabel = h('span', null, 'More details');
-    const detailsButton = h('button', { class: 'card-disclosure', type: 'button', 'aria-expanded': 'false' }, detailsLabel, icon('up', 16));
-    const measureButton = iconButton('ruler', 'Measure the angle to another object', () => {
-      if (app.selected) app.startMeasure(app.selected);
-    }, 'outlined');
-    const lifeButton = h('button', { class: 'pill-button', type: 'button', onclick: () => {
-      const obj = app.selectedObject;
-      const seed = obj ? starSeed(app.universe, obj) : null;
-      if (seed) this.openStarLab(seed);
-    } }, icon('star', 16), 'Life story');
-    const readButton = iconButton('book', 'Read about it in the Atlas', () => {
+    const atlasButton = h('button', { class: 'pill-button primary focus-atlas', type: 'button', onclick: () => {
       if (app.selected) this.openAtlas({ ref: app.selected });
-    }, 'outlined');
-    // Look at it, Fly to it, Stand on it: whichever make sense for this object from here.
-    const verbRow = h('div', { class: 'card-verbs' });
-    const followButton = iconButton('target', 'Centre and follow', () => {
-      if (app.selected) app.centre(app.selected);
-    }, 'outlined');
-    let expanded = false;
+    } }, icon('book', 16), 'Atlas');
+    const moreButton = iconButton('more', 'More things to do', () => toggleMenu(), 'outlined focus-more');
+    moreButton.setAttribute('aria-haspopup', 'menu');
+    moreButton.setAttribute('aria-expanded', 'false');
+    const menu = h('div', { class: 'focus-menu glass', role: 'menu', hidden: true });
+    const objSection = h('div', { class: 'focus-object', hidden: true },
+      h('header', { class: 'card-header' },
+        h('div', { class: 'card-heading' }, title, subtitle),
+        atlasButton, moreButton,
+        iconButton('close', 'Stop looking at it', () => app.select(null), 'outlined focus-close')),
+      quick);
+    const el = h('section', { class: 'focus-card glass chrome', hidden: true, 'aria-label': 'What you are looking at' }, trySection, objSection, menu);
+
+    // ---- the ⋯ menu: every action, by name, with a line on what it does
+    const closeMenu = () => {
+      menu.hidden = true;
+      moreButton.setAttribute('aria-expanded', 'false');
+    };
+    const item = (glyph: string, label: string, sub: string, run: () => void) =>
+      h('button', { class: 'menu-item', type: 'button', role: 'menuitem', onclick: () => { closeMenu(); run(); } },
+        icon(glyph, 20), h('span', { class: 'menu-text' }, h('span', { class: 'menu-label' }, label), sub ? h('span', { class: 'menu-sub' }, sub) : null));
+    const toggleMenu = () => {
+      if (!menu.hidden) { closeMenu(); return; }
+      const obj = app.selectedObject;
+      if (!obj) return;
+      const space = app.mode === 'space' || !!app.universe.voyage;
+      const items: HTMLElement[] = [];
+      if (!obj.region) items.push(item('target', 'Keep it centred', app.mode === 'space' ? 'Circle it as time runs' : `The sky turns, ${obj.name} stays put`, () => app.centre(obj.ref)));
+      for (const v of verbsFor(app, obj.ref)) {
+        if (v.id === 'look') items.push(item('eye', 'Zoom in on it', space ? `Land and look from ${app.site.name}` : 'Fill the view with it', v.run));
+        else if (v.id === 'fly') items.push(item('rocket', `Fly to ${obj.name}`, obj.starIndex !== undefined ? 'Star travel: see the sky from there' : 'Space view, circling it', v.run));
+        else items.push(item('flag', `Stand on ${obj.name}`, obj.ref === 'earth' ? `Sky view from ${app.site.name}` : 'Sky view from its surface', v.run));
+      }
+      if (!space && obj.kind !== 'constellation' && !obj.region) items.push(item('ruler', 'Measure the angle to…', 'Then tap a second object', () => app.startMeasure(obj.ref)));
+      if (obj.kind === 'sun' || (obj.starIndex !== undefined && (app.universe.stars.dist[obj.starIndex] > 0 || !!app.universe.stars.meta.get(obj.starIndex)?.n))) {
+        items.push(item('star', 'Its life story', 'In the Star lab', () => { const seed = starSeed(app.universe, obj); if (seed) this.openStarLab(seed); }));
+      }
+      if (obj.ref in TRIP_TARGETS) items.push(item('slingshot', `Plan a trip to ${obj.name}`, 'Launch windows and what they cost', () => this.openTrip(obj.ref as keyof typeof TRIP_TARGETS)));
+      items.push(item('share', 'Share this view', 'Copy a link to exactly this sky', () => share(this)));
+      fill(menu, items);
+      menu.hidden = false;
+      moreButton.setAttribute('aria-expanded', 'true');
+      (menu.querySelector('button') as HTMLButtonElement | null)?.focus({ preventScroll: true });
+    };
+    document.addEventListener('pointerdown', (e) => { if (!menu.hidden && !menu.contains(e.target as Node) && e.target !== moreButton && !moreButton.contains(e.target as Node)) closeMenu(); });
+    menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeMenu(); moreButton.focus(); } });
+
     let riseSetFor = '';
     let riseSet: ReturnType<typeof riseSetFacts> = [];
-
+    const style = () => ({ hour12: app.store.data.settings.hour12 });
     const factList = (facts: { label: string; value: string }[]) =>
       facts.map((f) => h('div', { class: 'fact' }, h('dt', null, f.label), h('dd', null, f.value)));
 
-    const el = h('section', { class: 'object-card glass chrome', hidden: true, 'aria-label': 'Selected object' },
-      h('header', { class: 'card-header' },
-        h('div', { class: 'card-heading' }, title, subtitle),
-        iconButton('close', 'Close', () => app.select(null))),
-      quick,
-      lumen,
-      h('div', { class: 'card-actions' },
-        verbRow,
-        followButton,
-        readButton,
-        measureButton,
-        lifeButton),
-      detailsButton,
-      more);
-
-    const style = () => ({ hour12: app.store.data.settings.hour12 });
-    const renderMore = () => {
-      const obj = app.selectedObject;
-      if (!obj || !expanded) return;
-      const key = `${obj.ref}|${Math.floor(app.clock.jdUT * 4)}|${app.site.lat}|${app.site.lon}`;
-      if (key !== riseSetFor) {
-        riseSetFor = key;
-        riseSet = riseSetFacts(app.universe, obj, app.clock.jdUT, style());
-      }
-      const text = blurb(obj);
-      fill(more,
-        text ? h('p', { class: 'card-blurb' }, text) : null,
-        h('dl', { class: 'facts' }, factList([...riseSet, ...detailFacts(app.universe, obj, style())])));
-    };
     const update = () => {
       const obj = app.selectedObject;
-      el.hidden = !obj;
+      const t = this.trying;
       document.documentElement.dataset.selected = String(!!obj);
-      if (!obj) return;
+      el.hidden = !obj && !t;
+      trySection.hidden = !t;
+      objSection.hidden = !obj;
+      el.classList.toggle('both', !!obj && !!t);
+      if (t) {
+        tryCap.textContent = `Trying it · ${t.title}`;
+        tryTitle.textContent = t.label;
+        tryNote.textContent = t.note;
+      }
+      if (!obj) { closeMenu(); return; }
       title.textContent = obj.name;
       subtitle.textContent = obj.region ? obj.subtitle
         : app.mode === 'space' && obj.body
@@ -471,80 +522,24 @@ export class Shell {
         : `${obj.subtitle} · ${whereNow(app.universe, obj, app.layers.atmosphere)}`;
       // Out in space or among the stars there is no horizon to measure from.
       const space = app.mode === 'space' || !!app.universe.voyage;
-      fill(quick, factList(quickFacts(app.universe, obj).filter((f) => !space || f.label !== 'Altitude')));
-      // Lumen, when it is on, says how old the light is.
-      const note = app.store.data.settings.guide === 'on' && !space ? lightNote(app.universe, obj) : null;
-      lumen.hidden = !note;
-      if (note) fill(lumen, lumenGlyph(), h('span', null, note));
-      measureButton.hidden = space || obj.kind === 'constellation' || !!obj.region;
-      followButton.hidden = !!obj.region;
-      readButton.hidden = obj.ref.startsWith('tyc:');
-      const verbs = verbsFor(app, obj.ref);
-      // The verb that keeps you where you are leads: looking from the ground, flying in space.
-      const lead = space ? 'fly' : 'look';
-      const key = `${obj.ref}|${verbs.map((v) => v.id).join()}|${lead}`;
-      if (verbRow.dataset.key !== key) {
-        verbRow.dataset.key = key;
-        fill(verbRow, verbs.map((v) => h('button', {
-          class: `pill-button${v.id === lead ? ' primary' : ''}`, type: 'button', onclick: () => {
-            // Fresh each time: the selection may have changed since the row was built.
-            const sel = app.selected;
-            if (!sel) return;
-            verbsFor(app, sel).find((x) => x.id === v.id)?.run();
-          },
-          'aria-label': `${v.label}: ${obj.name}`, title: v.label,
-        }, icon(v.glyph, 16), h('span', { class: 'verb-label' }, v.label))));
+      const key = `${obj.ref}|${Math.floor(app.clock.jdUT * 4)}|${app.site.lat}|${app.site.lon}`;
+      if (key !== riseSetFor) {
+        riseSetFor = key;
+        riseSet = space || obj.region ? [] : riseSetFacts(app.universe, obj, app.clock.jdUT, style());
       }
-      lifeButton.hidden = !(obj.kind === 'sun' || (obj.starIndex !== undefined && (app.universe.stars.dist[obj.starIndex] > 0 || !!app.universe.stars.meta.get(obj.starIndex)?.n)));
-      renderMore();
+      // Three numbers at most: how bright, how far, and the next rise or set.
+      const facts = quickFacts(app.universe, obj).filter((f) => f.label !== 'Altitude');
+      const next = riseSet.find((f) => /^(Rises|Sets)/.test(f.label));
+      fill(quick, factList([...facts.slice(0, next ? 2 : 3), ...(next ? [next] : [])]));
+      atlasButton.hidden = obj.ref.startsWith('tyc:');
     };
-    detailsButton.addEventListener('click', () => {
-      expanded = !expanded;
-      more.hidden = !expanded;
-      detailsButton.setAttribute('aria-expanded', String(expanded));
-      detailsLabel.textContent = expanded ? 'Fewer details' : 'More details';
-      renderMore();
-    });
-    app.on('select', () => { riseSetFor = ''; update(); });
+    this.renderFocus = update;
+    app.on('select', () => { riseSetFor = ''; closeMenu(); update(); });
     app.on('second', update);
     app.on('time', update);
     app.on('site', update);
-    app.on('mode', update);
+    app.on('mode', () => { closeMenu(); update(); });
     return el;
-  }
-
-  // ---------------------------------------------------------------- dock
-
-  private dockButtons: Partial<Record<Place, HTMLButtonElement>> = {};
-
-  /** Three places: the sky (Sky also brings you home from space), tonight's guide, and the Atlas (objects, concepts and labs). */
-  private dock(): HTMLElement {
-    const app = this.app;
-    const make = (place: Place, label: string, glyph: string, onClick: () => void) => {
-      const b = h('button', { class: 'dock-item', type: 'button', onclick: onClick }, icon(glyph, 20), h('span', null, label));
-      this.dockButtons[place] = b;
-      return b;
-    };
-    const el = h('nav', { class: 'dock glass chrome', 'aria-label': 'Places' },
-      make('sky', 'Sky', 'sky', () => { this.closeSheet(); app.land(); }),
-      make('tonight', 'Tonight', 'moon', () => this.openSheet('tonight')),
-      make('atlas', 'Atlas', 'book', () => this.openSheet('atlas')));
-    app.on('mode', () => {
-      document.documentElement.dataset.mode = app.mode;
-      this.syncDock();
-    });
-    document.documentElement.dataset.mode = app.mode;
-    this.syncDock();
-    return el;
-  }
-
-  private syncDock(): void {
-    // Space is reached by flying (the viewpoint chip, Fly to it, or zooming out), so the dock lights Sky only on the ground.
-    const current = this.sheet === 'tonight' || this.sheet === 'atlas' ? this.sheet : this.app.mode === 'space' ? null : 'sky';
-    for (const [place, button] of Object.entries(this.dockButtons)) {
-      if (place === current) button.setAttribute('aria-current', 'page');
-      else button.removeAttribute('aria-current');
-    }
   }
 
   private stillHint(): HTMLElement {

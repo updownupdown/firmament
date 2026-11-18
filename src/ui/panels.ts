@@ -1,6 +1,6 @@
-// The sheets that are mostly forms: settings, place and time. The layer
-// lists here also feed the View bar (viewbar.ts), which owns everything about
-// what the sky shows.
+// Settings, and the forms for a place on the Earth (in Where) and a date (in
+// When). The layer lists here also feed the View panel (viewbar.ts), which owns
+// everything about what the sky shows.
 
 import { DEG } from '../astro/math.ts';
 import { fetchText } from '../data/load.ts';
@@ -10,6 +10,7 @@ import { PLACES, searchPlaces } from '../sim/places.ts';
 import type { LayerFlags } from '../sim/scene.ts';
 import type { Site } from '../sim/universe.ts';
 import { h, fill, icon, toggle } from './dom.ts';
+import type { App } from '../app.ts';
 import type { Panel, Shell } from './shell.ts';
 
 // ------------------------------------------------------------------ layers and settings
@@ -75,10 +76,7 @@ export function settingsPanel(shell: Shell): Panel {
     const s = app.store.data.settings;
     const install = installButton(shell);
     fill(el,
-      h('p', { class: 'lede' }, 'What the sky shows (layers, looks, light pollution and sky culture) is under View, at the bottom right.'),
-      section('Guide',
-        h('div', { class: 'control-card' },
-          toggle('Lumen', s.guide === 'on', (on) => app.updateSettings((x) => { x.guide = on ? 'on' : 'off'; }), 'Science and stories in Tonight, and how old the light is on each object\'s card'))),
+      h('p', { class: 'lede' }, 'What the sky shows (layers, looks, light pollution and sky culture) is under View.'),
       section('Comfort',
         h('div', { class: 'control-card' },
           toggle('Night vision', s.nightVision, (on) => app.updateSettings((x) => { x.nightVision = on; }), 'A dim red screen that keeps your eyes dark-adapted'),
@@ -124,7 +122,7 @@ function installButton(shell: Shell): HTMLElement | null {
   }, icon('download', 18), h('span', null, 'Install as an app'), icon('forward', 16));
 }
 
-function share(shell: Shell): void {
+export function share(shell: Shell): void {
   const url = shell.app.shareUrl();
   history.replaceState(history.state, '', url);
   const done = () => shell.toast('Link copied. It opens this exact sky.');
@@ -175,29 +173,25 @@ function nearestZone(lat: number, lon: number): string {
   return best;
 }
 
-export function placeTimePanel(shell: Shell): Panel {
-  const app = shell.app;
-
-  // ---- place
-  const placeNow = h('p', { class: 'place-now' });
-  const placeInput = h('input', { class: 'field', type: 'search', placeholder: 'Search cities', autocomplete: 'off', 'aria-label': 'Search cities' });
+/** Choosing a place on the Earth: city search, recent places, your location, coordinates. */
+export function placeForm(app: App, onChosen: (site: Site) => void): { el: HTMLElement; refresh: () => void } {
+  const placeInput = h('input', { class: 'field', type: 'search', placeholder: 'Find a city', autocomplete: 'off', 'aria-label': 'Find a city' });
   const placeList = h('ul', { class: 'result-list compact', role: 'list' });
   const placeStatus = h('p', { class: 'hint', role: 'status' });
   const lat = h('input', { class: 'field', type: 'number', min: '-90', max: '90', step: 'any', inputmode: 'decimal', 'aria-label': 'Latitude, degrees north' });
   const lon = h('input', { class: 'field', type: 'number', min: '-180', max: '180', step: 'any', inputmode: 'decimal', 'aria-label': 'Longitude, degrees east' });
 
-  const choose = (site: Site) => { app.setSite(site); placeInput.value = ''; renderPlaces(); };
+  const choose = (site: Site) => { placeInput.value = ''; onChosen(site); renderPlaces(); };
   const placeRow = (s: Site) => h('li', null, h('button', { class: 'result', type: 'button', onclick: () => choose(s) },
     h('span', { class: 'result-main' }, h('span', { class: 'result-name' }, s.name), h('span', { class: 'result-sub' }, s.country ?? formatLatLon(s.lat, s.lon)))));
   const renderPlaces = () => {
     const site = app.site;
-    fill(placeNow, h('strong', null, site.name), ` · ${formatLatLon(site.lat, site.lon)}`);
     const q = placeInput.value.trim();
     const list: Site[] = q
       ? searchPlaces(q, 8).map((p) => ({ name: p.name, country: p.country, lat: p.lat, lon: p.lon, height: p.height ?? 0, tz: p.tz }))
       : app.store.data.recentSites.filter((s) => s.name !== site.name).slice(0, 4);
     fill(placeList, list.map(placeRow));
-    placeStatus.textContent = q && !list.length ? 'No city by that name here. You can enter coordinates below.' : '';
+    placeStatus.textContent = q && !list.length ? 'No city by that name here. You can enter coordinates instead.' : '';
     if (document.activeElement !== lat && document.activeElement !== lon) {
       lat.value = String(Number(site.lat.toFixed(4)));
       lon.value = String(Number(site.lon.toFixed(4)));
@@ -213,7 +207,7 @@ export function placeTimePanel(shell: Shell): Panel {
       choose({ name: 'My location', lat: Number(pos.coords.latitude.toFixed(3)), lon: Number(pos.coords.longitude.toFixed(3)), height: Math.max(0, Math.round(pos.coords.altitude ?? 0)), tz });
       placeStatus.textContent = '';
     }, () => { placeStatus.textContent = 'Location was not shared. Pick a city or enter coordinates instead.'; }, { maximumAge: 600000, timeout: 15000 });
-  } }, icon('locate', 18), 'Use my location');
+  } }, icon('locate', 18), 'My location');
 
   const useCoords = h('button', { class: 'pill-button', type: 'button', onclick: () => {
     const la = Number(lat.value), lo = Number(lon.value);
@@ -226,7 +220,19 @@ export function placeTimePanel(shell: Shell): Panel {
     placeStatus.textContent = tz ? '' : 'No time zone is known for that spot, so the clock shows local mean time.';
   } }, 'Go');
 
-  // ---- time
+  const coords = h('details', { class: 'place-coords' },
+    h('summary', { class: 'link-button' }, 'Enter coordinates'),
+    h('div', { class: 'coord-row' },
+      h('label', null, h('span', { class: 'hint' }, 'Latitude'), lat),
+      h('label', null, h('span', { class: 'hint' }, 'Longitude'), lon), useCoords));
+  const el = h('div', { class: 'place-form' },
+    h('div', { class: 'place-search' }, placeInput, locate),
+    placeList, coords, placeStatus);
+  return { el, refresh: renderPlaces };
+}
+
+/** Typing a date and time: any year, AD or BC, to the clock's limits. */
+export function dateForm(app: App): { el: HTMLElement; refresh: () => void } {
   const year = h('input', { class: 'field', type: 'number', min: '1', max: '99000', step: '1', inputmode: 'numeric', 'aria-label': 'Year' });
   const era = h('select', { class: 'field', 'aria-label': 'Era' }, h('option', { value: 'ad' }, 'AD'), h('option', { value: 'bc' }, 'BC'));
   const month = h('select', { class: 'field', 'aria-label': 'Month' }, MONTHS.map((m, i) => h('option', { value: String(i + 1) }, m)));
@@ -263,31 +269,15 @@ export function placeTimePanel(shell: Shell): Panel {
   };
   for (const f of timeFields) f.addEventListener('change', applyTime);
 
-  const nudge = (label: string, days: number) => h('button', { class: 'pill-button', type: 'button', onclick: () => app.setTime(app.clock.jdUT + days) }, label);
-  const refresh = () => { renderPlaces(); renderTime(); };
-  const el = h('div', { class: 'panel' },
-    h('section', { class: 'card' }, h('h3', { class: 'card-label' }, 'Place'),
-      placeNow, placeInput, placeList,
-      h('div', { class: 'button-row' }, locate),
-      h('div', { class: 'coord-row' },
-        h('label', null, h('span', { class: 'hint' }, 'Latitude'), lat),
-        h('label', null, h('span', { class: 'hint' }, 'Longitude'), lon), useCoords),
-      placeStatus),
-    h('section', { class: 'card' }, h('h3', { class: 'card-label' }, 'Date and time'),
-      h('div', { class: 'date-row' },
-        h('label', null, h('span', { class: 'hint' }, 'Day'), day),
-        h('label', { class: 'grow2' }, h('span', { class: 'hint' }, 'Month'), month),
-        h('label', { class: 'grow2' }, h('span', { class: 'hint' }, 'Year'), year)),
-      h('div', { class: 'date-row' },
-        h('label', null, h('span', { class: 'hint' }, 'Era'), era),
-        h('label', null, h('span', { class: 'hint' }, 'Hour'), hour),
-        h('label', null, h('span', { class: 'hint' }, 'Minute'), minute)),
-      h('div', { class: 'button-row' },
-        h('button', { class: 'pill-button primary', type: 'button', onclick: () => app.goToNow() }, 'Now'),
-        nudge('−1 day', -1), nudge('+1 day', 1), nudge('−1 hour', -1 / 24), nudge('+1 hour', 1 / 24)),
-      timeStatus, timeNote));
-  const live = () => { if (el.isConnected) renderTime(); };
-  app.on('time', live);
-  app.on('second', live);
-  return { title: 'Place and time', el, refresh };
+  const el = h('div', { class: 'date-form' },
+    h('div', { class: 'date-row' },
+      h('label', null, h('span', { class: 'hint' }, 'Day'), day),
+      h('label', { class: 'grow2' }, h('span', { class: 'hint' }, 'Month'), month),
+      h('label', { class: 'grow2' }, h('span', { class: 'hint' }, 'Year'), year)),
+    h('div', { class: 'date-row' },
+      h('label', null, h('span', { class: 'hint' }, 'Era'), era),
+      h('label', null, h('span', { class: 'hint' }, 'Hour'), hour),
+      h('label', null, h('span', { class: 'hint' }, 'Minute'), minute)),
+    timeStatus, timeNote);
+  return { el, refresh: renderTime };
 }

@@ -1,10 +1,9 @@
-// The View bar, opened from the View button at the bottom right: it takes the
-// dock's place with the sky in view above, so each switch shows what it
-// changes. Tabs group the switches (Looks first, for newcomers); switches are
-// tiles in rows of four, and the tabs that need more than on/off carry their
-// control below (light pollution under Ground, the sky culture in its own
-// tab). Settings (the gear) holds everything that is not about what the sky
-// shows.
+// The View panel, opened from View in the toolbar: it sits just above the
+// toolbar with the sky in view above, so each switch shows what it changes.
+// Tabs group the switches (Looks first, for newcomers); switches are tiles in
+// rows of four, and the tabs that need more than on/off carry their control
+// below (light pollution under Ground, the sky culture in its own tab).
+// Settings holds everything that is not about what the sky shows.
 
 import type { App } from '../app.ts';
 import { LOOKS, currentLook, lookLayers } from '../sim/looks.ts';
@@ -43,8 +42,9 @@ function tabsFor(mode: string): Tab[] {
 export function viewBar(app: App, opts: { onToggle: (open: boolean) => void }): ViewBar {
   const tabRow = h('div', { class: 'vb-tabs', role: 'tablist', 'aria-label': 'Groups' });
   const body = h('div', { class: 'vb-body', role: 'group' });
-  const el = h('section', { class: 'view-bar glass chrome', hidden: true, 'aria-label': 'View' },
-    h('div', { class: 'vb-head' }, tabRow, iconButton('close', 'Close', () => bar.close(), 'vb-close')),
+  const el = h('section', { class: 'view-bar glass chrome', hidden: true, 'aria-labelledby': 'view-title' },
+    h('header', { class: 'panel-head' }, h('h2', { class: 'panel-title', id: 'view-title' }, 'View'), iconButton('close', 'Close', () => bar.close(), 'panel-close')),
+    tabRow,
     body);
 
   let isOpen = false;

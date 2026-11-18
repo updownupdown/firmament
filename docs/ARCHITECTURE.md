@@ -143,8 +143,10 @@ separate pages.
 - **Space** — entered by zooming out of Sky: orrery, orbits, true or compressed
   scale, out to the Oort cloud, with the belts and clouds of small bodies.
 
-Navigation is a dock with Sky, Space, Tonight and Atlas (see the Atlas plan in `docs/STATUS.md`); Space is reached from
-Sky by zooming out or from a button, and is also used by concepts.
+Navigation (rethought 2026-11-18): Where and When chips at the top, one toolbar
+at the bottom (Search, Tonight, Atlas, View, Point, Settings), and a focus card
+above it for what you are looking at; see `docs/STATUS.md`. Space view is reached
+from Where, by flying to an object, or by zooming out, and is also used by concepts.
 
 Persistence is `localStorage` with a versioned schema: settings, the observer's place
 and hints already shown. (An observing log with "I saw it" was built and later

@@ -43,6 +43,11 @@ const ICONS: Record<string, string> = {
   play: '<path d="M6 4l10 6-10 6z" fill="currentColor" stroke="none"/>',
   pause: '<rect x="5" y="4" width="3.5" height="12" rx="1" fill="currentColor" stroke="none"/><rect x="11.5" y="4" width="3.5" height="12" rx="1" fill="currentColor" stroke="none"/>',
   close: '<path d="M5 5l10 10M15 5L5 15"/>',
+  clock: '<circle cx="10" cy="10" r="7"/><path d="M10 6v4l2.6 1.7"/>',
+  more: '<circle cx="4.5" cy="10" r="1.5" fill="currentColor" stroke="none"/><circle cx="10" cy="10" r="1.5" fill="currentColor" stroke="none"/><circle cx="15.5" cy="10" r="1.5" fill="currentColor" stroke="none"/>',
+  flag: '<path d="M5 17.5V3.5M5 3.5h9l-1.8 3.3L14 10H5"/>',
+  pencil: '<path d="M3.5 16.5h3.2L16 7.2 12.8 4 3.5 13.3z"/>',
+  down: '<path d="M5 8l5 5 5-5"/>',
   locate: '<circle cx="10" cy="10" r="5"/><path d="M10 2v3M10 15v3M2 10h3M15 10h3"/>',
   share: '<path d="M10 13V3M6.5 6.5L10 3l3.5 3.5M4 11v5h12v-5"/>',
   check: '<path d="M4 10.5l4 4 8-9"/>',
@@ -123,11 +128,6 @@ export function icon(name: string, size = 20): SVGSVGElement {
 /** A round icon-only button with an accessible name. */
 export function iconButton(name: string, label: string, onClick: () => void, extraClass = ''): HTMLButtonElement {
   return h('button', { class: `icon-button ${extraClass}`.trim(), type: 'button', 'aria-label': label, title: label, onclick: onClick }, icon(name));
-}
-
-/** Lumen, the optional guide: a soft point of light. Decorative; the name beside it says who is speaking. */
-export function lumenGlyph(): HTMLSpanElement {
-  return h('span', { class: 'lumen-glyph', 'aria-hidden': 'true' });
 }
 
 /** A labelled on/off switch. */

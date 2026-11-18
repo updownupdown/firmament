@@ -134,20 +134,31 @@ chosen by the owner on 2026-11-16)
 - `ui/tokens.css` holds every colour, size and radius; `base.css` and
   `shell.css` use only those. `dom.ts` is the tiny element helper (`h`, `icon`,
   `toggle`). No framework.
-- `shell.ts`: top chip (place, date, time, pace and accuracy note, play/pause;
-  tapping it opens the time panel), search and view buttons, object card (quick facts, centre,
-  zoom, details with rise/transit/set), selection reticle, the dock of three
-  places (Sky, which also brings you home from space or another world; Tonight
-  and Atlas open sheets; Space is reached by flying, see Viewpoint) and
-  one sheet at a time: full screen above the dock on phones, a left column from
-  900 px. On a phone the bottom holds one bar: the dock, or the object card in
-  its place while something is selected, or the journey card during a journey
-  (then the object card moves under the top bar). `Esc` closes, `/` searches, space pauses.
-- `panels.ts`: Settings (the gear in the top bar: Lumen, night vision, 12-hour
-  clock, reduced motion, share link, Still mode, install, credits rendered from
-  `ATTRIBUTION.md`; nothing that the View bar holds); `LAYER_GROUPS` and
-  `BORTLE` for the View bar; place and time (city search, geolocation,
-  coordinates, date fields with AD/BC down to the clock's limits).
+- `shell.ts` (layout rethought 2026-11-18, owner's request): the same three
+  places on every screen. **Top:** the Where chip (`ui/where.ts`: the kind of
+  view, "Sky from Earth", "Space view", "Star travel", "Sky from Mars", over the
+  place) and the When chip (`ui/timebar.ts`: date and time, with a glyph for live,
+  running or stopped; not a button). **Bottom:** one toolbar (Search, Tonight,
+  Atlas, View, Point on phones that can, Settings), always visible; Sky is gone
+  because going home lives in Where. **Just above the toolbar:** the focus card,
+  "what you are looking at": an object (name, where it is, three numbers, Atlas
+  as the one labelled button, a ⋯ menu that names every other action with a line
+  on what it does, and × to let go) and/or the concept being tried (`Shell.setTrying`:
+  Back to the article, Back to my sky). Flying to an object keeps it selected.
+  **Messages:** one toast slot under the chips (`Shell.toast(text, glyph)`);
+  pointing on and off is announced there from the `pointing` event, however it
+  changed. Every panel has the same head (`.panel-head`: title left, × right).
+  Sheets fill the screen above the toolbar on phones, a left column from 900 px.
+  `Esc` closes, `/` searches, space pauses.
+- `where.ts`: the Where panel (a sheet): You are here (with Home to … when away),
+  On the Earth (city search, my location, coordinates: `placeForm` in panels.ts),
+  On other worlds (Moon, Mars), In space (above the Solar System, each planet,
+  true or compressed scale while in Space view), Among the stars (four nearby
+  stars). Each section carries a badge for the view it leads to.
+- `panels.ts`: Settings (night vision, 12-hour clock, reduced motion, share
+  link, Still mode, install, credits rendered from `ATTRIBUTION.md`; nothing that
+  View holds); `LAYER_GROUPS` and `BORTLE` for View; `placeForm` (Where) and
+  `dateForm` (When).
 - `tonight.ts`: daily prompt with "Show me" (big events first, otherwise one of
   the bright planets, the Moon or the best-placed constellation, chosen by day
   number), dark-sky and Moon tiles, planets, constellations overhead and the
@@ -221,20 +232,16 @@ leaving Space view, one at a time).
 - Labs tab: Star lab, Trip planner, Slingshot, What if?. Concepts open these
   with `lab` blocks (`shell.openLab`).
 
-**Lumen, the optional guide** (owner's decision, 2026-11-17): off until the
-player opts in. `Settings.guide` is `'unset' | 'on' | 'off'`; while unset,
-Tonight shows a "Meet Lumen" offer, and the View panel's Guide section
-toggles it. Off, the Tonight prompt is a plain almanac line. On, the prompt
-card adds "What it is" (the object card blurb, or `sim/lore.ts`) and "The
-story" (myth, history, other cultures) for planets, the Moon, about 25 bright
-stars and 45 Western constellations, and the object card says when the
-light left (`lightNote`). Look: a soft breathing point of light in the accent
-colour (`.lumen-glyph`), still under reduced motion.
+**Lumen removed** (owner's decision, 2026-11-18): the opt-in guide is gone,
+with the light-travel note. Its lore (`sim/lore.ts`: science and story for the
+planets, the Moon, about 25 bright stars and 45 Western constellations) shows on
+each object's Atlas page ("About", "The story"). The store's migration drops the
+old `guide` setting.
 
 **New version prompt** (`ui/update.ts`): the page carries its build hash in a
 `firmament-build` meta tag; 20 s after start, every 15 minutes and when the
 tab comes back, it fetches `version.json` (no-store) and, if the build
-differs, shows a "Reload" banner (top on wide screens, above the dock on
+differs, shows a "Reload" banner (top on wide screens, above the toolbar on
 phones).
 
 **Faint stars can be tapped**: `Universe.faint` keeps the same Tycho-2 bands
@@ -247,32 +254,29 @@ only stars a magnitude above the limit, so what is picked is visible.
 magnitude, eclipse dimming and the deep-sky limit, split out of `sky.ts` so
 labels, picking and tests use it without the renderer.
 
-**Time chip and timeline** (`src/ui/timebar.ts`, `src/sim/timeline.ts`; owner's
-choice from the 2026-11-18 controls study, option B): the top chip shows place
-and time with play/pause. Tapping it turns the bottom bar into the timeline
-(`data-bar="time"` on the root hides the dock; on phones an object card moves
-under the top bar and shrinks). Zooms: **Night** is noon to noon (`timelineWindow`)
-with a twilight band, up-lanes for the Moon and the visible bright planets
-(clipped to sunset–sunrise, `nightSpan`) and moment chips (`nightMoments`: sunset,
-dark, rises, sets, best, dawn, sunrise); play runs 1 h/s and stops at sunrise.
-**Month** is the calendar month with a moonlight band (Moon illumination at
-22:00 each day) and events of importance ≥ 1; **Year** shows importance ≥ 2 and
-seasons, filled month by month from `EventService`. Zoomed out, dragging and play
-keep the clock time (`withClockOf`, `shiftSameTime`), stepping a day per beat so
-the sky does not spin. ‹ › step to the same time on the next night, month or year.
-The heading opens Place and time (date fields, any year). "Speed" opens the
-`RATE_STEPS` and direction for anyone who wants a rate.
+**When panel** (`src/ui/timebar.ts`, `src/sim/timeline.ts`): tapping the When
+chip drops the panel down from under the chips (the toolbar stays in view).
+Head: When, Back to now, ×. The date written out (tap to type any date and time,
+`dateForm`), a note when the sky is less than precise, Night / Month / Year,
+‹ › to the same time on the next night, month or year, then the strip. **Night**
+is noon to noon (`timelineWindow`) with day, twilight and dark as the background
+behind lanes for the Moon and the visible bright planets (clipped to
+sunset–sunrise, `nightSpan`); play runs 1 h/s and stops at sunrise. **Month**
+has moonlight each night (Moon illumination at 22:00) behind events of
+importance ≥ 1; **Year** shows importance ≥ 2 and seasons, filled month by month
+from `EventService`. Moments and events are one "Jump to" dropdown
+(`nightMoments` at night). Zoomed out, dragging and play keep the clock time
+(`withClockOf`, `shiftSameTime`). The speed is a dropdown of `RATE_STEPS`,
+forwards and backwards.
 
-**View bar** (`src/ui/viewbar.ts`, `src/sim/looks.ts`; option B of the same
-study, made taller on 2026-11-18 at James's request): the View button sits at the
-bottom right (above the dock on phones; hidden while a sheet, a selection or a
-bottom bar is up there) and turns the bottom bar into tabs (Looks, Sky, Guides,
-Ground with the light-pollution slider, Culture with the sky-culture picker; in
-Space view one Space tab) over tiles four to a row, two rows tall, so each
-switch is seen working. Looks (`LOOKS`: Naked eye, Stargazer = the defaults,
-Planets, Star chart, Navigator) set every sky layer and leave Space layers
-alone. Only one bottom bar (time or view) is open at a time
-(`Shell.barToggled`); opening a sheet or a journey closes them.
+**View panel** (`src/ui/viewbar.ts`, `src/sim/looks.ts`): View in the toolbar
+opens it just above the toolbar (on phones it takes the focus card's place),
+with the same head as every panel, then tabs (Looks, Sky, Guides, Ground with
+the light-pollution slider, Culture with the sky-culture picker; in Space view
+one Space tab) over tiles four to a row. Looks (`LOOKS`: Naked eye, Stargazer =
+the defaults, Planets, Star chart, Navigator) set every sky layer and leave
+Space layers alone. When and View are never open together (`Shell.barToggled`);
+opening a sheet closes them.
 
 **Search** (`src/ui/search.ts`, 2026-11-18): its own overlay from the search
 button or `/`, the only place the field takes focus (the Atlas no longer has a
@@ -286,10 +290,6 @@ Atlas page, search, time or view bar, selection, lab card, Still mode) pushes a
 history entry carrying its depth, and Back closes the topmost; the app is only
 left when nothing is open. Layers closed from the UI drop their entry with
 `dropLast`/`dropAll` (a quiet `history.go`, with pushes held until it lands).
-
-**Flash buttons**: the phone-pointing button (icon `pointing`) and Space view's
-scale switch (icons `spread` / `squeeze`) are round icon buttons that widen for
-about two seconds with a word on the new state (`Shell.flash`), instead of a toast.
 
 **Ground veil**: standing on the Earth the ground is drawn at 80% opacity
 (`GROUND_VEIL` in `GROUND_FRAG`), so lines below the horizon show faintly.
@@ -320,7 +320,7 @@ unresolved stars, not catalog stars, so they cannot be picked.
   `App.measure` holds the two ends; Escape or the banner's close stops it.
 - Zoom out past the widest sky (a few wheel notches, a firm pinch, or `-`)
   lifts off into Space; zoom into the Earth past its floor lands again.
-  Both, and the dock's Sky and Space, fly one unbroken path
+  Both, and the Where panel's moves between them, fly one unbroken path
   (`render/ascent.ts`, `App.setMode(mode, target, fly)`): the sky view rises
   along the local vertical (`SkyRenderer.height`, Earth radii), the horizon
   drops to the limb of a globe drawn in `GROUND_FRAG` with the same
@@ -331,17 +331,14 @@ unresolved stars, not catalog stars, so they cannot be picked.
   lift-off carries on. Landing first swings Space view round over home
   (`SpaceCamera.flyToPose`), then runs the climb backwards to the pose the
   sky had when it left. Scenes, links and reduced motion still cut straight.
-- Viewpoint (`src/ui/viewpoint.ts`, `App.viewpoint`): a chip under the time
-  chip says where the camera is ("Toronto, Earth", "Orbiting Mars", "Above
-  the Solar System"); Space view's scale switch sits beside it. Tapping it
-  offers Land in (home), Fly out over the Solar System, the last three worlds
-  orbited, and the verbs for the selection. The verbs (`verbsFor`) also
-  replace the object card's Zoom in: Look at it (`App.lookAt`: lands first
+- Viewpoint (`App.viewpoint`, shown by the Where chip; `verbsFor` in
+  `src/ui/viewpoint.ts` feeds the focus card's ⋯ menu): Look at it (`App.lookAt`: lands first
   when in space, then centres and frames), Fly to it (`App.flyToObject`:
   any Space view body or region; stars come with star travel) and Stand on
   it (`App.canStandOn`: the Earth for now; the Moon and Mars next). The
   verb that keeps you where you are leads; on narrow phones the others show
-  only their icons.
+  only their icons (before the 2026-11-18 rethink; now each is a named item in
+  the ⋯ menu).
 - Standing on the Moon and Mars (`sim/worlds.ts`, `makeWorldFrame` in
   `astro/ephemeris.ts`, `Universe.away`): Stand on it puts the observer at
   Tranquility Base or Jezero Crater. The horizon frame comes from the world's
@@ -352,7 +349,7 @@ unresolved stars, not catalog stars, so they cannot be picked.
   butterscotch day sky with blue around a low Sun and rust ground
   (`uWorld`, `uLand`, `uSunLit`). Rise and set times and the Moon's light are
   Earth-only and switch off away. The jump is a fade through black for now;
-  Sky, or Home to (the viewpoint chip), comes back. Tests in
+  Home to … in the Where panel comes back. Tests in
   `sim/worlds.test.ts` (the Earth fixed high over Tranquility Base, the
   Earth's phase from the Moon, a Martian sol, the Sun's size from Mars).
 - Star travel (phase 5): Fly to it on any star with a measured distance
@@ -367,7 +364,7 @@ unresolved stars, not catalog stars, so they cannot be picked.
   constellation names go (they come apart), and the Sun is drawn as one more
   star of magnitude 4.83 + 5 log10(d / 10 pc) with a label. Tested: from
   Alpha Centauri the Sun is magnitude 0.47 at RA 2h 40m, Dec +60.8° in
-  Cassiopeia (`sim/travel.test.ts`). Home to (the viewpoint chip) or Sky
+  Cassiopeia (`sim/travel.test.ts`). Home to … in the Where panel
   comes back; going to Space from there lands over the Solar System.
   `ZoomPast` in `render/camera.ts` needs a deliberate push, so resting on a
   limit never switches views. Zoom input is ignored while lifting off.

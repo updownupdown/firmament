@@ -5,17 +5,13 @@ import type { AstroEvent } from '../astro/events.ts';
 import { compassWord, describeSkyPosition, formatDate, formatRelativeDay, formatTime } from '../sim/format.ts';
 import type { Scene } from '../sim/scene.ts';
 import { type Tonight, type TonightBody, tonight } from '../sim/tonight.ts';
-import { loreFor } from '../sim/lore.ts';
-import { h, fill, lumenGlyph } from './dom.ts';
-import { blurb } from './facts.ts';
+import { h, fill } from './dom.ts';
 import type { Panel, Shell } from './shell.ts';
 
 interface Prompt {
   /** The plain almanac line. */
   text: string;
   scene: Scene;
-  /** What Lumen talks about, when it is on. */
-  ref?: string;
 }
 
 export function tonightPanel(shell: Shell): Panel {
@@ -59,47 +55,25 @@ export function tonightPanel(shell: Shell): Panel {
         ? `${name(p.id)} is the brightest planet in the sky tonight. Look to the ${compassWord(p.bestAz)} ${whenText}.`
         : p.when === 'morning' ? `${name(p.id)} is up before dawn: look to the ${compassWord(p.bestAz)}.`
         : `${name(p.id)} is up tonight: look to the ${compassWord(p.bestAz)} ${whenText}.`;
-      out.push({ text: lead, scene: lookAt(p.id, p.best), ref: p.id });
+      out.push({ text: lead, scene: lookAt(p.id, p.best) });
     }
     if (t.moon.visible && t.moon.illum > 0.08 && t.moon.best !== null) {
       const m = t.moon;
       const tail = m.illum > 0.95 ? 'It will wash out the faint stars, but the bright rays around its craters are at their best.'
         : m.illum < 0.5 ? 'Along the line between light and dark, crater shadows are long and sharp in binoculars.'
         : 'Look along the edge of the shadow, where the mountains catch the light.';
-      out.push({ text: `The Moon is a ${m.phaseName.toLowerCase().replace(' moon', ' Moon')}, ${Math.round(m.illum * 100)}% lit. ${tail}`, scene: lookAt('moon', m.best, 30), ref: 'moon' });
+      out.push({ text: `The Moon is a ${m.phaseName.toLowerCase().replace(' moon', ' Moon')}, ${Math.round(m.illum * 100)}% lit. ${tail}`, scene: lookAt('moon', m.best, 30) });
     }
     const c = t.constellations[0];
     if (c && t.darkness !== 'day') {
       const mid = t.darkFrom !== null && t.darkUntil !== null ? (t.darkFrom + t.darkUntil) / 2 : t.anchor + 0.5;
-      out.push({ text: `${c.name} rides high in the middle of the night, ${describeSkyPosition(c.az, c.alt)}. Trace its figure, then see what surrounds it.`, scene: { time: { jd: mid }, rate: 1, select: c.ref, camera: { look: c.ref, fov: 70 } }, ref: c.ref });
+      out.push({ text: `${c.name} rides high in the middle of the night, ${describeSkyPosition(c.az, c.alt)}. Trace its figure, then see what surrounds it.`, scene: { time: { jd: mid }, rate: 1, select: c.ref, camera: { look: c.ref, fov: 70 } } });
     }
     return out;
   };
 
-  const setGuide = (guide: 'on' | 'off') => { app.updateSettings((x) => { x.guide = guide; }); render(); };
-
-  /** The one-time offer to turn Lumen on. Until then, and if declined, Tonight is a plain almanac. */
-  const invite = () => h('section', { class: 'card lumen-card lumen-invite', 'aria-label': 'Meet Lumen' },
-    h('div', { class: 'lumen-head' }, lumenGlyph(), h('span', { class: 'lumen-name' }, 'Meet Lumen')),
-    h('p', null, 'Lumen is an optional guide. Each night it adds a fact and a story, from myth to history, about what to look at, and tells you how old the light is when you tap something in the sky.'),
-    h('div', { class: 'lumen-actions' },
-      h('button', { class: 'pill-button primary', type: 'button', onclick: () => setGuide('on') }, 'Turn on Lumen'),
-      h('button', { class: 'pill-button', type: 'button', onclick: () => setGuide('off') }, 'No thanks')),
-    h('p', { class: 'hint' }, 'You can change this any time in Settings.'));
-
-  const promptCard = (prompt: Prompt) => {
-    const show = h('button', { class: 'pill-button primary', type: 'button', onclick: () => shell.show(prompt.scene) }, 'Show me');
-    const obj = prompt.ref ? app.universe.resolve(prompt.ref) : null;
-    if (app.store.data.settings.guide !== 'on' || !obj) return h('section', { class: 'card prompt' }, h('p', null, prompt.text), show);
-    const lore = loreFor(app.universe, obj, blurb);
-    const line = (label: string, text?: string) => text ? h('p', { class: 'lumen-line' }, h('span', { class: 'card-label' }, label), text) : null;
-    return h('section', { class: 'card prompt lumen-card', 'aria-label': 'Lumen' },
-      h('div', { class: 'lumen-head' }, lumenGlyph(), h('span', { class: 'lumen-name' }, 'Lumen')),
-      h('p', null, prompt.text),
-      line('What it is', lore.science),
-      line('The story', lore.story),
-      show);
-  };
+  const promptCard = (prompt: Prompt) => h('section', { class: 'card prompt' }, h('p', null, prompt.text),
+    h('button', { class: 'pill-button primary', type: 'button', onclick: () => shell.show(prompt.scene) }, 'Show me'));
 
   const render = () => {
     const t = data;
@@ -136,7 +110,6 @@ export function tonightPanel(shell: Shell): Panel {
 
     fill(el,
       h('p', { class: 'lede' }, `${site.name} · ${formatDate(t.anchor, site, { weekday: true, long: true, noYear: true })}`),
-      app.store.data.settings.guide === 'unset' ? invite() : null,
       prompt ? promptCard(prompt) : null,
       h('div', { class: 'tiles' },
         h('section', { class: 'card tile' }, h('span', { class: 'card-label' }, 'Dark sky'), h('span', { class: 'tile-value' }, darkTitle), h('span', { class: 'hint' }, darkSub)),

@@ -2,9 +2,10 @@
 // settings. Sections of the UI read from it and call its methods; "show me"
 // anywhere means `app.apply(scene)`.
 
-import { DEG, clamp } from './astro/math.ts';
+import { DEG, apply, clamp, transpose } from './astro/math.ts';
 import { jdNow } from './astro/time.ts';
 import { type CoreData, loadBoundaries, loadCulture, loadFaintStars, loadTychoBand, loadTychoIndex } from './data/load.ts';
+import { ASCENT_SECONDS, type SkyPose, ascentPose, matchingFov, nadirAzimuth, orbitAngles } from './render/ascent.ts';
 import { SkyCamera, attachControls } from './render/camera.ts';
 import { LabelLayer, collectLabels, layoutLabels } from './render/labels.ts';
 import { pick } from './render/pick.ts';
@@ -72,6 +73,12 @@ export class App {
   measure: { from: string; to: string | null } | null = null;
 
   private readonly labels: LabelLayer;
+  /** A lift-off or landing in progress, in the sky view's part of the flight. */
+  private transit: { up: boolean; t: number; ground: SkyPose; top: { az: number; fov: number; height: number }; target?: string } | null = null;
+  /** Where the sky was looking when it last lifted off, to land facing the same way. */
+  private groundPose: SkyPose | null = null;
+  /** The Space view's part of a landing is under way. */
+  private descending = false;
   private readonly listeners = new Map<AppEvent, Set<() => void>>();
   private readonly lineColor: [number, number, number];
   private readonly accentColor: [number, number, number];
@@ -134,8 +141,8 @@ export class App {
     });
     new ResizeObserver(() => this.invalidate()).observe(canvas);
     // Zoom out past the widest sky to lift off; zoom into the Earth from space to land.
-    this.camera.zoomPast.onPast = () => this.setMode('space');
-    this.space.camera.zoomPast.onPast = () => { if (this.space.camera.focus === 'earth') this.setMode('sky'); };
+    this.camera.zoomPast.onPast = () => this.setMode('space', undefined, true);
+    this.space.camera.zoomPast.onPast = () => { if (this.space.camera.focus === 'earth') this.setMode('sky', undefined, true); };
 
     // The rest of the data arrives after the first frame.
     loadFaintStars(core.stars).then(() => {
@@ -404,10 +411,25 @@ export class App {
     return 'unsupported';
   }
 
-  /** Switch between the sky from the ground and the solar system from outside. */
-  setMode(mode: ViewMode, target?: string): void {
+  /** Lifting off or landing: the view is flying itself. */
+  get flying(): boolean {
+    return this.transit !== null || this.descending;
+  }
+
+  /**
+   * Switch between the sky from the ground and the solar system from outside.
+   * With `fly`, the camera rises from the ground into orbit (or comes down
+   * again) in one unbroken flight; without, it cuts straight there.
+   */
+  setMode(mode: ViewMode, target?: string, fly = false): void {
+    if (this.flying) return;
     if (mode === this.mode) return;
     if (mode === 'space') { void this.setPointing(false); this.stopMeasure(); }
+    if (fly && !this.reducedMotion && !this.layers.compressed) {
+      if (mode === 'space') this.climb(target ?? this.selected ?? 'sun');
+      else this.descend();
+      return;
+    }
     this.mode = mode;
     if (mode === 'space') {
       // Lift off: start just above the Earth and pull back until the inner planets are in view.
@@ -420,6 +442,86 @@ export class App {
     this.invalidate();
     this.emit('mode');
     this.emit('select');
+  }
+
+  /** The top of the climb: as high as Space view's lift-off starts, looking down through its lens. */
+  private top(): { az: number; fov: number; height: number } {
+    const p = this.renderer.projection;
+    return {
+      az: nadirAzimuth(this.universe.frame.j2000ToHorizon),
+      fov: matchingFov(p.width, p.height, this.space.camera.fovY),
+      height: this.space.liftOffStart / this.space.earthRadius - 1,
+    };
+  }
+
+  private climb(target: string): void {
+    const p = this.renderer.projection;
+    this.camera.track = null;
+    this.camera.flyTo({}, 0);
+    this.universe.update(this.clock.jdUT);
+    this.groundPose = { az: p.az, alt: p.alt, fov: Math.min(p.fov, 120 * DEG) };
+    this.transit = { up: true, t: 0, ground: { az: p.az, alt: p.alt, fov: p.fov }, top: this.top(), target };
+    this.invalidate();
+  }
+
+  private descend(): void {
+    // First swing round above home and come down to the top of the climb, then hand over to the sky.
+    this.universe.update(this.clock.jdUT);
+    const zenith = apply(transpose(this.universe.frame.j2000ToHorizon), [0, 0, 1]);
+    const { yaw, pitch } = orbitAngles(zenith);
+    const cam = this.space.camera;
+    this.space.setFocus('earth');
+    this.descending = true;
+    const seconds = clamp(1.2 + 0.18 * Math.abs(Math.log(cam.dist / this.space.liftOffStart)), 1.4, 3.6);
+    cam.flyToPose(yaw, pitch, this.space.liftOffStart, seconds, () => {
+      this.descending = false;
+      this.universe.update(this.clock.jdUT);
+      const top = this.top();
+      const g = this.groundPose ?? { az: 180 * DEG, alt: 25 * DEG, fov: 90 * DEG };
+      this.mode = 'sky';
+      this.transit = { up: false, t: 0, ground: { ...g, alt: clamp(g.alt, 5 * DEG, 50 * DEG) }, top };
+      this.poseSky(1);
+      this.emit('mode');
+      this.emit('select');
+    });
+    this.invalidate();
+  }
+
+  /** Put the sky camera `t` of the way up the current climb. */
+  private poseSky(t: number): void {
+    const tr = this.transit!;
+    const pose = ascentPose(t, tr.ground, tr.top);
+    const p = this.renderer.projection;
+    p.az = pose.az; p.alt = pose.alt; p.fov = pose.fov; p.lens = pose.lens;
+    this.renderer.height = pose.height;
+    this.renderer.dirty = true;
+  }
+
+  private stepTransit(dt: number): void {
+    const tr = this.transit!;
+    // Coming down from orbit takes a little less time than going up.
+    tr.t = Math.min(1, tr.t + dt / (tr.up ? ASCENT_SECONDS : ASCENT_SECONDS * 0.85));
+    this.poseSky(tr.up ? tr.t : 1 - tr.t);
+    if (tr.t < 1) return;
+    this.transit = null;
+    const p = this.renderer.projection;
+    this.renderer.height = 0;
+    if (tr.up) {
+      // The hand-over: Space view takes the same place, looking the same way.
+      const zenith = apply(transpose(this.universe.frame.j2000ToHorizon), [0, 0, 1]);
+      const { yaw, pitch } = orbitAngles(zenith);
+      this.space.camera.yaw = yaw;
+      this.space.camera.pitch = pitch;
+      this.mode = 'space';
+      this.space.liftOff(tr.target ?? 'sun');
+      p.lens = 0.5;
+      p.az = tr.ground.az; p.alt = tr.ground.alt; p.fov = Math.min(tr.ground.fov, 120 * DEG);
+      this.emit('mode');
+      this.emit('select');
+    } else {
+      p.lens = 0.5;
+    }
+    this.invalidate();
   }
 
   /** Where a selected object is on screen, for the reticle. */
@@ -519,7 +621,8 @@ export class App {
         this.pointingFollowing = false;
         void this.setPointing(false);
       }
-      const moved = space ? this.space.camera.tick(dt) : this.camera.tick(dt);
+      let moved = space ? this.space.camera.tick(dt) : this.camera.tick(dt);
+      if (this.transit) { this.stepTransit(dt); moved = true; }
       this.sinceDraw += dt;
       // The sky turns 15 arcseconds a second: redraw once it has moved a third of a pixel.
       const drift = (0.3 * this.renderer.projection.pixelAngle) / (7.3e-5 * Math.max(1, Math.abs(this.clock.rate)));
@@ -560,7 +663,7 @@ export class App {
     });
     this.loadTycho();
     const p = this.renderer.projection;
-    const items = this.still ? [] : collectLabels(this.renderer, this.layers, this.selected, this.highlight);
+    const items = this.still || this.transit ? [] : collectLabels(this.renderer, this.layers, this.selected, this.highlight);
     this.labels.update(layoutLabels(items, p.width, p.height));
     this.emit('frame');
   }

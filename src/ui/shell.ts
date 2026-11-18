@@ -4,6 +4,8 @@
 // holds everything else.
 
 import type { App } from '../app.ts';
+import type { TripTarget } from '../learn/trip.ts';
+import { type TripPlanner, tripPlanner } from './trip.ts';
 import { Pointing } from '../render/pointing.ts';
 import { formatDistanceAU } from '../sim/format.ts';
 import { lightNote } from '../sim/lore.ts';
@@ -147,6 +149,14 @@ export class Shell {
   openStarLab(seed?: StarSeed | null): void {
     if (seed !== undefined) this.starLab.seed(seed);
     this.openSheet('stars');
+  }
+
+  private trip: TripPlanner | null = null;
+
+  /** Open the trip planner over Space view. */
+  openTrip(target?: TripTarget): void {
+    this.trip ??= tripPlanner(this);
+    this.trip.open(target);
   }
 
   /** Open the Atlas at an entry, a category, or its search field. */

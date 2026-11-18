@@ -83,6 +83,7 @@ const ICONS: Record<string, string> = {
   reset: '<path d="M4.5 9.5a5.5 5.5 0 1 0 1.7-4"/><path d="M5.5 2.5v3.5H9"/>',
   belt: '<circle cx="10" cy="10" r="1.8"/><ellipse cx="10" cy="10" rx="7.5" ry="3.2" stroke-dasharray="1.2 2"/>',
   ruler: '<path d="M3 14.5L14.5 3l2.5 2.5L5.5 17z"/><path d="M6.5 11.5l1.5 1.5M9 9l1.5 1.5M11.5 6.5L13 8"/>',
+  rocket: '<path d="M10 2.5c2.6 2 3.6 5 3.2 8.6l-1.7 2.4H8.5l-1.7-2.4C6.4 7.5 7.4 4.5 10 2.5z"/><circle cx="10" cy="8" r="1.4"/><path d="M6.8 11.1L4.5 13.5l.5 2.5 3-1.2M13.2 11.1l2.3 2.4-.5 2.5-3-1.2M9 15.5l1 2 1-2"/>',
 };
 
 export function icon(name: string, size = 20): SVGSVGElement {

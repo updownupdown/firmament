@@ -588,6 +588,7 @@ layout(location = 1) in vec3 aVel;
 layout(location = 2) in vec4 aMagColor;
 uniform mat3 uView;      // J2000 → camera
 uniform vec2 uF;         // focal length over half-width and half-height
+uniform vec2 uShift;     // lens shift, NDC
 uniform float uYears;
 uniform float uLimitMag;
 uniform float uPixelRatio;
@@ -603,7 +604,7 @@ void main() {
   vec3 c = uView * (p / r);
   float x = uLimitMag - mag;
   if (x <= 0.0 || c.z > -0.01) { gl_Position = vec4(3.0, 3.0, 3.0, 1.0); gl_PointSize = 1.0; return; }
-  gl_Position = vec4(uF * c.xy, 0.0, -c.z);
+  gl_Position = vec4(uF * c.xy - uShift * c.z, 0.0, -c.z);
   float core = min(0.5 + 0.22 * x + 0.012 * x * x, 4.0);
   vCore = core * uPixelRatio;
   vBright = clamp(0.1 + x / 2.6, 0.0, 1.0) * smoothstep(0.0, 0.25, x);
@@ -615,11 +616,12 @@ void main() {
 export const ORBIT_VERT = HEADER + `
 layout(location = 0) in vec4 aPos;   // camera space, w = position along the orbit 0..1 (1 = the body)
 uniform vec2 uF;
+uniform vec2 uShift;
 uniform float uNear;
 out float vAlong;
 void main() {
   vAlong = aPos.w;
-  gl_Position = vec4(uF * aPos.xy, -aPos.z - 2.0 * uNear, -aPos.z);
+  gl_Position = vec4(uF * aPos.xy - uShift * aPos.z, -aPos.z - 2.0 * uNear, -aPos.z);
 }`;
 
 export const ORBIT_FRAG = HEADER + `
@@ -740,11 +742,12 @@ export const SPACE_MILKY_FRAG = HEADER + `
 in vec2 vNdc;
 uniform mat3 uView;     // J2000 → camera
 uniform vec2 uF;
+uniform vec2 uShift;
 uniform sampler2D uMilkyWay;
 uniform float uGain;
 out vec4 outColor;
 void main() {
-  vec3 e = normalize(transpose(uView) * vec3(vNdc / uF, -1.0));
+  vec3 e = normalize(transpose(uView) * vec3((vNdc - uShift) / uF, -1.0));
   float ra = atan(e.y, e.x);
   float dec = asin(clamp(e.z, -1.0, 1.0));
   vec2 uv = vec2(ra / (2.0 * PI), 0.5 - dec / PI);
@@ -801,6 +804,7 @@ uniform mat3 uEclToView;   // J2000 ecliptic -> camera, rotation only
 uniform vec3 uCentre;      // camera-space position of the Sun
 uniform float uDist;       // camera distance from its focus, AU
 uniform vec2 uF;
+uniform vec2 uShift;
 uniform float uDays;       // days since J2000 (TT)
 uniform float uCompressed;
 uniform float uPointSize;
@@ -819,7 +823,7 @@ void main() {
   vec3 c = uCentre + uEclToView * p;
   float depth = -c.z;
   if (depth < uDist * 1e-3) { gl_Position = vec4(3.0, 3.0, 3.0, 1.0); gl_PointSize = 1.0; vFade = 0.0; return; }
-  gl_Position = vec4(uF * c.xy, 0.0, depth);
+  gl_Position = vec4(uF * c.xy + uShift * depth, 0.0, depth);
   // Points far nearer than the focus would streak across the view as big blobs: keep them small and dim.
   vFade = smoothstep(uDist * 0.02, uDist * 0.3, depth);
   gl_PointSize = uPointSize;

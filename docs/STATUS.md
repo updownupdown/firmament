@@ -182,6 +182,21 @@ sheet and a "Back to …" pill (`data-reading`) leads back to the page.
   concepts whose `related` names it. Stored journey progress is dropped by
   the store's migration.
 
+**Trip planner** (`src/learn/trip.ts`, `src/ui/trip.ts`; tests in
+`learn/trip.test.ts`). Opened from Atlas → Labs or the Hohmann concept. A card
+over Space view with Venus / Mars / Jupiter, launch windows stepped by
+synodic period, and a porkchop plot (`porkchop`: departure plus arrival
+v∞ from `lambert` between the real planets, by launch date and flight time;
+brighter is cheaper; the cross marks the cheapest). Tap or drag to choose a
+trip; Space view draws its path and a spacecraft through `SpaceRenderer.overlay`
+(paths and markers in heliocentric AU; a marker's place may follow the
+clock). Fly it runs time so the trip takes 12 s and stops on arrival. Mars
+windows match 2020–2031; Perseverance's 30 Jul 2020 trip needs 3.8 km/s
+leaving the Earth (tested). `SpaceCamera.shiftY` is a lens shift that keeps
+the orbits in the sky above the card on phones (all Space shaders take
+`uShift`). The small-bodies layer is turned off while the card is open and
+put back after.
+
 **Lumen, the optional guide** (owner's decision, 2026-11-17): off until the
 player opts in. `Settings.guide` is `'unset' | 'on' | 'off'`; while unset,
 Tonight shows a "Meet Lumen" offer, and the View panel's Guide section

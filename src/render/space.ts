@@ -46,6 +46,8 @@ export class SpaceCamera implements Controllable {
   dist = 4;
   width = 1;
   height = 1;
+  /** Lens shift: how far up the screen the focus sits, CSS pixels (to keep it clear of a card below). */
+  shiftY = 0;
   readonly fovY = 40 * DEG;
   held = false;
   reducedMotion = false;
@@ -97,7 +99,7 @@ export class SpaceCamera implements Controllable {
     if (depth < this.dist * 1e-3) return null;
     const f = this.focal;
     const x = this.width / 2 + (f * c[0]) / depth;
-    const y = this.height / 2 - (f * c[1]) / depth;
+    const y = this.height / 2 - this.shiftY - (f * c[1]) / depth;
     return { x, y, depth, onScreen: x >= 0 && x <= this.width && y >= 0 && y <= this.height };
   }
 
@@ -334,11 +336,26 @@ export interface SpaceOptions {
   selected: string | null;
 }
 
+/**
+ * Lines and markers a sandbox lays over Space view, in heliocentric J2000 AU
+ * at true scale (squeezed here when the compressed scale is on).
+ */
+export interface SpaceOverlay {
+  /** `along` runs 0..1 and brightens toward 1, as orbit trails do; leave it out for an even line. */
+  paths: { points: Vec3[]; color: Vec3; alpha: number; along?: boolean }[];
+  /** A marker's place and name may follow the clock (TT Julian date). */
+  markers: { id: string; pos: Vec3 | ((jdTT: number) => Vec3); color: Vec3; label?: string | ((jdTT: number) => string | undefined); radiusPx?: number }[];
+}
+
 export class SpaceRenderer {
   readonly camera = new SpaceCamera();
   readonly bodies = buildBodies();
   /** What the last frame drew, far to near. */
   drawn: DrawnSpaceBody[] = [];
+  /** Drawn over the planets' orbits by a sandbox such as the trip planner. */
+  overlay: SpaceOverlay | null = null;
+  /** Where the overlay's markers landed on screen last frame. */
+  private overlayDrawn: { id: string; label?: string; x: number; y: number; onScreen: boolean; r: number }[] = [];
   private readonly gl: WebGL2RenderingContext;
   private readonly universe: Universe;
   private readonly starMesh: Mesh;
@@ -519,24 +536,25 @@ export class SpaceRenderer {
     gl.clearColor(0.012, 0.018, 0.035, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
     const fx = (2 * cam.focal) / cam.width, fy = (2 * cam.focal) / cam.height;
+    const shift = (2 * cam.shiftY) / cam.height;
 
     if (opts.layers.milkyWay) {
       gl.blendFunc(gl.ONE, gl.ZERO);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.milkyWay);
-      this.milkyProgram.use().m3('uView', cam.view).v2('uF', fx, fy).i('uMilkyWay', 0).f('uGain', 1);
+      this.milkyProgram.use().m3('uView', cam.view).v2('uF', fx, fy).v2('uShift', 0, shift).i('uMilkyWay', 0).f('uGain', 1);
       this.screen.drawQuads();
     }
 
     // Stars, at infinity.
     gl.blendFunc(gl.ONE, gl.ONE);
-    this.starProgram.use().m3('uView', cam.view).v2('uF', fx, fy).f('uYears', u.years).f('uLimitMag', 6.3).f('uPixelRatio', pixelRatio);
+    this.starProgram.use().m3('uView', cam.view).v2('uF', fx, fy).v2('uShift', 0, shift).f('uYears', u.years).f('uLimitMag', 6.3).f('uPixelRatio', pixelRatio);
     this.starMesh.drawPoints();
 
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     if (opts.layers.smallBodies) this.drawPopulations(focusPos, fx, fy, pixelRatio);
     if (opts.layers.orbits) {
-      this.orbitProgram.use().v2('uF', fx, fy).f('uNear', cam.dist * 1e-3);
+      this.orbitProgram.use().v2('uF', fx, fy).v2('uShift', 0, (2 * cam.shiftY) / cam.height).f('uNear', cam.dist * 1e-3);
       for (const b of this.bodies) {
         const truePoints = this.orbitPoints(b);
         if (!truePoints) continue;
@@ -574,6 +592,8 @@ export class SpaceRenderer {
       }
     }
 
+    if (this.overlay) this.drawOverlayPaths(this.overlay, focusPos, fx, fy);
+
     // Bodies, far to near.
     const drawn: (DrawnSpaceBody & { body: SpaceBody; cam: Vec3 })[] = [];
     for (const b of this.bodies) {
@@ -600,6 +620,45 @@ export class SpaceRenderer {
       this.quad.drawQuads();
     }
     this.drawn = drawn;
+    this.overlayDrawn = [];
+    if (this.overlay) {
+      for (const m of this.overlay.markers) {
+        const jd = u.frame.jdTT;
+        const pos = typeof m.pos === 'function' ? m.pos(jd) : m.pos;
+        const s = cam.projectCamera(cam.toCamera(sub(this.squash(pos), focusPos)));
+        if (!s) continue;
+        const r = m.radiusPx ?? 3.5;
+        const label = typeof m.label === 'function' ? m.label(jd) : m.label;
+        this.overlayDrawn.push({ id: m.id, label, x: s.x, y: s.y, onScreen: s.onScreen, r });
+        p.v2('uCentre', (s.x / cam.width) * 2 - 1, 1 - (s.y / cam.height) * 2)
+          .v2('uHalf', (r * 1.4 / cam.width) * 2, (r * 1.4 / cam.height) * 2)
+          .v3('uColor', m.color).v3('uLight', [0, 0, 1]).v3('uPole', [0, 1, 0]).v3('uPrime', [1, 0, 0])
+          .i('uKind', 0).f('uExtent', 1.4).f('uPixels', r * pixelRatio);
+        this.quad.drawQuads();
+      }
+    }
+  }
+
+  /** A heliocentric point as drawn at the current scale. */
+  private squash(p: Vec3): Vec3 {
+    return this.compressed ? COMPRESS.helio(p) : p;
+  }
+
+  private drawOverlayPaths(o: SpaceOverlay, focusPos: Vec3, fx: number, fy: number): void {
+    const gl = this.gl, cam = this.camera;
+    this.orbitProgram.use().v2('uF', fx, fy).v2('uShift', 0, (2 * cam.shiftY) / cam.height).f('uNear', cam.dist * 1e-3);
+    for (const path of o.paths) {
+      const n = path.points.length;
+      if (n < 2) continue;
+      const data = new Float32Array(n * 4);
+      path.points.forEach((pt, i) => {
+        const c = cam.toCamera(sub(this.squash(pt), focusPos));
+        data.set([c[0], c[1], c[2], path.along ? i / (n - 1) : 1], i * 4);
+      });
+      this.orbitMesh.set(data, gl.DYNAMIC_DRAW);
+      this.orbitProgram.v4('uColor', path.color[0], path.color[1], path.color[2], path.alpha);
+      this.orbitMesh.drawLineStrip();
+    }
   }
 
   /** How visible a ring of radius `r` AU is from here: 0 when it is a speck or we are deep inside it. */
@@ -620,7 +679,7 @@ export class SpaceRenderer {
     }
     const centre = cam.toCamera(scale(focusPos, -1));
     const p = this.popProgram.use()
-      .m3('uEclToView', mul(cam.view, ECL_TO_EQ_J2000)).v3('uCentre', centre).f('uDist', cam.dist).v2('uF', fx, fy)
+      .m3('uEclToView', mul(cam.view, ECL_TO_EQ_J2000)).v3('uCentre', centre).f('uDist', cam.dist).v2('uF', fx, fy).v2('uShift', 0, (2 * cam.shiftY) / cam.height)
       .f('uDays', this.universe.frame.jdTT - J2000).f('uCompressed', this.compressed ? 1 : 0)
       .f('uPointSize', Math.max(1, 1.6 * pixelRatio));
     for (const { pop, mesh } of this.populations) {
@@ -685,6 +744,9 @@ export class SpaceRenderer {
       const s = cam.projectCamera(cam.toCamera(sub(this.regionAnchor(region), focusPos)));
       if (!s || !s.onScreen) continue;
       items.push({ key: ref, text: region.name, x: s.x, y: s.y, kind: 'region', priority: 300, offset: 0, centred: true, selected: selected === ref });
+    }
+    for (const m of this.overlayDrawn) {
+      if (m.label && m.onScreen) items.push({ key: `overlay:${m.id}`, text: m.label, x: m.x, y: m.y, kind: 'body', priority: 950, offset: m.r + 5, selected: false });
     }
     const parentOf = new Map(this.bodies.filter((b) => b.parent).map((b) => [b.id, b.parent!]));
     for (const d of this.drawn) {

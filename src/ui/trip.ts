@@ -11,6 +11,7 @@ import {
 import type { SpaceOverlay } from '../render/space.ts';
 import { formatDate } from '../sim/format.ts';
 import { h, fill, icon, iconButton } from './dom.ts';
+import { spaceLab } from './space-lab.ts';
 import { palette, prepare } from './plot-kit.ts';
 import type { Shell } from './shell.ts';
 
@@ -41,10 +42,7 @@ export function tripPlanner(shell: Shell): TripPlanner {
   let pc: Porkchop | null = null;
   let sel: Trip | null = null;
   let flying = false;
-  let open = false;
   let busy = 0;
-  /** The small-bodies layer as it was, put back on close: belts and comets crowd the planner's view. */
-  let smallBodies: boolean | null = null;
 
   const canvas = h('canvas', { class: 'plot-canvas trip-plot', role: 'img', 'aria-label': 'Porkchop plot: what a trip costs by launch date and flight time. Tap to choose a trip.' });
   const title = h('span', { class: 'trip-window' });
@@ -56,18 +54,20 @@ export function tripPlanner(shell: Shell): TripPlanner {
     const t = trip(eph, 'mars', PERSEVERANCE.launch, PERSEVERANCE.arrive - PERSEVERANCE.launch);
     if (t) choose(t);
   } }, 'Perseverance');
-  const el = h('section', { class: 'trip-card glass chrome', hidden: true, 'aria-label': 'Trip planner' },
-    h('header', { class: 'card-header' },
-      h('h2', { class: 'trip-title' }, 'Trip planner'),
-      iconButton('close', 'Close the trip planner', () => close())),
-    targets,
-    h('div', { class: 'trip-nav' },
-      iconButton('back', 'Earlier launch window', () => step(-1)), title, iconButton('forward', 'Later launch window', () => step(1))),
-    canvas,
-    h('p', { class: 'hint trip-key' }, 'Brighter is cheaper. Across: launch date. Up: days in flight.'),
-    h('div', { class: 'button-row' }, flyButton, cheapest, percy),
-    readout);
-  shell.root.append(el);
+  const lab = spaceLab(shell, {
+    title: 'Trip planner',
+    children: [
+      targets,
+      h('div', { class: 'trip-nav' },
+        iconButton('back', 'Earlier launch window', () => step(-1)), title, iconButton('forward', 'Later launch window', () => step(1))),
+      canvas,
+      h('p', { class: 'hint trip-key' }, 'Brighter is cheaper. Across: launch date. Up: days in flight.'),
+      h('div', { class: 'button-row' }, flyButton, cheapest, percy),
+      readout,
+    ],
+    onClose: () => { busy++; if (flying) stopFlying(); },
+  });
+  const el = lab.el;
 
   // ------------------------------------------------------------ choosing
 
@@ -75,7 +75,7 @@ export function tripPlanner(shell: Shell): TripPlanner {
 
   const renderTargets = () => fill(targets, (Object.keys(TRIP_TARGETS) as TripTarget[]).map((t) => h('button', {
     type: 'button', 'aria-pressed': String(t === target),
-    onclick: () => { if (t !== target) { target = t; renderTargets(); frame(); goToWindowNear(app.universe.frame.jdTT); } },
+    onclick: () => { if (t !== target) { target = t; renderTargets(); lab.frame(REACH[t]); goToWindowNear(app.universe.frame.jdTT); } },
   }, TRIP_TARGETS[t].name)));
 
   const renderReadout = () => {
@@ -97,7 +97,7 @@ export function tripPlanner(shell: Shell): TripPlanner {
   };
 
   const updateOverlay = () => {
-    if (!open || !sel) { app.space.overlay = null; app.invalidate(); return; }
+    if (!lab.isOpen || !sel) { app.space.overlay = null; app.invalidate(); return; }
     const p = palette(el);
     const t = sel;
     const overlay: SpaceOverlay = {
@@ -265,67 +265,24 @@ export function tripPlanner(shell: Shell): TripPlanner {
 
   // Stop on arrival.
   app.on('frame', () => {
-    if (!open || !sel || !flying || app.universe.frame.jdTT < sel.arrive) return;
+    if (!lab.isOpen || !sel || !flying || app.universe.frame.jdTT < sel.arrive) return;
     flying = false;
     app.setTime(sel.arrive);
     app.setRate(1, true);
     renderReadout();
     shell.toast(`Arrived at ${TRIP_TARGETS[sel.target].name}, ${Math.round(sel.days)} days after launch.`);
   });
-  app.on('mode', () => { if (open && app.mode !== 'space') close(); });
-
-  /**
-   * Frame the orbits in the sky left clear by the card: on a phone the card
-   * covers the lower part, so the view's centre is shifted up into the gap.
-   */
+  /** How far out to frame, AU. */
   const REACH: Record<TripTarget, number> = { venus: 1.15, mars: 1.75, jupiter: 5.6 };
-  const frame = (glide = true) => {
-    if (!open) return;
-    const cam = app.space.camera;
-    const vh = innerHeight;
-    let free = vh * 0.85;
-    cam.shiftY = 0;
-    if (matchMedia('(max-width: 899px)').matches) {
-      const top = 76, bottom = el.getBoundingClientRect().top;
-      free = Math.max(120, bottom - top);
-      cam.shiftY = vh / 2 - (top + bottom) / 2;
-    }
-    const dist = REACH[target] / (Math.tan(cam.fovY / 2) * (free / vh)) * 1.08;
-    cam.yaw = -90 * Math.PI / 180;
-    cam.pitch = 78 * Math.PI / 180;
-    cam.flyTo(dist, glide ? 0.8 : 0);
-    app.invalidate();
-  };
-  new ResizeObserver(() => frame(false)).observe(el);
-
-  const close = () => {
-    if (!open) return;
-    open = false;
-    app.space.camera.shiftY = 0;
-    if (smallBodies !== null) app.apply({ layers: { smallBodies } });
-    smallBodies = null;
-    busy++;
-    if (flying) stopFlying();
-    el.hidden = true;
-    delete document.documentElement.dataset.trip;
-    updateOverlay();
-  };
 
   return {
-    get isOpen() { return open; },
+    get isOpen() { return lab.isOpen; },
     open(t) {
       if (t) target = t;
-      shell.closeSheet();
-      app.select(null);
-      open = true;
-      el.hidden = false;
-      document.documentElement.dataset.trip = '';
-      smallBodies ??= app.layers.smallBodies;
-      app.apply({ rate: 0, camera: { mode: 'space', look: 'sun', dist: 4, orbit: { yaw: -90, pitch: 78 } }, layers: { orbits: true, planetLabels: true, compressed: false, smallBodies: false } });
+      lab.open(REACH[target]);
       renderTargets();
-      requestAnimationFrame(() => frame(false));
       goToWindowNear(app.universe.frame.jdTT);
     },
-    close,
+    close: () => lab.close(),
   };
 }

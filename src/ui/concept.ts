@@ -137,7 +137,7 @@ export function conceptPages(shell: Shell, redraw: () => void): ConceptPages {
     if (b.kind === 'try') return tryIt(c, b);
     if (b.kind === 'lab') {
       return h('div', { class: 'card concept-try' },
-        h('button', { class: 'pill-button primary', type: 'button', onclick: () => shell.openTrip() }, icon('rocket', 16), b.label),
+        h('button', { class: 'pill-button primary', type: 'button', onclick: () => shell.openLab(b.lab) }, icon(b.lab === 'whatif' ? 'orbit' : 'rocket', 16), b.label),
         h('p', { class: 'hint' }, b.note));
     }
     if (b.kind === 'plot') return plot(key, b);

@@ -197,6 +197,22 @@ the orbits in the sky above the card on phones (all Space shaders take
 `uShift`). The small-bodies layer is turned off while the card is open and
 put back after.
 
+**Slingshot and What if? in Space view** (`ui/space-lab.ts` is the shared
+card: framing with the lens shift, small bodies off while open, closes on
+leaving Space view, one at a time).
+- Slingshot (`learn/slingshot.ts`, `ui/slingshot.ts`): Voyager 2's real
+  Earth–Jupiter Lambert transfer (20 Aug 1977 → 9 Jul 1979; departure
+  10.1 km/s, matching its C3), then a patched-conic turn at Jupiter set by the
+  closest approach (1.1–30 Jupiter radii) and side; "behind" is whichever side
+  speeds it up. Space view draws the path in and the path out (green when it
+  escapes); Fly it runs launch to eight years after. Tests: 10.1 radii behind
+  goes from about 9.6 to 19.7 km/s against 18.2 km/s escape.
+- What if? (`ui/whatif.ts`): the N-body `Sandbox` drawn in Space view with
+  trails; the overlay's `hideBodies` hides the real planets and their orbits,
+  and the card carries a "What if" badge (`data-whatif` on the root).
+- Labs tab: Star lab, Trip planner, Slingshot, What if?. Concepts open these
+  with `lab` blocks (`shell.openLab`).
+
 **Lumen, the optional guide** (owner's decision, 2026-11-17): off until the
 player opts in. `Settings.guide` is `'unset' | 'on' | 'off'`; while unset,
 Tonight shows a "Meet Lumen" offer, and the View panel's Guide section

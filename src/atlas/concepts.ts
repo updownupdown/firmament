@@ -27,7 +27,7 @@ export type ConceptBlock =
    */
   | { kind: 'plot'; plot: Plot; caption: string; task?: Extract<Task, { kind: 'plot' }>; scene?: Scene }
   /** A button that opens one of the labs. */
-  | { kind: 'lab'; lab: 'trip'; label: string; note: string }
+  | { kind: 'lab'; lab: 'trip' | 'slingshot' | 'whatif'; label: string; note: string }
   /**
    * A question to check yourself; never blocks reading on. `scene` is the sky
    * the answer is read from, set up again when checking so the answer matches.
@@ -50,8 +50,6 @@ export interface Concept {
   blocks: ConceptBlock[];
   /** Atlas entries worth reading next. */
   related: string[];
-  /** Listed under Labs as well as in its group. */
-  lab?: { icon: string; hint: string; title?: string };
 }
 
 const sky = (s: Scene): Scene => ({ rate: 0, ...s });
@@ -344,7 +342,6 @@ export const CONCEPTS: Concept[] = [
       ] },
     ],
     related: ['mars', 'sun', 'jupiter'],
-    lab: { icon: 'orbit', hint: 'Find the launch window to Mars.' },
   },
   {
     id: 'gravity-assist',
@@ -360,6 +357,7 @@ export const CONCEPTS: Concept[] = [
       { kind: 'text', title: 'In, round and out', paragraphs: [
         'As seen by Jupiter, a passing spacecraft falls in, swings round and climbs out again at exactly the speed it came in. Nothing is gained. But Jupiter itself is moving around the Sun at 13 km/s. Seen from the Sun, the spacecraft\'s exit speed is its speed relative to Jupiter plus Jupiter\'s own motion, pointed in a new direction. Pass behind Jupiter, and the spacecraft is turned to leave in the direction Jupiter is going, and gains speed. Pass in front, and it loses speed: a way to fall inward toward the Sun, used by missions to Mercury.',
       ] },
+      { kind: 'lab', lab: 'slingshot', label: 'Fly Voyager 2 past Jupiter', note: 'In Space view: choose the side and how close, and see whether it escapes the Sun.' },
       { kind: 'plot', plot: { kind: 'flyby' }, caption: 'Left: the path past Jupiter as Jupiter sees it. Right: the same flyby as the Sun sees it, with Jupiter\'s motion added. The green arc is the speed needed to escape the Sun from here.', task: { kind: 'plot', prompt: 'Choose a side and a closest approach that send the spacecraft out of the Solar System.', tolerance: 0, hint: 'Not enough yet. Try the other side, or a closer pass.', explain: 'Passing behind Jupiter, the spacecraft is pulled along after it and thrown forward in the direction Jupiter is moving.' } },
       { kind: 'text', title: 'Where the speed comes from', paragraphs: [
         'The extra speed comes from Jupiter, which slows down in its orbit by an equal and opposite amount of momentum. Jupiter is about 2,600 billion billion times heavier than Voyager, so the change is far too small ever to measure.',
@@ -374,7 +372,6 @@ export const CONCEPTS: Concept[] = [
       { kind: 'question', task: { kind: 'choice', prompt: 'A spacecraft passes in front of a planet, crossing its path ahead of it. What happens to its speed around the Sun?', options: ['It speeds up', 'It slows down', 'Nothing changes'], answer: 1, explain: 'It slows down. Missions to Mercury and the Sun use passes like this to fall inward.' } },
     ],
     related: ['jupiter', 'saturn', 'neptune', 'uranus'],
-    lab: { icon: 'orbit', hint: 'Steer a slingshot past Jupiter.' },
   },
   {
     id: 'what-if',
@@ -386,6 +383,7 @@ export const CONCEPTS: Concept[] = [
       { kind: 'text', title: 'Gravity, and nothing else', paragraphs: [
         'The diagram below starts with the Sun and eight planets at their real positions and speeds today. From there nothing is looked up: at each tiny step it adds up every pull on every body and moves them on. Run it for a few centuries.',
       ] },
+      { kind: 'lab', lab: 'whatif', label: 'Run What if? in Space view', note: 'The same experiment, full screen among the stars.' },
       { kind: 'try', label: 'The real planets, from above', note: 'Space view of the Solar System at the moment the sandbox starts from.', scene: { ...WHAT_IF_SCENE, camera: { look: 'sun', mode: 'space', dist: 45, orbit: { yaw: -90, pitch: 70 } }, layers: { orbits: true, planetLabels: true } } },
       { kind: 'plot', plot: { kind: 'sandbox', controls: 'none' }, scene: WHAT_IF_SCENE, caption: 'The planets from above under gravity alone, starting from today.' },
       { kind: 'text', title: 'A heavier Jupiter', paragraphs: [
@@ -407,7 +405,6 @@ export const CONCEPTS: Concept[] = [
       { kind: 'question', task: { kind: 'choice', prompt: 'With Jupiter 100 times heavier, which planets are shaken up first?', options: ['Mercury and Venus', 'The Earth and Mars', 'Saturn, Uranus and Neptune'], answer: 2, explain: 'The outer planets, which are closest to Jupiter.' } },
     ],
     related: ['jupiter', 'region:oort', 'sun'],
-    lab: { icon: 'orbit', hint: 'Change the planets and see what gravity does.', title: 'What if?' },
   },
 
   // ---------------------------------------------------------------- stars

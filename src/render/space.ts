@@ -345,6 +345,8 @@ export interface SpaceOverlay {
   paths: { points: Vec3[]; color: Vec3; alpha: number; along?: boolean }[];
   /** A marker's place and name may follow the clock (TT Julian date). */
   markers: { id: string; pos: Vec3 | ((jdTT: number) => Vec3); color: Vec3; label?: string | ((jdTT: number) => string | undefined); radiusPx?: number }[];
+  /** Draw only the Sun of the real bodies (and none of their orbits): for an imagined Solar System. */
+  hideBodies?: boolean;
 }
 
 export class SpaceRenderer {
@@ -553,7 +555,8 @@ export class SpaceRenderer {
 
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     if (opts.layers.smallBodies) this.drawPopulations(focusPos, fx, fy, pixelRatio);
-    if (opts.layers.orbits) {
+    const hide = !!this.overlay?.hideBodies;
+    if (opts.layers.orbits && !hide) {
       this.orbitProgram.use().v2('uF', fx, fy).v2('uShift', 0, (2 * cam.shiftY) / cam.height).f('uNear', cam.dist * 1e-3);
       for (const b of this.bodies) {
         const truePoints = this.orbitPoints(b);
@@ -597,6 +600,7 @@ export class SpaceRenderer {
     // Bodies, far to near.
     const drawn: (DrawnSpaceBody & { body: SpaceBody; cam: Vec3 })[] = [];
     for (const b of this.bodies) {
+      if (hide && b.id !== 'sun') continue;
       const c = cam.toCamera(sub(this.positions.get(b.id)!, focusPos));
       const s = cam.projectCamera(c);
       if (!s) continue;

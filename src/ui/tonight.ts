@@ -5,7 +5,6 @@ import type { AstroEvent } from '../astro/events.ts';
 import { makeFrame } from '../astro/ephemeris.ts';
 import { type NightSky, moonFace, nightSky } from '../astro/lunar.ts';
 import { compassWord, describeSkyPosition, formatDate, formatDuration, formatRelativeDay, formatTime, localTime } from '../sim/format.ts';
-import { SYNODIC_MONTH } from '../sim/mooncal.ts';
 import type { Scene } from '../sim/scene.ts';
 import { type Tonight, type TonightBody, tonight } from '../sim/tonight.ts';
 import { earthSite } from '../sim/universe.ts';
@@ -190,7 +189,7 @@ export function tonightPanel(shell: Shell): Panel {
       ? riseSet.map(([w, jd]) => `${w} ${time(jd)}`).join(' · ').replace(/^./, (c) => c.toUpperCase())
       : m.visible ? 'Up all night' : 'Not up tonight';
     const lastNew = (events ?? []).filter((e) => e.kind === 'moon-phase' && e.data?.phase === 0 && e.t <= when).pop();
-    const age = lastNew ? when - lastNew.t : (m.elongation / (2 * Math.PI)) * SYNODIC_MONTH;
+    const age = lastNew ? when - lastNew.t : null;
     const next = (events ?? []).find((e) => e.kind === 'moon-phase' && e.t > app.clock.jdUT);
     const nextText = next ? `${next.title} ${Math.abs(next.t - app.clock.jdUT) < 13 ? formatRelativeDay(next.t, app.clock.jdUT, site) : `on ${formatDate(next.t, site, { weekday: true, noYear: true })}`}, ${time(next.t)}` : null;
     const pic = moonPicture(face, 96, `The Moon ${Math.round(m.illum * 100)}% lit, as it looks at ${time(when)}`);
@@ -200,7 +199,7 @@ export function tonightPanel(shell: Shell): Panel {
         h('div', { class: 'mc-text' },
           h('span', { class: 'card-label' }, 'Moon'),
           h('span', { class: 'tile-value' }, `${Math.round(m.illum * 100)}% lit`),
-          h('span', { class: 'mc-phase' }, `${m.phaseName} · ${Math.max(0, age).toFixed(1)} days old`),
+          h('span', { class: 'mc-phase' }, age === null ? m.phaseName : `${m.phaseName} · ${Math.max(0, age).toFixed(1)} days old`),
           h('span', { class: 'hint' }, riseText),
           nextText ? h('span', { class: 'hint' }, nextText) : null)),
       h('p', { class: 'hint mc-note' }, `As it looks${m.visible ? ` at ${time(when)}` : ''}, with the top toward the sky overhead.`),

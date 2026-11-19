@@ -223,7 +223,12 @@ chosen by the owner on 2026-11-16)
   events worker over `moonMonthSpan` and runs in about 0.15 s; nights use
   `astro/lunar.ts` `nightSky` (two-hourly positions interpolated, the Earth's
   turn exact; 5-minute samples, within 2 minutes of the full searches).
-  Supermoon = full Moon under 360,000 km. Tests in `sim/mooncal.test.ts`.
+  Supermoon = full Moon under 360,000 km. Full Moons carry their traditional
+  North American names (`FULL_MOON_NAMES`, with a line on each; the Harvest
+  Moon is the one nearest the September equinox and the Hunter's Moon the next)
+  and a Blue Moon is the second full Moon in a local calendar month (owner's
+  request, 2026-11-19); shown in the grid, the day, the month list and on
+  Tonight's next-phase line. Tests in `sim/mooncal.test.ts`.
 - `facts.ts`: the words and numbers on the object card.
 - Visual checks: build, serve `dist/` and screenshot with Playwright (Chromium
   needs `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`);

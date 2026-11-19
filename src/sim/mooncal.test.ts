@@ -114,3 +114,21 @@ test('moon calendar: the total lunar eclipse of 14 March 2025 is seen from Toron
   assert.ok(m.eclipses.some((e) => e.event.kind === 'solar-eclipse'));
   assert.ok(ms < 600, `took ${ms} ms`);
 });
+
+test('moon calendar: traditional names, the Harvest Moon and Blue Moons', () => {
+  // 2025: the full Moon nearest the 22 September equinox was on 6 October in Toronto, so it is the Harvest Moon,
+  // September's is the Corn Moon and November's the Hunter's Moon.
+  const u = universe(TORONTO, jdFromLocal(TORONTO, 2025, 9, 1, 12));
+  const name = (y: number, mo: number) => moonMonth(u, y, mo).days.find((d) => d.fullName)!.fullName!.name;
+  assert.equal(name(2025, 9), 'Corn Moon');
+  assert.equal(name(2025, 10), 'Harvest Moon');
+  assert.equal(name(2025, 11), 'Hunter’s Moon');
+  assert.equal(name(2025, 12), 'Cold Moon');
+  // 2024: the Harvest Moon was on 17 September (with a partial eclipse), the Hunter's Moon on 17 October.
+  assert.equal(name(2024, 9), 'Harvest Moon');
+  assert.equal(name(2024, 10), 'Hunter’s Moon');
+  assert.equal(name(2024, 11), 'Beaver Moon');
+  // August 2023 had two full Moons, on the 1st and the 30th: the second is a Blue Moon.
+  const aug = moonMonth(u, 2023, 8).days.filter((d) => d.fullName);
+  assert.deepEqual(aug.map((d) => [d.day, d.blue]), [[1, false], [30, true]]);
+});

@@ -112,8 +112,9 @@ export function moonCalendar(shell: Shell, onToggle: (open: boolean) => void): M
       d.eclipses.length ? h('span', { class: 'mcal-mark eclipse', title: d.eclipses[0].title }, icon('eclipse', 12)) : null,
       d.size === 'super' ? h('span', { class: 'mcal-mark super', title: 'Supermoon' }, 'S') : null,
       d.size === 'micro' ? h('span', { class: 'mcal-mark micro', title: 'Micromoon' }, 'm') : null,
+      d.blue ? h('span', { class: 'mcal-mark blue', title: 'Blue Moon' }, 'B') : null,
     ];
-    const label = `${WEEKDAYS[d.weekday]} ${d.day}: ${d.phaseName}, ${Math.round(d.illum * 100)}% lit${d.quarter ? `, ${QUARTER[d.quarter.q]} at ${time(d.quarter.t)}` : ''}`;
+    const label = `${WEEKDAYS[d.weekday]} ${d.day}: ${d.phaseName}, ${Math.round(d.illum * 100)}% lit${d.quarter ? `, ${QUARTER[d.quarter.q]} at ${time(d.quarter.t)}` : ''}${d.fullName ? `, the ${d.fullName.name}` : ''}${d.blue ? ', a Blue Moon' : ''}`;
     return h('button', {
       class: `mcal-cell${isToday ? ' today' : ''}${d.day === selected ? ' selected' : ''}${d.quarter ? ' quarter' : ''}`,
       type: 'button', role: 'gridcell', 'aria-label': label, 'aria-selected': String(d.day === selected),
@@ -121,7 +122,7 @@ export function moonCalendar(shell: Shell, onToggle: (open: boolean) => void): M
     },
     h('span', { class: 'mcal-day' }, String(d.day), marks),
     moonPicture(d.face, 30),
-    h('span', { class: 'mcal-phase' }, d.quarter ? QUARTER_SHORT[d.quarter.q] : `${Math.round(d.illum * 100)}%`),
+    h('span', { class: 'mcal-phase' }, d.blue ? 'Blue Moon' : d.fullName ? d.fullName.name.replace(' Moon', '') : d.quarter ? QUARTER_SHORT[d.quarter.q] : `${Math.round(d.illum * 100)}%`),
     h('span', { class: 'mcal-track', title: `${formatDuration(d.night.moonlessHours / 24)} of dark sky with the Moon down` }, bar));
   };
 
@@ -164,11 +165,14 @@ export function moonCalendar(shell: Shell, onToggle: (open: boolean) => void): M
         moonPicture(d.face, 104, `The Moon on ${d.day} ${MONTHS[d.month - 1]}`),
         h('div', { class: 'mcal-day-text' },
           h('span', { class: 'card-label' }, formatDate(d.jd, site, { weekday: true, long: true, noYear: true })),
-          h('span', { class: 'tile-value' }, `${d.phaseName}`),
+          h('span', { class: 'tile-value' }, d.fullName ? `${d.blue ? 'Blue Moon · ' : ''}${d.fullName.name}` : d.phaseName),
           h('span', { class: 'mcal-sub' }, `${Math.round(d.illum * 100)}% lit · ${d.age.toFixed(1)} days old`),
           d.quarter ? h('span', { class: 'mcal-sub strong' }, `${QUARTER[d.quarter.q]} at ${time(d.quarter.t)}`) : null,
           d.size === 'super' ? h('span', { class: 'mcal-sub strong' }, 'A supermoon: a full Moon near perigee') : null,
           d.size === 'micro' ? h('span', { class: 'mcal-sub' }, 'A micromoon: a full Moon near apogee') : null)),
+      d.fullName ? h('p', { class: 'mcal-story' }, d.fullName.story,
+        d.blue ? ' It is also a Blue Moon: the second full Moon in one calendar month, which happens about every two and a half years.' : '',
+        h('span', { class: 'hint' }, ' Traditional North American name.')) : null,
       ecl,
       h('dl', { class: 'facts' },
         fact('Moonrise', time(d.rise)),
@@ -194,7 +198,11 @@ export function moonCalendar(shell: Shell, onToggle: (open: boolean) => void): M
       class: 'row', type: 'button', onclick: () => { selected = dayOf(jd); render(); detail.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); },
     }, h('span', { class: 'row-text' }, text), h('span', { class: 'row-when' }, sub)));
     const rows: { t: number; el: HTMLElement }[] = [
-      ...m.quarters.map((q) => ({ t: q.t, el: row(QUARTER[q.q] + (q.q === 2 && q.km < 360_000 ? ' (supermoon)' : ''), when(q.t), q.t) })),
+      ...m.quarters.map((q) => {
+        const d = m.days[dayOf(q.t) - 1];
+        const named = q.q === 2 && d?.fullName ? `${d.blue ? 'Blue Moon · ' : ''}${d.fullName.name}` : QUARTER[q.q];
+        return { t: q.t, el: row(named + (q.q === 2 && q.km < 360_000 ? ' (supermoon)' : ''), when(q.t), q.t) };
+      }),
       ...m.apsides.map((a) => ({ t: a.t, el: row(`${a.kind === 'perigee' ? 'Perigee, closest' : 'Apogee, farthest'}: ${km(a.km)}`, when(a.t), a.t) })),
       ...m.eclipses.map((e) => ({ t: e.event.t, el: row(`${e.event.title}${e.upHere ? '' : ' (not seen here)'}`, when(e.event.t), e.event.t) })),
     ].sort((a, b) => a.t - b.t);

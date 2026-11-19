@@ -1,6 +1,6 @@
 # Fit mean orbital elements of the moons of Mars, Saturn and Uranus to PyEphem 4.2
-# (pip install ephem numpy scipy), 2000-2038. Output: moons.json, pasted into
-# src/astro/satellites.ts. See the header of that file.
+# (pip install ephem numpy scipy), 2000-2038: python fit_moons.py titan -> out_titan.json.
+# The results are pasted into src/astro/satellites.ts; see the header of that file.
 import ephem, math, json, sys
 import numpy as np
 from scipy.optimize import least_squares
@@ -57,23 +57,24 @@ def run(item):
         n0=2*math.pi/per
         L0=math.atan2(V[0,1],V[0,0])-n0*t[0]
         # coarse search for n
-        Nn=np.cross(V[:-1],V[1:]); Nn=Nn[np.linalg.norm(Nn,axis=1)>0]
-        nrm=(Nn/np.linalg.norm(Nn,axis=1)[:,None]).mean(0); nrm/=np.linalg.norm(nrm)
+        _,_,vt=np.linalg.svd(V/np.linalg.norm(V,axis=1)[:,None],full_matrices=False); nrm=vt[-1]
+        if (nrm[2]<0)!=(par=='uranus'): nrm=-nrm
         inc0=math.acos(nrm[2]); O0=math.atan2(nrm[0],-nrm[1])
         # mean longitude: node angle plus in-plane angle
         xn=np.array([math.cos(O0),math.sin(O0),0.0]); yn=np.cross(nrm,xn)
-        u=np.unwrap(np.arctan2(V@yn,V@xn))
-        A_=np.vstack([t,np.ones_like(t)]).T; nn,u0=np.linalg.lstsq(A_,u,rcond=None)[0]
+        u=np.arctan2(V@yn,V@xn)
+        nn=2*math.pi/per
+        ph=u-nn*t; u0=math.atan2(np.sin(ph).mean(),np.cos(ph).mean())
         L0g=O0+u0
         kl=2*math.pi/LIB.get(mid,1e9)
         lam=1.0 if mid in LIB else 1e-12
         f=lambda p: (model(p,t)-V).ravel()/a0
         best=None
         for ph0 in ([0,2,4] if mid in LIB else [0]):
-          for wo in [0,1.6,3.2,4.8]:
-           for e0 in [0.002,0.03]:
+          for wo in [0,0.8,1.6,2.4,3.2,4.0,4.8,5.6]:
+           for e0 in [0.003,0.02,0.04]:
             p0=[a0,e0,inc0,O0,0,O0+wo,0,L0g,nn,0.01 if mid in LIB else 0,kl,ph0,0]
-            lo=[0.8*a0,0,0,-50,-0.01,-50,-0.05,-1e4,nn*0.99,-lam,kl*0.9-1e-12,-50,-100]; hi=[1.2*a0,0.4,math.pi,50,0.01,50,0.05,1e4,nn*1.01,lam,kl*1.1+1e-12,50,100]
+            lo=[0.8*a0,0,0,-50,-0.01,-50,-0.05,-1e4,nn*0.999,-lam,kl*0.9-1e-12,-50,-100]; hi=[1.2*a0,0.4,math.pi,50,0.01,50,0.05,1e4,nn*1.001,lam,kl*1.1+1e-12,50,100]
             s_=least_squares(f,p0,bounds=(lo,hi),x_scale='jac',max_nfev=4000)
             if best is None or s_.cost<best.cost: best=s_
         p=best.x; res=np.sqrt(np.mean(np.sum((model(p,t)-V)**2,1)))
@@ -83,9 +84,9 @@ def run(item):
         print(mid,{k:out[mid][k] for k in ['a','e','i','rmsKm','rmsFrac','N']},file=sys.stderr)
 
     return out
-import multiprocessing as mp
+
 if __name__=='__main__':
-    allo={}
-    with mp.Pool(4) as pool:
-        for o in pool.imap_unordered(run,MOONS): allo.update(o)
-    json.dump(allo,open('/tmp/claude-0/fit/moons.json','w'),indent=1)
+    name=sys.argv[1]
+    for m in MOONS:
+        if m[0]==name:
+            o=run(m); json.dump(o,open(f'out_{name}.json','w'),default=float)

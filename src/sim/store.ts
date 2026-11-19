@@ -5,7 +5,7 @@ import { DEFAULT_LAYERS, type LayerFlags } from './scene.ts';
 import { type Site } from './universe.ts';
 
 export const STORE_KEY = 'firmament';
-export const STORE_VERSION = 2;
+export const STORE_VERSION = 3;
 
 export interface Settings {
   layers: LayerFlags;
@@ -58,6 +58,8 @@ export function migrate(raw: unknown): StoreData {
   const settings = { ...(r.settings && typeof r.settings === 'object' ? r.settings : {}) } as Partial<Settings>;
   // Version 2: the default sky became a dark one (Bortle 2, was 4). Anyone still on the old default moves with it.
   if (r.version < 2 && settings.bortle === 4) settings.bortle = base.settings.bortle;
+  // Version 3: twinkling became opt-in; it shipped on for a day and was too busy.
+  if (r.version < 3 && settings.layers) settings.layers = { ...settings.layers, twinkle: false };
   return {
     version: STORE_VERSION,
     settings: {

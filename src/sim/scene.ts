@@ -46,7 +46,7 @@ export const DEFAULT_LAYERS: LayerFlags = {
   lines: true, constellationLabels: true, boundaries: false, starLabels: true, planetLabels: true,
   dsos: true, milkyWay: true, atmosphere: true, ground: true, cardinals: true,
   gridAltAz: false, gridEquatorial: false, ecliptic: false, orbits: true, gridGalactic: false, compressed: false, skyOrbits: false,
-  smallBodies: true, twinkle: true, zodiacal: true, airglow: true, dsoPhotos: true, art: false,
+  smallBodies: true, twinkle: false, zodiacal: true, airglow: true, dsoPhotos: true, art: false,
 };
 
 // Order is part of the URL format: append new layers at the end, never reorder.

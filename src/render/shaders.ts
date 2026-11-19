@@ -521,8 +521,9 @@ void main() {
     float am = min(airmass, 10.0);
     float seed = fract(float(gl_VertexID) * 0.6180339887) * 100.0;
     float n = sin(uTime * 9.0 + seed * 3.7) * 0.5 + sin(uTime * 15.7 + seed * 7.3) * 0.3 + sin(uTime * 26.3 + seed * 1.9) * 0.2;
-    mag += uTwinkle * 0.12 * pow(am, 1.15) * n;
-    float split = uTwinkle * clamp((am - 5.0) / 12.0, 0.0, 0.2);
+    // About 0.03 mag at the zenith, a few tenths only in the last degrees above the horizon.
+    mag += uTwinkle * 0.03 * pow(am, 0.9) * n;
+    float split = uTwinkle * clamp((am - 8.0) / 40.0, 0.0, 0.05);
     tint *= vec3(1.0 + split * sin(uTime * 13.0 + seed), 1.0 + split * sin(uTime * 13.0 + seed + 2.1), 1.0 + split * sin(uTime * 13.0 + seed + 4.2));
   }
   float x = uLimitMag - mag;

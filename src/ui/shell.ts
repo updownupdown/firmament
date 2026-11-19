@@ -23,6 +23,7 @@ import { h, fill, icon, iconButton, swipeToDismiss } from './dom.ts';
 import { whereNow } from './facts.ts';
 import { type AtlasPanel, atlasPanel } from './atlas.ts';
 import { measureTool } from './measure.ts';
+import { trailsBanner } from './trails.ts';
 import { settingsPanel, share } from './panels.ts';
 import { type WhereBar, whereBar, whereChip } from './where.ts';
 import { flightHud } from './flight.ts';
@@ -112,7 +113,7 @@ export class Shell {
       if (open) { this.closeBars(); this.back.push('search', () => this.search.close()); } else this.back.dropLast('search');
       this.syncTools();
     });
-    root.append(measure.layer, this.topBar(), measure.banner, this.reticle(), this.edgeArrow(), this.focusCard(), this.toolbar(), ...flightHud(app, () => app.land()), this.timeBar.el, this.whereBar.el, this.viewBar.el, this.sheetEl, this.search.el, this.toastEl, this.stillHint());
+    root.append(measure.layer, this.topBar(), measure.banner, trailsBanner(app), this.reticle(), this.edgeArrow(), this.focusCard(), this.toolbar(), ...flightHud(app, () => app.land()), this.timeBar.el, this.whereBar.el, this.viewBar.el, this.sheetEl, this.search.el, this.toastEl, this.stillHint());
     // On the page itself, not in #ui: inside #ui's stacking context the red would only blend with the controls.
     document.body.append(...nightVision);
     this.watchPointing();
@@ -145,6 +146,7 @@ export class Shell {
         else if (this.whereBar.open) this.whereBar.close();
         else if (this.viewBar.open) this.viewBar.close();
         else if (app.measure) app.stopMeasure();
+        else if (app.trails) app.stopTrails();
         else if (app.selected) app.select(null);
       } else if (e.key === '/' && !isTyping(e)) {
         e.preventDefault();

@@ -38,7 +38,7 @@ function tabsFor(mode: string): Tab[] {
     { id: 'looks', label: 'Looks', items: 'looks' },
     { id: 'sky', label: 'Sky', items: group('On the sky'), extra: 'lines' },
     { id: 'guides', label: 'Guides', items: group('Guides') },
-    { id: 'ground', label: 'Ground', items: group('Air and ground'), extra: 'bortle' },
+    { id: 'ground', label: 'Air', items: group('Air and ground'), extra: 'bortle' },
     { id: 'culture', label: 'Culture', items: 'culture' },
   ];
 }
@@ -68,6 +68,11 @@ export function viewBar(app: App, opts: { onToggle: (open: boolean) => void }): 
         }
       }, l.hint))),
       h('p', { class: 'vb-note' }, now ? now.hint : 'Your own mix. Pick a look to start again from one.'),
+      app.mode === 'sky' && !app.universe.voyage ? h('div', { class: 'vb-control' },
+        h('div', { class: 'control-head' }, h('span', null, 'Long exposure'), h('span', { class: 'value' }, 'Hours of sky in seconds')),
+        h('div', { class: 'button-row' },
+          h('button', { type: 'button', class: 'pill-button', 'aria-pressed': String(!!app.trails), onclick: () => { if (app.trails) app.stopTrails(); else { app.startTrails(); bar.close(); } } },
+            app.trails ? 'Stop star trails' : 'Star trails'))) : null,
     ];
   };
 

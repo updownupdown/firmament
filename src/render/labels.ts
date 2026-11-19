@@ -3,7 +3,7 @@
 // ones that would overlap, and reuses elements between frames.
 
 import { SOLAR_BODIES } from '../astro/ephemeris.ts';
-import { GALILEAN } from '../astro/galilean.ts';
+import { moonInfo } from '../astro/satellites.ts';
 import { DEG, type Vec3, apply, clamp } from '../astro/math.ts';
 import { fromAzAlt } from '../astro/frames.ts';
 import type { LayerFlags } from '../sim/scene.ts';
@@ -81,7 +81,7 @@ export function collectLabels(r: SkyRenderer, layers: LayerFlags, selectedRef: s
     const names: Record<string, string> = {};
     for (const d of r.drawn) {
       const isSolar = (SOLAR_BODIES as string[]).includes(d.id) || d.id === 'earth';
-      const moon = GALILEAN.find((g) => g.id === d.id);
+      const moon = moonInfo(d.id);
       if (!d.screen || !d.screen.onScreen || d.alt < floor) continue;
       // A planet passing behind the Moon (or the Sun) is hidden, and so is its name.
       const at = d.screen;
@@ -93,8 +93,8 @@ export function collectLabels(r: SkyRenderer, layers: LayerFlags, selectedRef: s
       const sel = marked.has(d.id);
       if (!sel) {
         if (d.body.mag > c.limitMag + 0.5 && d.id !== 'sun' && d.id !== 'moon' && d.id !== 'earth') continue;
-        // Jupiter's moons only once they separate from the planet's glare.
-        if (moon && p.fov > 3 * DEG) continue;
+        // A planet's moons only once they separate from its glare.
+        if (moon && p.fov > (moon.parent === 'jupiter' ? 3 : moon.parent === 'saturn' ? 1 : 0.2) * DEG) continue;
         if (!isSolar && !moon && d.body.mag > c.limitMag - 1) continue;
       }
       names[d.id] ??= u.resolve(d.id)?.name ?? d.id;

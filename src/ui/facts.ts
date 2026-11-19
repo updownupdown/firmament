@@ -165,6 +165,23 @@ const BLURBS: Record<string, string> = {
   europa: 'An ice shell over a salt-water ocean. It circles Jupiter every three and a half days.',
   ganymede: 'The largest moon in the solar system, bigger than Mercury.',
   callisto: 'The outermost of the four big moons, and among the most heavily cratered bodies known.',
+  phobos: 'A dark, lumpy moon 22 km across, so close to Mars that it rises in the west and sets in the east twice a day.',
+  deimos: 'The smaller, farther of Mars\'s two moons, 12 km across. From Mars it looks like a bright star.',
+  mimas: 'A small icy moon with one giant crater, Herschel, a third of its own width across.',
+  enceladus: 'The whitest body in the Solar System. Geysers at its south pole spray an ocean\'s water into space.',
+  tethys: 'An icy moon of almost pure water ice, scarred by a canyon that runs three quarters of the way round it.',
+  dione: 'An icy moon with bright cliffs of ice on its trailing side.',
+  rhea: 'Saturn\'s second largest moon, an ancient, cratered ball of ice and rock.',
+  titan: 'Bigger than Mercury, with a thick orange haze, methane rain and lakes. A small telescope shows it as a star beside Saturn.',
+  hyperion: 'A spongy, tumbling moon whose spin is chaotic: no two of its days are the same.',
+  iapetus: 'One side is as dark as coal and the other as bright as snow, and a ridge runs round its equator.',
+  miranda: 'The smallest of Uranus\'s big moons, a patchwork of grooves and cliffs up to 20 km high.',
+  ariel: 'The brightest of Uranus\'s moons, crossed by long valleys.',
+  umbriel: 'The darkest of Uranus\'s big moons, with one bright ring of a crater.',
+  titania: 'Uranus\'s largest moon, found by William Herschel in 1787.',
+  oberon: 'The outermost of Uranus\'s big moons, old and heavily cratered.',
+  triton: 'Neptune\'s big moon goes round backwards, so it was probably a Kuiper belt world that Neptune captured. Voyager 2 saw nitrogen geysers.',
+  charon: 'Half Pluto\'s width, so the two circle a point in the space between them, each keeping one face to the other.',
 };
 
 export { DEG };

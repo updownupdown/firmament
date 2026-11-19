@@ -250,7 +250,52 @@ vec3 pixelDirection(vec2 ndc) {
 }
 `;
 
-export const SKY_FRAG = HEADER + UNPROJECT + SKY + `
+/**
+ * Faint natural light of a dark sky. The zodiacal light (sunlight scattered by dust in the
+ * plane of the planets: a cone up from the horizon after dusk and before dawn, after Leinert
+ * et al. 1998's shape), its faint band along the ecliptic and the gegenschein opposite the
+ * Sun; and airglow, the upper atmosphere's own green and red light, brightest about 10°
+ * above the horizon (the van Rhijn effect) and rippled by gravity waves.
+ */
+const NIGHT_LIGHT = `
+uniform vec3 uEclPole;     // the ecliptic's north pole, horizon frame
+uniform float uZodiacal;   // 0 off, 1 on
+uniform float uAirglow;    // 0 off, 1 on
+uniform float uTime;       // seconds, for airglow's slow drift
+vec3 nightLight(vec3 h) {
+  float s = uSunAlt / DEG;
+  vec3 c = vec3(0.0);
+  bool air = uAtmosphere > 0.5 && uAir > 0.0 && uWorld != 1;
+  float mu = max(h.z, 0.0);
+  float airmass = 1.0 / (mu + 0.025 * exp(-11.0 * mu));
+  float through = air ? exp(-0.28 * (min(airmass, 40.0) - 1.0)) * smoothstep(-0.01, 0.03, h.z) : 1.0;
+  // A dark sky's faint light is lost under city glow and moonlight.
+  float contrast = (1.0 - 0.85 * sqrt(uLightPollution)) * (1.0 - 0.75 * uMoonLight);
+  if (uZodiacal > 0.0) {
+    float dark = uWorld == 1 ? 1.0 - smoothstep(-3.0, 0.5, s) : 1.0 - smoothstep(-17.0, -13.0, s);
+    float sb = dot(h, uEclPole);
+    float beta = abs(asin(clamp(sb, -1.0, 1.0))) / DEG;
+    vec3 hp = h - uEclPole * sb, sp = uSunDir - uEclPole * dot(uSunDir, uEclPole);
+    float dl = acos(clamp(dot(normalize(hp + 1e-6), normalize(sp + 1e-6)), -1.0, 1.0)) / DEG;
+    float cone = pow(32.0 / max(dl, 14.0), 2.1) * exp(-pow(beta / (7.0 + 0.2 * dl), 1.25));
+    float band = 0.07 * exp(-beta / 11.0);
+    float gegen = 0.14 * exp(-pow((180.0 - dl) / 10.0, 2.0) - pow(beta / 7.0, 2.0));
+    c += vec3(1.0, 0.93, 0.82) * (cone + band + gegen) * 0.4 * dark * uZodiacal;
+  }
+  if (uAirglow > 0.0 && air && uWorld == 0) {
+    float dark = 1.0 - smoothstep(-17.0, -10.0, s);
+    float vr = inversesqrt(1.0 - 0.972 * (1.0 - mu * mu));
+    vec2 ground = h.xy / (mu + 0.12);
+    float ripple = 0.75 + 0.25 * sin(dot(ground, vec2(5.0, 2.6)) + uTime * 0.004) * sin(dot(ground, vec2(-1.7, 4.1)) - uTime * 0.003);
+    vec3 tint = mix(vec3(0.95, 0.72, 0.38), vec3(0.42, 1.0, 0.50), smoothstep(0.02, 0.25, mu));
+    tint = mix(tint, vec3(0.85, 0.35, 0.32), 0.25 * smoothstep(0.3, 0.9, mu));
+    c += tint * vr * ripple * 0.003 * dark * uAirglow;
+  }
+  return c * through * contrast;
+}
+`;
+
+export const SKY_FRAG = HEADER + UNPROJECT + SKY + NIGHT_LIGHT + `
 uniform mat3 uHorizonToJ2000;
 uniform sampler2D uMilkyWay;
 uniform float uMilkyWayGain;
@@ -259,6 +304,7 @@ out vec4 outColor;
 void main() {
   vec3 h = pixelDirection(vNdc);
   vec3 c = skyColor(h);
+  if (uZodiacal + uAirglow > 0.0) c += nightLight(h);
   if (uMilkyWayGain > 0.001) {
     vec3 e = uHorizonToJ2000 * h;
     float ra = atan(e.y, e.x);
@@ -286,11 +332,24 @@ uniform vec3 uPole;      // the Earth's north pole, horizon frame
 uniform vec3 uPrime;     // its prime meridian, horizon frame
 uniform vec3 uLand;      // the colour of the ground: green-grey on the Earth, grey on the Moon, rust on Mars
 uniform float uSunLit;   // direct sunlight on airless ground, 0..1
+uniform sampler2D uPano; // a real panorama of the ground (equirectangular, north at the left edge), on the Moon and Mars
+uniform float uPanoOn;   // 1 once it has arrived
 in vec2 vNdc;
 out vec4 outColor;
 void main() {
   vec3 h = pixelDirection(vNdc);
   float alt = asin(clamp(h.z, -1.0, 1.0));
+  if (uPanoOn > 0.5 && uHeight <= 0.0) {
+    float az = atan(h.y, -h.x);
+    vec2 uv = vec2(fract(az / (2.0 * PI)), 0.5 - alt / PI);
+    vec4 p = textureGrad(uPano, uv, vec2(dFdx(uv.x) > 0.5 || dFdx(uv.x) < -0.5 ? 0.0 : dFdx(uv.x), dFdx(uv.y)), vec2(dFdy(uv.x) > 0.5 || dFdy(uv.x) < -0.5 ? 0.0 : dFdy(uv.x), dFdy(uv.y)));
+    if (p.a < 0.5) discard;
+    // The photo was taken in daylight: light it by the Sun's height and the sky's glow.
+    vec3 sky = skyColor(vec3(0.0, 0.0, 1.0));
+    float light = clamp(uSunLit * 2.0 + dot(sky, vec3(0.3, 0.5, 0.2)) * 1.6, 0.012, 1.0);
+    outColor = vec4(p.rgb * light + (hash12(gl_FragCoord.xy) - 0.5) / 255.0, 1.0);
+    return;
+  }
   // The land takes a little colour from the sky above it and darkens toward the feet.
   // Lit by the whole sky overhead, not by the glow at the horizon.
   vec3 overhead = skyColor(vec3(0.0, 0.0, 1.0));
@@ -349,6 +408,62 @@ float starGlow(float x, float pixelRatio, float strength) {
 
 // ---------------------------------------------------------------- stars
 
+/** Deep-sky photographs on the sky (render/photos.ts). */
+export const PHOTO_VERT = HEADER + PROJECT + `
+layout(location = 0) in vec3 aDir;   // J2000
+layout(location = 1) in vec2 aUv;
+uniform mat3 uJ2000ToHorizon;
+out vec2 vUv;
+out float vAirmass;
+void main() {
+  vUv = aUv;
+  vec3 h = refractDir(uJ2000ToHorizon * aDir);
+  vAirmass = 1.0 / (max(h.z, 0.0) + 0.025 * exp(-11.0 * max(h.z, 0.0)));
+  gl_Position = projectCamera(uView * h);
+}`;
+
+export const PHOTO_FRAG = HEADER + `
+uniform sampler2D uTex;
+uniform float uAlpha;
+uniform float uExtinction;
+in vec2 vUv;
+in float vAirmass;
+out vec4 outColor;
+void main() {
+  vec3 c = texture(uTex, vUv).rgb;
+  // Drop the photo's own sky background so only the object adds light, and soften the edges.
+  c = max(c - 0.05, 0.0) / 0.95;
+  vec2 e = min(vUv, 1.0 - vUv);
+  float edge = smoothstep(0.0, 0.12, min(e.x, e.y));
+  float air = exp(-0.921 * uExtinction * (min(vAirmass, 40.0) - 1.0));
+  outColor = vec4(c * uAlpha * edge * air, 0.0);
+}`;
+
+/** Constellation artwork (render/art.ts): a grey picture, tinted and added to the sky. */
+export const ART_FRAG = HEADER + `
+uniform sampler2D uTex;
+uniform vec3 uTint;
+uniform float uExtinction;
+in vec2 vUv;
+in float vAirmass;
+out vec4 outColor;
+void main() {
+  float v = texture(uTex, vUv).r;
+  vec2 e = min(vUv, 1.0 - vUv);
+  float edge = smoothstep(0.0, 0.05, min(e.x, e.y));
+  float air = exp(-0.921 * uExtinction * (min(vAirmass, 40.0) - 1.0));
+  outColor = vec4(uTint * v * edge * air, 0.0);
+}`;
+
+/** Copies a texture to the target, for stacking star trails. */
+export const COPY_FRAG = HEADER + `
+uniform sampler2D uTex;
+in vec2 vNdc;
+out vec4 outColor;
+void main() {
+  outColor = texture(uTex, vNdc * 0.5 + 0.5);
+}`;
+
 export const STAR_ATTRIBUTES = ['aPos', 'aVel', 'aMagColor'];
 
 export const STAR_VERT = HEADER + PROJECT + STAR_LOOK + `
@@ -365,6 +480,8 @@ uniform float uSizeBoost;
 uniform float uOrbit;       // 0 on the ground, 1 drawn as Space view draws its stars (lifting off)
 uniform vec3 uObserver;     // where the observer is among the stars, parsecs from the Sun (zero at home)
 uniform vec3 uBeta;         // the observer's velocity over light speed, J2000 (zero unless flying below light speed)
+uniform float uTwinkle;     // 0 still, 1 twinkling through the air
+uniform float uTime;        // seconds
 out vec3 vColor;
 out float vCore;    // core radius in device pixels
 out float vBright;  // 0..1 peak intensity
@@ -392,10 +509,21 @@ void main() {
   }
   vec3 d = normalize(n + uAberration);
   vec3 h = refractDir(uJ2000ToHorizon * d);
+  float airmass = 1.0;
   if (uExtinction > 0.0) {
     float sinAlt = max(h.z, 0.0);
-    float airmass = 1.0 / (sinAlt + 0.025 * exp(-11.0 * sinAlt));
+    airmass = 1.0 / (sinAlt + 0.025 * exp(-11.0 * sinAlt));
     mag += uExtinction * (airmass - 1.0);
+  }
+  if (uTwinkle > 0.0) {
+    // Scintillation: turbulence flickers a star's light many times a second, more as its light
+    // crosses more air, and low down splits its colours too. Each star gets its own phases.
+    float am = min(airmass, 10.0);
+    float seed = fract(float(gl_VertexID) * 0.6180339887) * 100.0;
+    float n = sin(uTime * 9.0 + seed * 3.7) * 0.5 + sin(uTime * 15.7 + seed * 7.3) * 0.3 + sin(uTime * 26.3 + seed * 1.9) * 0.2;
+    mag += uTwinkle * 0.12 * pow(am, 1.15) * n;
+    float split = uTwinkle * clamp((am - 5.0) / 12.0, 0.0, 0.2);
+    tint *= vec3(1.0 + split * sin(uTime * 13.0 + seed), 1.0 + split * sin(uTime * 13.0 + seed + 2.1), 1.0 + split * sin(uTime * 13.0 + seed + 4.2));
   }
   float x = uLimitMag - mag;
   if (x <= 0.0) { gl_Position = vec4(3.0, 3.0, 3.0, 1.0); gl_PointSize = 1.0; return; }

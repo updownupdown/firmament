@@ -32,7 +32,7 @@ export type AppEvent =
   | 'frame'
   /** About once a second of real time, for clocks and live readouts. */
   | 'second'
-  | 'select' | 'settings' | 'site' | 'section' | 'time' | 'data' | 'mode' | 'pointing' | 'measure';
+  | 'select' | 'settings' | 'site' | 'section' | 'time' | 'data' | 'mode' | 'pointing' | 'measure' | 'trails';
 
 /** How far star travel reaches: about 100 light years, where catalogue distances are good to a few percent. */
 export const MAX_TRIP_PC = 30.7;
@@ -103,6 +103,8 @@ export class App {
   still = false;
   /** The measuring tool: the angle from one object to another (`to` is null until a second tap). */
   measure: { from: string; to: string | null } | null = null;
+  /** Star trails: when the exposure began (UT Julian date), and the clock to put back afterwards. */
+  trails: { since: number; rate: number; paused: boolean } | null = null;
 
   private readonly labels: LabelLayer;
   /** A lift-off or landing in progress, in the sky view's part of the flight. */
@@ -332,6 +334,7 @@ export class App {
 
   setTime(jdUT: number): void {
     this.clock.setJd(jdUT);
+    this.restartTrails();
     this.invalidate();
     this.emit('time');
   }
@@ -344,8 +347,62 @@ export class App {
 
   goToNow(): void {
     this.clock.now();
+    this.restartTrails();
     this.invalidate();
     this.emit('time');
+  }
+
+  // ---------------------------------------------------------------- star trails
+
+  /** A long exposure: time runs fast while the frames stack into arcs round the pole. */
+  startTrails(): void {
+    if (this.mode !== 'sky' || this.universe.voyage) return;
+    this.select(null);
+    this.stopMeasure();
+    if (this.still) this.setStill(false);
+    this.trails = { since: this.clock.jdUT, rate: this.clock.rate, paused: this.clock.paused };
+    this.camera.track = null;
+    this.clock.paused = false;
+    // Five minutes a second: an hour of sky in 12 seconds.
+    if (this.clock.rate < 60) this.clock.rate = 300;
+    this.renderer.trails = true;
+    this.renderer.clearTrails();
+    this.renderer.dirty = true;
+    this.emit('trails');
+    this.emit('time');
+  }
+
+  stopTrails(): void {
+    const t = this.trails;
+    if (!t) return;
+    this.trails = null;
+    this.renderer.trails = false;
+    this.clock.rate = t.rate;
+    this.clock.paused = true;
+    this.renderer.dirty = true;
+    this.emit('trails');
+    this.emit('time');
+  }
+
+  /** The view or the time jumped: the arcs so far no longer fit, so begin a new exposure. */
+  private restartTrails(): void {
+    if (!this.trails) return;
+    this.trails.since = this.clock.jdUT;
+    this.renderer.clearTrails();
+  }
+
+  /** Save what is on the sky canvas as a PNG. */
+  saveImage(name: string): void {
+    // A WebGL canvas keeps its picture only until it is shown, so draw and read it in one go.
+    this.draw(true);
+    this.canvas.toBlob((blob) => {
+      if (!blob) return;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }, 'image/png');
   }
 
   // ---------------------------------------------------------------- measuring
@@ -456,7 +513,7 @@ export class App {
   setMode(mode: ViewMode, target?: string, fly = false): void {
     if (this.flying) return;
     if (mode === this.mode) return;
-    if (mode === 'space') { void this.setPointing(false); this.stopMeasure(); }
+    if (mode === 'space') { void this.setPointing(false); this.stopMeasure(); this.stopTrails(); }
     const away = this.universe.away;
     if (mode === 'space' && away) {
       // Off from another world: straight into orbit around it (from the stars, back over the Solar System), and home is the Earth again.
@@ -1004,6 +1061,7 @@ export class App {
       }
       if (space) this.space.camera.cruise = this.transit || this.travel || this.descending ? 0 : orbitRate(this.space.camera.focus, this.space.camera.dist, this.clock.paused ? 0 : this.clock.rate, this.reducedMotion);
       let moved = space ? this.space.camera.tick(dt) : this.camera.tick(dt);
+      if (moved && !space) this.restartTrails();
       if (this.transit) { this.stepTransit(dt); moved = true; }
       if (this.travel) { this.stepTravel(dt); moved = true; }
       if (this.flight && this.stepFlight(dt)) moved = true;
@@ -1015,6 +1073,8 @@ export class App {
       // Resize first: a camera already moving on the first frame must not draw at the canvas's old size.
       const resized = this.renderer.resize();
       if (moved || due || resized || this.renderer.dirty) this.draw();
+      // Twinkling stars keep the sky drawing, at a gentle 20 frames a second; the labels stay put.
+      else if (!space && this.renderer.twinkling && this.sinceDraw >= 0.05) this.draw(true);
       if (now - this.lastSecond >= 1000) {
         this.lastSecond = now;
         this.emit('second');
@@ -1024,7 +1084,7 @@ export class App {
     requestAnimationFrame(frame);
   }
 
-  private draw(): void {
+  private draw(skyOnly = false): void {
     this.sinceDraw = 0;
     this.universe.update(this.clock.jdUT);
     if (this.mode === 'space') {
@@ -1046,10 +1106,12 @@ export class App {
       highlightConstellation: con ? con.split(':')[2] : null,
       lineColor: this.lineColor, accentColor: this.accentColor, selected: this.selected,
       lineStyle: lineStyle(this.store.data.settings.lineStyle),
+      time: this.reducedMotion ? undefined : performance.now() / 1000,
     });
+    if (skyOnly) return;
     this.loadTycho();
     const p = this.renderer.projection;
-    const items = this.still || this.transit ? [] : collectLabels(this.renderer, this.layers, this.selected, this.highlight);
+    const items = this.still || this.transit || this.trails ? [] : collectLabels(this.renderer, this.layers, this.selected, this.highlight);
     this.labels.update(layoutLabels(items, p.width, p.height));
     this.emit('frame');
   }

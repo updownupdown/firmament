@@ -6,7 +6,7 @@ import type { LayerFlags } from './scene.ts';
 
 /** The layers that belong to the sky from the ground. */
 export const SKY_LAYERS: (keyof LayerFlags)[] = [
-  'lines', 'constellationLabels', 'starLabels', 'planetLabels', 'dsos', 'milkyWay', 'skyOrbits', 'boundaries',
+  'lines', 'art', 'constellationLabels', 'starLabels', 'planetLabels', 'dsos', 'dsoPhotos', 'milkyWay', 'skyOrbits', 'boundaries',
   'gridAltAz', 'gridEquatorial', 'ecliptic', 'gridGalactic', 'cardinals', 'atmosphere', 'ground',
 ];
 
@@ -21,8 +21,8 @@ export interface Look {
 const AIR: (keyof LayerFlags)[] = ['atmosphere', 'ground', 'cardinals'];
 
 export const LOOKS: Look[] = [
-  { id: 'eye', name: 'Naked eye', hint: 'Just the sky, as your eyes see it', on: ['milkyWay', ...AIR] },
-  { id: 'stargazer', name: 'Stargazer', hint: 'Figures and names', on: ['lines', 'constellationLabels', 'starLabels', 'planetLabels', 'dsos', 'milkyWay', ...AIR] },
+  { id: 'eye', name: 'Naked eye', hint: 'Just the sky, as your eyes see it', on: ['milkyWay', 'dsoPhotos', ...AIR] },
+  { id: 'stargazer', name: 'Stargazer', hint: 'Figures and names', on: ['lines', 'constellationLabels', 'starLabels', 'planetLabels', 'dsos', 'dsoPhotos', 'milkyWay', ...AIR] },
   { id: 'planets', name: 'Planets', hint: 'The ecliptic and their paths', on: ['planetLabels', 'ecliptic', 'skyOrbits', 'milkyWay', ...AIR] },
   { id: 'chart', name: 'Star chart', hint: 'Borders, grid and every name', on: ['lines', 'constellationLabels', 'boundaries', 'starLabels', 'planetLabels', 'dsos', 'gridEquatorial', ...AIR] },
   { id: 'navigator', name: 'Navigator', hint: 'Altitude grid and bright stars', on: ['gridAltAz', 'starLabels', 'planetLabels', 'milkyWay', ...AIR] },

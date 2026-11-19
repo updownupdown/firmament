@@ -602,6 +602,10 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
   padding: var(--space-1) var(--space-1) var(--space-1) var(--space-5); border-radius: var(--radius-pill);
 }
 .measure-text { margin: 0; font-size: var(--text-sm); }
+.trails-banner .pill-button { padding-block: var(--space-1); }
+/* Out of the way of the sky being exposed: just above the toolbar. */
+.measure-banner.trails-banner { top: auto; bottom: calc(var(--safe-bottom) + var(--space-3) + var(--dock-height) + var(--space-3)); }
+@media (max-width: 899px) { :root:not([data-trails='true']) .trails-banner { display: none; } }
 :root[data-still='true'] .measure-layer { display: none; }
 @media (min-width: 900px) { .measure-banner { top: calc(var(--safe-top) + var(--space-4)); } }
 

@@ -432,6 +432,41 @@ unresolved stars, not catalog stars, so they cannot be picked.
   and moons' distances in planet radii to the square root; tested to keep
   every planet clear of its neighbours.
 
+**Survey features** (2026-11-19, from James's pick of what other sky apps have):
+- More moons (`astro/satellites.ts`): Phobos, Deimos, Saturn's eight classical
+  moons, Uranus's five, Triton and Charon, beside the Galilean four (`MOONS`
+  holds all of them). Mean elements in the parent's equatorial plane with
+  turning node and pericentre and one libration term (Mimas–Tethys,
+  Enceladus–Dione, Titan–Hyperion), fitted to PyEphem's BDL/TASS theories over
+  2000–2038 (`scripts/fit_moons.py`). The Universe observes them (light-time
+  from the planet), Space view draws them with orbits, search, Atlas and the
+  Solar System list include them.
+- Night light in the sky shader (`NIGHT_LIGHT`): zodiacal light, its band and
+  the gegenschein (Leinert-shaped, from the Sun's ecliptic longitude and
+  latitude), and airglow (van Rhijn, gravity-wave ripples). Twinkling in the
+  star shader (`uTwinkle`; airmass-scaled, colour split low down). Layers
+  `twinkle`, `zodiacal`, `airglow` (View → Air). Twinkling keeps the loop
+  drawing at 20 fps without relaying labels (`App.draw(true)`); reduced
+  motion stops it.
+- Star trails (`App.startTrails`, `ui/trails.ts`; View → Looks → Star trails):
+  the sky is drawn off screen and stacked with `MAX` blending (lighten
+  stacking) while time runs at 5 min/s; charted lines and labels are left out,
+  moving the view or the time starts a new exposure, and Save picture
+  downloads the canvas.
+- Deep-sky photos (`render/photos.ts`, layer `dsoPhotos`): 108 images from
+  Stellarium's nebula set, only those credited to ESO, ESA/Hubble, NASA or
+  SDSS (`public/data/dso-photos/index.json` keeps each credit, source and
+  licence). They fade in from about 24 px across. The famous showpieces (M31,
+  M42…) in Stellarium's set are by amateurs or DSS, so they are not included.
+- Constellation art (`render/art.ts`, layer `art`, off by default; Western
+  culture only): Stellarium's modern illustrations by Johan Meuris (Free Art
+  License), each pinned by three anchor stars through an affine map on the
+  tangent plane.
+- Landscapes: standing on the Moon shows NASA's Apollo 17 panorama
+  (Taurus–Littrow) and on Mars Spirit's Husband Hill panorama (Gusev); the
+  stand-on sites moved there to match. The Earth keeps its generic hills (no
+  Earth panorama with a clear licence was found).
+
 **Tycho-2** (`src/astro/tycho.ts`; tests in `tycho.test.ts`): 1.9 million
 stars to magnitude 12 that HYG lacks, in 45 declination bands
 (`public/data/tycho/NN.bin`, 6 bytes a star, 11 MB in all). `SkyRenderer`

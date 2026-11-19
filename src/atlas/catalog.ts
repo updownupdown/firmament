@@ -4,7 +4,7 @@
 
 import { SOLAR_BODIES } from '../astro/ephemeris.ts';
 import { METEOR_SHOWERS, type MeteorShower } from '../astro/events.ts';
-import { GALILEAN } from '../astro/galilean.ts';
+import { MOONS } from '../astro/satellites.ts';
 import { SMALL_BODIES } from '../astro/kepler.ts';
 import { REGIONS } from '../astro/populations.ts';
 import { DSO_TYPES } from '../data/types.ts';
@@ -70,10 +70,12 @@ export const ATLAS_CATEGORIES: AtlasCategory[] = [
     groups: (u) => [{ entries: entries(u, PLANETS) }],
   },
   {
-    id: 'moons', title: 'Moons', icon: 'moon', blurb: 'Our Moon, and the four big moons Galileo found around Jupiter.',
+    id: 'moons', title: 'Moons', icon: 'moon', blurb: 'Our Moon, and the major moons of Mars, Jupiter, Saturn, Uranus, Neptune and Pluto.',
     groups: (u) => [
       { title: 'Earth', entries: entries(u, ['moon']) },
-      { title: 'Jupiter', entries: entries(u, GALILEAN.map((m) => m.id)) },
+      ...(['mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'] as const).map((p) => ({
+        title: p[0].toUpperCase() + p.slice(1), entries: entries(u, MOONS.filter((m) => m.parent === p).map((m) => m.id)),
+      })),
     ],
   },
   {

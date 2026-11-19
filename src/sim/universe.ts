@@ -11,6 +11,7 @@ import {
 import { bodyRiseSet, starRiseSet, type RiseSet } from '../astro/events.ts';
 import { azAlt, refractionFromTrue } from '../astro/frames.ts';
 import { GALILEAN, galileanMoons } from '../astro/galilean.ts';
+import { ELEMENT_MOONS, MOONS, moonInfo, moonMagnitude, moonOffset } from '../astro/satellites.ts';
 import { SMALL_BODIES } from '../astro/kepler.ts';
 import { REGIONS, type Region, regionById } from '../astro/populations.ts';
 import { AU_KM, DEG, type Vec3, add, apply, fromSpherical, norm, normalize, scale, transpose as transposeRows } from '../astro/math.ts';
@@ -214,6 +215,27 @@ export class Universe {
       this.bodies.set(a.world, { ...self, dir: apply(transposeRows(f.j2000ToHorizon), [0, 0, -1]), radius: 0, mag: 99 });
     }
     this.addGalileanMoons(f);
+    this.addOtherMoons(f);
+  }
+
+  /** Moons with mean elements, seen from the observer (the planet's light-time applies to them too). */
+  private addOtherMoons(f: Frame): void {
+    const lt = new Map<string, number>();
+    for (const moon of ELEMENT_MOONS) {
+      const host = this.bodies.get(moon.parent);
+      if (!host) continue;
+      if (!lt.has(moon.parent)) lt.set(moon.parent, host.dist / 173.1446);
+      const off = scale(moonOffset(moon, f.jdTT - lt.get(moon.parent)!), 1 / AU_KM);
+      const g = add(scale(host.dir, host.dist), off);
+      const dist = norm(g);
+      this.bodies.set(moon.id, {
+        id: moon.id, dir: scale(g, 1 / dist), dist, r: host.r,
+        helio: add(host.helio, off), phase: host.phase, illum: host.illum,
+        mag: moonMagnitude(moon, host.r, dist),
+        radius: Math.asin(Math.min(1, moon.radiusKm / (dist * AU_KM))),
+        sunDir: host.sunDir, ringTilt: 0,
+      });
+    }
   }
 
   private addGalileanMoons(f: Frame): void {
@@ -299,8 +321,8 @@ export class Universe {
         const kind: ObjectKind = ref === 'sun' ? 'sun' : ref === 'moon' ? 'moon' : solar.kind === 'dwarf' ? 'dwarf' : 'planet';
         return { ref, kind, name: solar.name, subtitle: PLANET_BLURBS[ref] ?? 'Planet', dir: body.dir, mag: body.mag, body };
       }
-      const moon = GALILEAN.find((m) => m.id === ref);
-      if (moon) return { ref, kind: 'satellite', name: moon.name, subtitle: 'Moon of Jupiter', dir: body.dir, mag: body.mag, body };
+      const moon = moonInfo(ref);
+      if (moon) return { ref, kind: 'satellite', name: moon.name, subtitle: `Moon of ${BODIES[moon.parent].name}`, dir: body.dir, mag: body.mag, body };
       const small = SMALL_BODIES.find((b) => b.id === ref)!;
       const kind: ObjectKind = small.kind === 'comet' ? 'comet' : small.kind === 'dwarf' ? 'dwarf' : 'minor';
       return { ref, kind, name: small.name, subtitle: small.group, dir: body.dir, mag: body.mag, body };
@@ -371,8 +393,8 @@ export class Universe {
     // Rising and setting are worked out for the Earth's turning only.
     if (!obj || this.away) return null;
     const site = earthSite(this.site);
-    if (obj.body && !GALILEAN.some((m) => m.id === ref)) return bodyRiseSet(this.eph, site, jd0, ref);
-    if (obj.body) return bodyRiseSet(this.eph, site, jd0, 'jupiter');
+    const moon = moonInfo(ref);
+    if (obj.body) return bodyRiseSet(this.eph, site, jd0, moon ? moon.parent : ref);
     return starRiseSet(this.eph, site, jd0, obj.dir);
   }
 
@@ -390,7 +412,7 @@ export class Universe {
       });
     };
     for (const id of SOLAR_BODIES) push(id, 100);
-    for (const m of GALILEAN) push(m.id, 60);
+    for (const m of MOONS) push(m.id, m.parent === 'jupiter' ? 60 : 56);
     for (const b of SMALL_BODIES) push(b.id, 50, [b.id]);
     for (const r of REGIONS) push(`region:${r.id}`, 55, r.aka);
     for (const c of this.culture?.constellations ?? []) {

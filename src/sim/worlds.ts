@@ -2,10 +2,10 @@
 // east, in degrees, as in the IAU frames the Moon and Mars are drawn in.
 
 export const WORLD_SITES = {
-  /** Apollo 11's landing site in Mare Tranquillitatis. */
-  moon: { name: 'Tranquility Base', lat: 0.674, lon: 23.473 },
-  /** Jezero Crater, where Perseverance landed in 2021. */
-  mars: { name: 'Jezero Crater', lat: 18.44, lon: 77.45 },
+  /** The Taurus–Littrow valley, where Apollo 17 landed in 1972 and took the panorama shown around you. */
+  moon: { name: 'Taurus–Littrow', lat: 20.19, lon: 30.77 },
+  /** Husband Hill in Gusev Crater, where the rover Spirit took its 2005 summit panorama. */
+  mars: { name: 'Gusev Crater', lat: -14.6, lon: 175.47 },
 } as const;
 
 export const WORLD_NAMES = { earth: 'Earth', moon: 'Moon', mars: 'Mars' } as const;

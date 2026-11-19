@@ -1016,3 +1016,6 @@ button.sys-item:hover { background: var(--color-surface-raised); }
 .edge-arrow.to-right { flex-direction: row-reverse; padding: 0 var(--space-2) 0 var(--space-3); }
 .edge-arrow-glyph { display: inline-flex; color: var(--color-accent); }
 .edge-arrow:hover { background: var(--color-surface-hover); }
+.mcal-mark.blue { color: var(--color-accent); }
+.mcal-story { font-size: var(--text-sm); line-height: 1.45; color: var(--color-text-muted); }
+.mcal-cell.quarter .mcal-phase { font-size: 0.625rem; }

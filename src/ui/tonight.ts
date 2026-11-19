@@ -8,6 +8,7 @@ import { compassWord, describeSkyPosition, formatDate, formatDuration, formatRel
 import type { Scene } from '../sim/scene.ts';
 import { type Tonight, type TonightBody, tonight } from '../sim/tonight.ts';
 import { earthSite } from '../sim/universe.ts';
+import { fullMoonName, isBlueMoon } from '../sim/mooncal.ts';
 import { h, fill, icon } from './dom.ts';
 import { moonPicture } from './moonpic.ts';
 import type { Panel, Shell } from './shell.ts';
@@ -191,7 +192,9 @@ export function tonightPanel(shell: Shell): Panel {
     const lastNew = (events ?? []).filter((e) => e.kind === 'moon-phase' && e.data?.phase === 0 && e.t <= when).pop();
     const age = lastNew ? when - lastNew.t : null;
     const next = (events ?? []).find((e) => e.kind === 'moon-phase' && e.t > app.clock.jdUT);
-    const nextText = next ? `${next.title} ${Math.abs(next.t - app.clock.jdUT) < 13 ? formatRelativeDay(next.t, app.clock.jdUT, site) : `on ${formatDate(next.t, site, { weekday: true, noYear: true })}`}, ${time(next.t)}` : null;
+    const nextName = next && next.data?.phase === 2 ? fullMoonName(app.universe.eph, site, next.t).name : null;
+    const nextBlue = next && nextName ? isBlueMoon(site, next.t, (events ?? []).filter((e) => e.kind === 'moon-phase' && e.data?.phase === 2).map((e) => e.t)) : false;
+    const nextText = next ? `${nextName ? `${nextBlue ? 'Blue Moon, the ' : 'The '}${nextName}` : next.title} ${Math.abs(next.t - app.clock.jdUT) < 13 ? formatRelativeDay(next.t, app.clock.jdUT, site) : `on ${formatDate(next.t, site, { weekday: true, noYear: true })}`}, ${time(next.t)}` : null;
     const pic = moonPicture(face, 96, `The Moon ${Math.round(m.illum * 100)}% lit, as it looks at ${time(when)}`);
     return h('section', { class: 'card moon-card' },
       h('div', { class: 'mc-row' },

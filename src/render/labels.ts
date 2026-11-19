@@ -128,7 +128,8 @@ export function collectLabels(r: SkyRenderer, layers: LayerFlags, selectedRef: s
     }
   }
 
-  if (layers.dsos) {
+  // Deep-sky objects are placed as seen from home; out past the nearby stars they would be in the wrong place.
+  if (layers.dsos && !(voyage && Math.hypot(voyage[0], voyage[1], voyage[2]) > 30)) {
     for (const d of u.dsos) {
       const ref = `dso:${dsoId(d)}`;
       const sel = marked.has(ref);

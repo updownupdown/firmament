@@ -541,8 +541,12 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
 :root[data-still='true'] .still-hint { display: block; }
 :root[data-still='true'] .chrome, :root[data-still='true'] .sheet, :root[data-still='true'] .reticle { display: none !important; }
 
-.night-vision { display: none; position: fixed; inset: 0; z-index: 20; pointer-events: none !important; background: var(--color-night-vision); mix-blend-mode: multiply; }
-:root[data-night-vision='true'] .night-vision { display: block; }
+/* Night vision: everything is first turned to dim grey (so white text cannot stay bright), then
+   multiplied by deep red, which leaves only a dim red image: the eye's rods barely see it. */
+.night-vision-dim, .night-vision { display: none; position: fixed; inset: 0; pointer-events: none !important; }
+.night-vision-dim { z-index: 20; -webkit-backdrop-filter: grayscale(1) brightness(var(--night-vision-level)) contrast(1.1); backdrop-filter: grayscale(1) brightness(var(--night-vision-level)) contrast(1.1); }
+.night-vision { z-index: 21; background: var(--color-night-vision); mix-blend-mode: multiply; }
+:root[data-night-vision='true'] .night-vision, :root[data-night-vision='true'] .night-vision-dim { display: block; }
 
 /* Phone: a sheet takes the whole screen above the toolbar. */
 @media (max-width: 899px) {
@@ -554,8 +558,6 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
   .top-bar { right: auto; width: 440px; }
   .sheet { right: auto; width: 440px; top: calc(var(--safe-top) + var(--space-3) + 54px + var(--space-2)); bottom: calc(var(--safe-bottom) + var(--space-3)); }
   .time-bar, .where-bar { right: auto; width: 440px; max-height: calc(100vh - 54px - var(--space-8)); }
-  .flight-top { right: auto; width: 440px; }
-  .flight-bottom { left: 50%; right: auto; width: 480px; transform: translateX(-50%); }
   .toolbar { left: 50%; right: auto; width: 480px; transform: translateX(-50%); }
   .view-bar { left: 50%; right: auto; width: 520px; transform: translateX(-50%); }
   :root[data-sheet] .toolbar, :root[data-sheet] .view-bar { left: calc(50% + 240px); }
@@ -819,15 +821,18 @@ button.sys-item:hover { background: var(--color-surface-raised); }
 .flight-stats b { font-size: var(--text-lg); font-weight: var(--weight-medium); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .flight-note { color: var(--color-warn); font-size: var(--text-sm); }
 .flight-note[hidden] { display: none; }
-.flight-speeds { display: grid; grid-template-columns: 40px repeat(5, minmax(0, 1fr)); gap: 4px; }
-.flight-speeds button {
-  min-height: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;
-  border: none; border-radius: var(--radius-sm); background: var(--color-surface-raised); color: var(--color-text-muted);
-  font: inherit; font-size: var(--text-sm); white-space: nowrap;
-}
-.flight-speeds button small { font-size: 0.6rem; color: var(--color-text-faint); }
-.flight-speeds button[aria-pressed='true'] { background: var(--color-text); color: var(--color-on-accent); font-weight: var(--weight-medium); }
-.flight-speeds button[aria-pressed='true'] small { color: var(--color-on-accent); opacity: 0.7; }
+.flight-speeds { display: flex; align-items: center; gap: var(--space-2); }
+.flight-play { width: 44px; height: 44px; flex: none; background: var(--color-text); color: var(--color-on-accent); border-color: transparent; }
+.flight-play:hover { background: var(--color-accent-strong); }
+.flight-step { width: 44px; height: 44px; flex: none; background: var(--color-surface-raised); border-color: var(--color-border); }
+.flight-step:disabled { opacity: 0.35; }
+.flight-readout { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+.flight-speed { font-size: var(--text-lg); font-weight: var(--weight-medium); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.flight-pace { font-size: var(--text-xs); color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.flight-ladder { display: flex; gap: 5px; margin-top: 3px; }
+.flight-ladder i { width: 6px; height: 6px; border-radius: 50%; background: var(--color-border-strong); }
+.flight-ladder i.real { background: var(--color-accent-edge); }
+.flight-ladder i.on { background: var(--color-text); box-shadow: 0 0 0 2px var(--color-accent-edge); }
 .flight-hint { padding: 0 var(--space-2) var(--space-1); }
 .place-form { display: flex; flex-direction: column; gap: var(--space-2); }
 .place-search { display: flex; gap: var(--space-2); }
@@ -984,3 +989,30 @@ button.sys-item:hover { background: var(--color-surface-raised); }
   .mcal-grid { gap: 3px; }
   .mcal-cell .moon-pic { width: 26px !important; height: 26px !important; }
 }
+
+/* Wide screens: the flight cards sit where the chips and the toolbar do (after the base rules, so these win). */
+@media (min-width: 900px) {
+  .flight-top { right: auto; width: 440px; }
+  .flight-bottom { left: 50%; right: auto; width: 480px; transform: translateX(-50%); }
+}
+
+/* Line colours in View: three choices, each with a swatch of figure (left) and orbit (right) colour. */
+.segmented.line-styles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.segmented.line-styles button { font-size: var(--text-xs); white-space: nowrap; }
+.line-styles .swatch {
+  flex: none; width: 12px; height: 12px; border-radius: 50%;
+  background: linear-gradient(90deg, var(--a) 0 50%, var(--b) 50% 100%);
+  box-shadow: 0 0 0 1px var(--color-border);
+}
+
+/* The way to a selected object that is out of view: a small pill at the screen's edge. */
+.edge-arrow {
+  position: fixed; left: 0; top: 0; z-index: 2; will-change: transform;
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  min-height: 36px; padding: 0 var(--space-3) 0 var(--space-2); border-radius: var(--radius-pill);
+  color: var(--color-text); font-size: var(--text-sm); font-weight: var(--weight-medium); white-space: nowrap;
+  border: 1px solid var(--color-accent-edge);
+}
+.edge-arrow.to-right { flex-direction: row-reverse; padding: 0 var(--space-2) 0 var(--space-3); }
+.edge-arrow-glyph { display: inline-flex; color: var(--color-accent); }
+.edge-arrow:hover { background: var(--color-surface-hover); }

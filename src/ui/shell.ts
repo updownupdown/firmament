@@ -107,7 +107,8 @@ export class Shell {
     this.toastEl.addEventListener('pointerleave', () => {
       if (!this.toastEl.hidden) this.toastTimer = window.setTimeout(() => this.hideToast(), 2500);
     });
-    const nightVision = h('div', { class: 'night-vision', 'aria-hidden': 'true' });
+    // Night vision in two layers: the first turns everything below it to dim grey, the second tints that red.
+    const nightVision = [h('div', { class: 'night-vision-dim', 'aria-hidden': 'true' }), h('div', { class: 'night-vision', 'aria-hidden': 'true' })];
     const measure = measureTool(app);
     this.search = searchOverlay(this, (open) => {
       if (open) { this.closeBars(); this.back.push('search', () => this.search.close()); } else this.back.dropLast('search');
@@ -116,7 +117,9 @@ export class Shell {
     this.moonCal = moonCalendar(this, (open) => {
       if (open) { this.closeBars(); this.search.close(); this.back.push('moon-calendar', () => this.moonCal.close()); } else this.back.dropLast('moon-calendar');
     });
-    root.append(measure.layer, this.topBar(), measure.banner, this.reticle(), this.focusCard(), this.toolbar(), ...flightHud(app, () => app.land()), this.timeBar.el, this.whereBar.el, this.viewBar.el, this.sheetEl, this.search.el, this.moonCal.el, this.toastEl, this.stillHint(), nightVision);
+    root.append(measure.layer, this.topBar(), measure.banner, this.reticle(), this.edgeArrow(), this.focusCard(), this.toolbar(), ...flightHud(app, () => app.land()), this.timeBar.el, this.whereBar.el, this.viewBar.el, this.sheetEl, this.search.el, this.moonCal.el, this.toastEl, this.stillHint());
+    // On the page itself, not in #ui: inside #ui's stacking context the red would only blend with the controls.
+    document.body.append(...nightVision);
     this.watchPointing();
 
     // Back steps out of a selection and of Still mode too.
@@ -430,6 +433,54 @@ export class Shell {
     return el;
   }
 
+  /**
+   * When the selected object is out of view, an arrow at the edge of the
+   * screen points the way to it, with its name; a tap turns the view to it.
+   * It sits inside the space the chips, toolbar and card leave free.
+   */
+  private edgeArrow(): HTMLElement {
+    const app = this.app;
+    const name = h('span', { class: 'edge-arrow-name' });
+    const glyph = h('span', { class: 'edge-arrow-glyph' }, icon('forward', 18));
+    const el = h('button', { class: 'edge-arrow glass chrome', type: 'button', hidden: true, onclick: () => { if (app.selected) app.centre(app.selected); } }, glyph, name);
+    const below = (sel: string) => {
+      const e = document.querySelector(sel) as HTMLElement | null;
+      return e && !e.hidden && e.offsetParent !== null ? e.getBoundingClientRect() : null;
+    };
+    const place = () => {
+      const ref = app.selected;
+      const off = ref && !app.still && !this.trying ? app.offscreen(ref) : null;
+      const obj = off ? app.selectedObject : null;
+      if (!off || !obj) { el.hidden = true; return; }
+      const w = innerWidth, hgt = innerHeight;
+      // Free area: below the chips, above the toolbar (and the card when it sits low).
+      const top = (below('.top-bar')?.bottom ?? 60) + 10;
+      let bottom = (below('.toolbar')?.top ?? hgt - 80) - 10;
+      const card = below('.focus-card');
+      if (card && card.top > hgt / 2) bottom = Math.min(bottom, card.top - 10);
+      const left = 12, right = w - 12;
+      const cx = (left + right) / 2, cy = (top + bottom) / 2;
+      const tx = off.dx > 0 ? (right - cx) / off.dx : off.dx < 0 ? (left - cx) / off.dx : Infinity;
+      const ty = off.dy > 0 ? (bottom - cy) / off.dy : off.dy < 0 ? (top - cy) / off.dy : Infinity;
+      const t = Math.max(0, Math.min(tx, ty));
+      if (name.textContent !== obj.name) name.textContent = obj.name;
+      const deg = Math.round(off.angle / DEG);
+      el.setAttribute('aria-label', `${obj.name} is ${deg}° away. Turn to it.`);
+      el.title = `${obj.name}, ${deg}° away`;
+      el.hidden = false;
+      // Keep the whole pill on screen: pull it in from the edge by its own size.
+      const bw = el.offsetWidth, bh = el.offsetHeight;
+      const x = clampN(cx + off.dx * t - bw / 2, left, right - bw);
+      const y = clampN(cy + off.dy * t - bh / 2, top, bottom - bh);
+      el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+      glyph.style.transform = `rotate(${Math.atan2(off.dy, off.dx).toFixed(3)}rad)`;
+      el.classList.toggle('to-right', off.dx > 0.2);
+    };
+    app.on('frame', place);
+    app.on('select', place);
+    return el;
+  }
+
   private trying: Trying | null = null;
   private renderFocus: () => void = () => {};
 
@@ -544,4 +595,8 @@ export class Shell {
 function isTyping(e: KeyboardEvent): boolean {
   const t = e.target as HTMLElement | null;
   return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+}
+
+function clampN(x: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, x));
 }

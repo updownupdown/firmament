@@ -15,9 +15,11 @@ import { SUN_ABSOLUTE_MAG, blackbodyRGB, temperatureFromBV } from '../astro/star
 import { J2000 } from '../astro/time.ts';
 import type { Boundaries, Constellation, Dso } from '../data/types.ts';
 import type { LayerFlags } from '../sim/scene.ts';
+import { makeGalaxy } from '../sim/galaxy.ts';
 import type { Universe } from '../sim/universe.ts';
 import { Mesh, Program, loadTexture } from './gl.ts';
 import { SurfaceMaps, bindSurfaceMaps } from './maps.ts';
+import { type LineStyle, LINE_STYLES } from './linestyle.ts';
 import { TYCHO_KEEP, type TychoBand, type TychoIndex, bandsNear, countBrighter as countTycho } from '../astro/tycho.ts';
 import { type SkyConditions, airDimming, dsoLimit, skyConditions } from './conditions.ts';
 import { type Projected, SkyProjection, refractVector } from './projection.ts';
@@ -37,6 +39,8 @@ export interface SkyOptions {
   accentColor: [number, number, number];
   /** The selected object, whose orbit is drawn brighter. */
   selected?: string | null;
+  /** Colours and weights of the figures and orbits. */
+  lineStyle?: LineStyle;
 }
 
 /** Bodies whose orbits can be drawn on the sky. */
@@ -96,6 +100,7 @@ export class SkyRenderer {
   private readonly markers: Mesh;
   readonly milkyWay: WebGLTexture;
   private readonly milkyStars: Mesh;
+  private galaxy: Mesh | null = null;
   private readonly milkyStarProgram: Program;
   /** Orbits on the sky: true orbit samples (heliocentric, geocentric for the Moon) and their meshes. */
   private readonly skyOrbits = new Map<string, { jd: number; points: Float64Array; mesh: Mesh; drawnAt: number }>();
@@ -180,6 +185,24 @@ export class SkyRenderer {
     this.stars.set(data);
     this.figureCulture = '';
     this.dirty = true;
+  }
+
+  /** The model galaxy as star records: each point lit from the Sun's distance, like a catalog star. */
+  private makeGalaxyMesh(): Mesh {
+    const small = Math.min(screen.width, screen.height) < 700;
+    const g = makeGalaxy(small ? 120000 : 260000);
+    const out = new Float32Array(g.count * STAR_STRIDE);
+    for (let i = 0; i < g.count; i++) {
+      const o = i * STAR_STRIDE;
+      const x = g.pos[3 * i], y = g.pos[3 * i + 1], z = g.pos[3 * i + 2];
+      out[o] = x; out[o + 1] = y; out[o + 2] = z; out[o + 3] = 1;
+      out[o + 7] = g.absMag[i] + 5 * Math.log10(Math.hypot(x, y, z) / 10);
+      const [r, gg, b] = blackbodyRGB(g.temp[i]);
+      out[o + 8] = 0.4 + 0.6 * r; out[o + 9] = 0.4 + 0.6 * gg; out[o + 10] = 0.4 + 0.6 * b;
+    }
+    const mesh = new Mesh(this.gl, STAR_STRIDE, [{ index: 0, size: 4, offset: 0 }, { index: 1, size: 3, offset: 4 }, { index: 2, size: 4, offset: 7 }]);
+    mesh.set(out);
+    return mesh;
   }
 
   /** Upload a decoded Tycho-2 band. Keeps the dozen most recently used. */
@@ -422,7 +445,10 @@ export class SkyRenderer {
     gl.blendFunc(gl.ONE, gl.ZERO);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.milkyWay);
-    const mwGain = opts.layers.milkyWay ? Math.pow(clamp((c.nakedEyeLimit - 4.4) / 2.4, 0, 1), 1.4) : 0;
+    // The Milky Way picture is the view from the Sun: it fades as interstellar flight leaves the neighbourhood,
+    // and the model galaxy (drawn with the stars) takes over.
+    const away = u.voyage ? Math.hypot(...u.voyage) : 0;
+    const mwGain = opts.layers.milkyWay ? Math.pow(clamp((c.nakedEyeLimit - 4.4) / 2.4, 0, 1), 1.4) * (1 - smoothstep01((away - 30) / 400)) : 0;
     // With the star field drawn, the smooth glow only fills in what lies between its points.
     const starred = this.milkyStars.count > 0;
     this.skyUniforms(this.skyProgram, c, opts)
@@ -446,6 +472,7 @@ export class SkyRenderer {
     const lines = this.common(this.lineProgram)
       .v2('uViewport', this.canvas.width, this.canvas.height).f('uYears', u.years);
     const [lr, lg, lb] = opts.lineColor;
+    const style = opts.lineStyle ?? LINE_STYLES[0];
     const drawLines = (mesh: Mesh, frame: Mat3, alpha: number, width: number, moving: boolean, refract: boolean, rgb = opts.lineColor) => {
       lines.m3('uFrame', frame).v4('uColor', rgb[0], rgb[1], rgb[2], alpha * chartFade).f('uWidth', width * dpr)
         .v3('uAberration', moving ? aberration : [0, 0, 0]).f('uRefract', refract && pr.refraction ? 1 : 0)
@@ -474,14 +501,15 @@ export class SkyRenderer {
         const e = this.skyOrbits.get(id)!;
         const on = opts.selected === id;
         const [r, g, b] = on ? opts.accentColor : BODIES[id].color;
-        drawLines(e.mesh, f.j2000ToHorizon, on ? 0.85 : 0.38, on ? 1.6 : 1.1, false, true, [0.5 + 0.5 * r, 0.5 + 0.5 * g, 0.5 + 0.5 * b]);
+        const tint: [number, number, number] = !on && style.orbit ? style.orbit : [0.5 + 0.5 * r, 0.5 + 0.5 * g, 0.5 + 0.5 * b];
+        drawLines(e.mesh, f.j2000ToHorizon, on ? 0.85 : Math.min(1, 0.38 * style.orbitAlpha), on ? 1.6 : 1.1, false, true, tint);
       }
     }
     if (opts.layers.boundaries && this.boundaries.count) {
       drawLines(this.boundaries, f.j2000ToHorizon, 0.2, 1, false, true, [lr * 0.9, lg * 0.75, lb * 0.75]);
     }
     if (opts.layers.lines) {
-      drawLines(this.figures, f.j2000ToHorizon, 0.2 + 0.2 * night, 1.2, true, true);
+      drawLines(this.figures, f.j2000ToHorizon, Math.min(1, (0.2 + 0.2 * night) * style.figureAlpha), 1.2 * style.figureWidth, true, true, style.figure ?? opts.lineColor);
     }
     if (this.highlight.count) {
       drawLines(this.highlight, f.j2000ToHorizon, 0.95, 2, true, true, opts.accentColor);
@@ -497,6 +525,13 @@ export class SkyRenderer {
     // Out among the stars a faint star can be close and bright, so all of them are sent.
     this.stars.drawPoints(voyage ? undefined : this.countBrighter(c.limitMag + 0.5));
     this.drawTycho(c.limitMag);
+    // Out past the star catalog's reach, the model of the galaxy (sim/galaxy.ts).
+    if (away > 20) {
+      if (!this.galaxy) this.galaxy = this.makeGalaxyMesh();
+      stars.f('uYears', 0).v3('uAberration', [0, 0, 0]);
+      this.galaxy.drawPoints();
+      stars.f('uYears', u.years).v3('uAberration', aberration);
+    }
 
     // Out among the stars the planets are lost in the Sun's glare; the Sun is one more star.
     this.drawn = voyage ? [] : this.placeBodies(c);

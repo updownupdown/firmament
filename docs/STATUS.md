@@ -129,6 +129,14 @@ the build stands against that plan and what to do next, in order.
   focused body (not the Sun, and only within 0.05 AU) at the true circular-orbit
   rate for the clock's speed, never slower than a lap in 3 minutes and never
   faster than one in 40 s; stopped time holds still. `SpaceCamera.cruise`.
+- **Line colours** (2026-11-19, `render/linestyle.ts`, setting `lineStyle`): Neutral
+  (one periwinkle), Bold figures (bright blue, wider; golden orbits) and Quiet
+  figures (faint grey; golden orbits). Chosen under View → Sky (and Space view).
+- **Edge arrow** (`Shell.edgeArrow`, `App.offscreen`): when the selected object
+  is out of view, a pill at the screen edge points to it; a tap centres it.
+- **Night vision** is two layers on `document.body` (they were inside `#ui`,
+  whose stacking context made the red multiply only with the controls, so the
+  screen went bright red): a backdrop-filter to dim grey, then a red multiply.
 - Labels: a body whose centre is behind a nearer body's true disc has no name
   (`behindDisc`; the sky view does the same for the Moon and the Sun), and the
   Planet names switch now works in Space view too.
@@ -434,7 +442,19 @@ unresolved stars, not catalog stars, so they cannot be picked.
   7.5 log10 D (held to 2.5 mag brighter, 6 fainter) and tints them (rough colour shift), in the star shader
   (`uBeta`) and in `starDirection`/`starMag`. Faster than light is labelled
   make-believe: plain motion, no relativity. The flight stops on arrival a few
-  hundred AU short, and at the 30.7 pc edge of the reliable map.
+  hundred AU short.
+- Flight follow-up (2026-11-19): speeds run 0.5c, 0.9c, 0.99c, then 1,000c up
+  to 10 billion c, stepped with rewind/fast-forward around a play button (the
+  ladder shows as dots). Past the catalog's reach the sky is a model galaxy
+  (`sim/galaxy.ts`: seeded barred spiral, exponential disc 2.6 kpc, four arms
+  pitched 12°, bulge and bar, Sun 8.18 kpc out; drawn with the star shader from
+  20 pc out, while the Milky Way picture fades between 30 and 430 pc). "The
+  galactic centre" is a heading (Sgr A* direction tested); flights stop 16 kpc
+  from the Sun. Deep-sky labels hide beyond 30 pc. On desktop the speed card
+  centres over the toolbar (the media rule must come after the base rule).
+- When panel performance: while time runs, the strip's window is rebuilt at
+  most every 1.5 s at Night zoom (each rebuild runs `tonight()`, ~110 ms) and
+  every 0.4 s otherwise; this was the stutter at fast rates.
 - Compressed scale in Space view: layer `compressed`, switched by the pill
   under the place chip. `COMPRESS` in `render/space.ts` squares-roots
   distances from the Sun (Earth stays at 1 AU), takes sizes to the 0.6 power

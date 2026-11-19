@@ -558,8 +558,6 @@ button.tile:hover, button.row:hover, .result:hover, .chip-button:hover { backgro
   .top-bar { right: auto; width: 440px; }
   .sheet { right: auto; width: 440px; top: calc(var(--safe-top) + var(--space-3) + 54px + var(--space-2)); bottom: calc(var(--safe-bottom) + var(--space-3)); }
   .time-bar, .where-bar { right: auto; width: 440px; max-height: calc(100vh - 54px - var(--space-8)); }
-  .flight-top { right: auto; width: 440px; }
-  .flight-bottom { left: 50%; right: auto; width: 480px; transform: translateX(-50%); }
   .toolbar { left: 50%; right: auto; width: 480px; transform: translateX(-50%); }
   .view-bar { left: 50%; right: auto; width: 520px; transform: translateX(-50%); }
   :root[data-sheet] .toolbar, :root[data-sheet] .view-bar { left: calc(50% + 240px); }
@@ -823,15 +821,18 @@ button.sys-item:hover { background: var(--color-surface-raised); }
 .flight-stats b { font-size: var(--text-lg); font-weight: var(--weight-medium); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .flight-note { color: var(--color-warn); font-size: var(--text-sm); }
 .flight-note[hidden] { display: none; }
-.flight-speeds { display: grid; grid-template-columns: 40px repeat(5, minmax(0, 1fr)); gap: 4px; }
-.flight-speeds button {
-  min-height: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;
-  border: none; border-radius: var(--radius-sm); background: var(--color-surface-raised); color: var(--color-text-muted);
-  font: inherit; font-size: var(--text-sm); white-space: nowrap;
-}
-.flight-speeds button small { font-size: 0.6rem; color: var(--color-text-faint); }
-.flight-speeds button[aria-pressed='true'] { background: var(--color-text); color: var(--color-on-accent); font-weight: var(--weight-medium); }
-.flight-speeds button[aria-pressed='true'] small { color: var(--color-on-accent); opacity: 0.7; }
+.flight-speeds { display: flex; align-items: center; gap: var(--space-2); }
+.flight-play { width: 44px; height: 44px; flex: none; background: var(--color-text); color: var(--color-on-accent); border-color: transparent; }
+.flight-play:hover { background: var(--color-accent-strong); }
+.flight-step { width: 44px; height: 44px; flex: none; background: var(--color-surface-raised); border-color: var(--color-border); }
+.flight-step:disabled { opacity: 0.35; }
+.flight-readout { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+.flight-speed { font-size: var(--text-lg); font-weight: var(--weight-medium); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.flight-pace { font-size: var(--text-xs); color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.flight-ladder { display: flex; gap: 5px; margin-top: 3px; }
+.flight-ladder i { width: 6px; height: 6px; border-radius: 50%; background: var(--color-border-strong); }
+.flight-ladder i.real { background: var(--color-accent-edge); }
+.flight-ladder i.on { background: var(--color-text); box-shadow: 0 0 0 2px var(--color-accent-edge); }
 .flight-hint { padding: 0 var(--space-2) var(--space-1); }
 .place-form { display: flex; flex-direction: column; gap: var(--space-2); }
 .place-search { display: flex; gap: var(--space-2); }
@@ -894,6 +895,12 @@ button.sys-item:hover { background: var(--color-surface-raised); }
 .time-bar.compact .tl-lane-name, .time-bar.compact .tl-ticks, .time-bar.compact .tl-head-time, .time-bar.compact .tl-divider { display: none; }
 .time-bar.compact .tl-head { top: 0; bottom: 0; }
 .time-bar.compact .tl-now { bottom: 0; }
+
+/* Wide screens: the flight cards sit where the chips and the toolbar do (after the base rules, so these win). */
+@media (min-width: 900px) {
+  .flight-top { right: auto; width: 440px; }
+  .flight-bottom { left: 50%; right: auto; width: 480px; transform: translateX(-50%); }
+}
 
 /* Line colours in View: three choices, each with a swatch of figure (left) and orbit (right) colour. */
 .segmented.line-styles { grid-template-columns: repeat(3, minmax(0, 1fr)); }

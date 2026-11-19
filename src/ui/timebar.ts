@@ -163,10 +163,18 @@ export function timeChip(app: App, opts: { onToggle: (open: boolean) => void }):
   const ensureWindow = (force = false) => {
     const jd = app.clock.jdUT;
     if (!force && win && win.zoom === zoom && jd >= win.start && jd < win.end && winKey === siteKey()) return;
+    // Running fast, time leaves the strip every frame; rebuilding it each time (a night's
+    // rise and set times, a month's events) is what made fast play stutter. Rebuild a few
+    // times a second at most (a night every 1.5 s), and let the head rest at the strip's edge in between.
+    const t = performance.now();
+    // A night costs most (rise and set searches for every planet), so it waits longest.
+    if (!force && win && !app.clock.paused && t - lastBuild < (zoom === 'night' ? 1500 : 400)) return;
+    lastBuild = t;
     win = timelineWindow(zoom, jd, site());
     winKey = siteKey();
     build();
   };
+  let lastBuild = 0;
 
   const tick = (x: number, text: string, major = false) =>
     h('span', { class: major ? 'tl-tick major' : 'tl-tick', style: `left:${x}%` }, h('span', null, text));

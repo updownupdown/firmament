@@ -5,6 +5,7 @@
 import { DEG, type Vec3, apply, clamp, dot, norm, normalize, scale, sub, transpose } from './astro/math.ts';
 import { fromAzAlt } from './astro/frames.ts';
 import { LY_PER_PC, SECONDS_PER_YEAR } from './astro/relativity.ts';
+import { GALACTIC_CENTRE_DIR, GALACTIC_CENTRE_PC } from './sim/galaxy.ts';
 import { jdNow } from './astro/time.ts';
 import { type CoreData, loadBoundaries, loadCulture, loadFaintStars, loadTychoBand, loadTychoIndex } from './data/load.ts';
 import { ASCENT_SECONDS, type SkyPose, ascentPose, matchingFov, nadirAzimuth, orbitAngles } from './render/ascent.ts';
@@ -39,7 +40,9 @@ export const MAX_TRIP_PC = 30.7;
 const STOP_SHORT_PC = 0.002;
 
 /** Speeds offered for interstellar flight, in multiples of light speed. Below 1 the view follows special relativity. */
-export const FLIGHT_SPEEDS = [0.5, 0.99, 1e3, 1e6, 1e7];
+export const FLIGHT_SPEEDS = [0.5, 0.9, 0.99, 1e3, 1e6, 1e7, 1e8, 1e9, 1e10];
+/** How far from the Sun a flight may go, parsecs: past the centre of the galaxy, not out of it. */
+const FLIGHT_LIMIT_PC = 16000;
 
 /** Interstellar flight: heading somewhere at a chosen speed, in real time. */
 export interface Flight {
@@ -52,8 +55,10 @@ export interface Flight {
   name: string;
   /** Multiples of light speed; 0 when stopped. */
   speed: number;
-  /** A short note when the flight stopped by itself (arrived, or reached the edge of the map). */
+  /** A short note when the flight stopped by itself (arrived, or reached the edge of the galaxy). */
   note: string;
+  /** What was picked as the heading: a star reference, 'sun', 'galaxy' or 'look'. */
+  choice: string;
 }
 
 const DEFAULT_SITE: Site = (() => {
@@ -528,7 +533,7 @@ export class App {
   startFlight(ref = 'star:91262'): void {
     if (this.flying) return;
     const begin = () => {
-      this.flight = { heading: [1, 0, 0], target: null, ref: null, name: '', speed: 0, note: '' };
+      this.flight = { heading: [1, 0, 0], target: null, ref: null, name: '', speed: 0, note: '', choice: '' };
       this.setFlightHeading(ref);
       this.setFlightSpeed(1e6);
     };
@@ -546,7 +551,7 @@ export class App {
     });
   }
 
-  /** Head for a star, for the Sun ('sun'), or straight on the way the view faces ('look'). */
+  /** Head for a star, for the Sun ('sun'), the centre of the galaxy ('galaxy'), or straight on the way the view faces ('look'). */
   setFlightHeading(choice: string): void {
     const fl = this.flight;
     const at = this.universe.voyage;
@@ -558,7 +563,11 @@ export class App {
       const p = this.renderer.projection;
       heading = apply(transpose(this.universe.frame.j2000ToHorizon), fromAzAlt(p.az, p.alt));
     } else {
-      if (choice === 'sun') {
+      if (choice === 'galaxy') {
+        // Stop at the edge of the central bulge, looking in.
+        target = scale(GALACTIC_CENTRE_DIR, GALACTIC_CENTRE_PC - 250);
+        name = 'the galactic centre';
+      } else if (choice === 'sun') {
         const d = norm(at);
         if (d < STOP_SHORT_PC * 2) return;
         target = scale(at, STOP_SHORT_PC / d);
@@ -575,7 +584,8 @@ export class App {
     }
     fl.heading = normalize(heading);
     fl.target = target;
-    fl.ref = choice === 'look' || choice === 'sun' ? null : choice;
+    fl.ref = choice === 'look' || choice === 'sun' || choice === 'galaxy' ? null : choice;
+    fl.choice = choice;
     fl.name = name;
     fl.note = '';
     this.syncBeta();
@@ -627,11 +637,11 @@ export class App {
       if (step >= left) { step = left; arrived = true; }
     }
     const next: Vec3 = [at[0] + fl.heading[0] * step, at[1] + fl.heading[1] * step, at[2] + fl.heading[2] * step];
-    // The map of the stars is reliable to about 100 light years: stop at its edge rather than fly into guesses.
+    // Past the catalog's reach the stars are the model galaxy; stop before flying out of it altogether.
     const outward = dot(next, fl.heading) > 0;
-    if (outward && norm(next) > MAX_TRIP_PC) {
+    if (outward && norm(next) > FLIGHT_LIMIT_PC) {
       fl.speed = 0;
-      fl.note = 'This is the edge of the map: past about 100 light years, star distances are too uncertain to fly by.';
+      fl.note = 'This is as far as Firmament goes: turn back toward the Sun or the galactic centre.';
       this.syncBeta();
       this.emit('mode');
       return false;

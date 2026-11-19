@@ -400,6 +400,9 @@ export interface SpaceOptions {
   lineColor: [number, number, number];
   accentColor: [number, number, number];
   selected: string | null;
+  /** Orbit colour and strength from the line style (null colour keeps lineColor). */
+  orbitColor?: [number, number, number] | null;
+  orbitAlpha?: number;
 }
 
 /**
@@ -467,6 +470,13 @@ export class SpaceRenderer {
   /** Heliocentric position (AU, J2000) of a body at the universe's instant. */
   position(id: string): Vec3 | null {
     return this.positions.get(id) ?? null;
+  }
+
+  /** Where a body is relative to the camera, in camera space (x right, y up, looking along −z), or null. */
+  cameraVector(id: string): Vec3 | null {
+    const p = this.positions.get(id);
+    if (!p) return null;
+    return this.camera.toCamera(sub(p, this.positions.get(this.camera.focus) ?? [0, 0, 0]));
   }
 
   /** Radius as drawn, AU. */
@@ -666,9 +676,9 @@ export class SpaceRenderer {
         }
         put(n - 1, here, 1);
         const marked = opts.selected === b.id;
-        const col = marked ? opts.accentColor : opts.lineColor;
+        const col = marked ? opts.accentColor : opts.orbitColor ?? opts.lineColor;
         this.orbitMesh.set(data.subarray(0, n * 4), gl.DYNAMIC_DRAW);
-        this.orbitProgram.v4('uColor', col[0], col[1], col[2], alpha * (marked ? 0.95 : b.minor ? 0.22 : 0.5));
+        this.orbitProgram.v4('uColor', col[0], col[1], col[2], Math.min(1, alpha * (marked ? 0.95 : (b.minor ? 0.22 : 0.5) * (opts.orbitAlpha ?? 1))));
         this.orbitMesh.drawLineStrip();
       }
     }

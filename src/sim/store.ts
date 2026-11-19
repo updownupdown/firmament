@@ -14,6 +14,8 @@ export interface Settings {
   bortle: number;
   hour12: boolean;
   nightVision: boolean;
+  /** How figures and orbits are coloured: 'neutral', 'vivid' or 'subtle' (render/linestyle.ts). */
+  lineStyle: string;
   reducedMotion: boolean;
   /** Design direction chosen by the owner or the player. */
   theme: string;
@@ -34,7 +36,7 @@ export function defaultData(): StoreData {
     version: STORE_VERSION,
     settings: {
       layers: { ...DEFAULT_LAYERS }, culture: 'western', bortle: 2, hour12: false,
-      nightVision: false, reducedMotion: false, theme: 'default',
+      nightVision: false, reducedMotion: false, theme: 'default', lineStyle: 'neutral',
     },
     site: null, recentSites: [], seen: [],
   };

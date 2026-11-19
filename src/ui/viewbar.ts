@@ -11,6 +11,9 @@ import { LOOKS, currentLook, lookLayers } from '../sim/looks.ts';
 import type { LayerFlags } from '../sim/scene.ts';
 import { h, fill, icon, iconButton } from './dom.ts';
 import { BORTLE, LAYER_GROUPS, type LayerTile } from './panels.ts';
+import { LINE_STYLES, lineStyle } from '../render/linestyle.ts';
+
+const css = (c: [number, number, number]) => `rgb(${c.map((x) => Math.round(x * 255)).join(' ')})`;
 
 export interface ViewBar {
   el: HTMLElement;
@@ -19,7 +22,7 @@ export interface ViewBar {
   close(): void;
 }
 
-type Tab = { id: string; label: string; items: LayerTile[] | 'looks' | 'culture'; extra?: 'bortle' };
+type Tab = { id: string; label: string; items: LayerTile[] | 'looks' | 'culture'; extra?: 'bortle' | 'lines' };
 
 const LOOK_ICONS: Record<string, string> = { eye: 'eye', stargazer: 'figures', planets: 'planet', chart: 'bounds', navigator: 'compass' };
 
@@ -29,11 +32,11 @@ const group = (title: string) => LAYER_GROUPS.find((g) => g.title === title)?.it
 function tabsFor(mode: string): Tab[] {
   if (mode === 'space') {
     const milky = group('On the sky').filter(([k]) => k === 'milkyWay' || k === 'planetLabels');
-    return [{ id: 'space', label: 'Space view', items: [...group('Space view'), ...milky] }];
+    return [{ id: 'space', label: 'Space view', items: [...group('Space view'), ...milky], extra: 'lines' }];
   }
   return [
     { id: 'looks', label: 'Looks', items: 'looks' },
-    { id: 'sky', label: 'Sky', items: group('On the sky') },
+    { id: 'sky', label: 'Sky', items: group('On the sky'), extra: 'lines' },
     { id: 'guides', label: 'Guides', items: group('Guides') },
     { id: 'ground', label: 'Ground', items: group('Air and ground'), extra: 'bortle' },
     { id: 'culture', label: 'Culture', items: 'culture' },
@@ -80,6 +83,16 @@ export function viewBar(app: App, opts: { onToggle: (open: boolean) => void }): 
       h('div', { class: 'slider-row' }, h('span', { class: 'hint' }, 'Dark'), slider, h('span', { class: 'hint' }, 'City')));
   };
 
+  const lines = () => {
+    const now = lineStyle(app.store.data.settings.lineStyle);
+    return h('div', { class: 'vb-control' },
+      h('div', { class: 'control-head' }, h('span', null, 'Line colours'), h('span', { class: 'value' }, now.hint)),
+      h('div', { class: 'segmented line-styles', role: 'group', 'aria-label': 'Line colours' }, LINE_STYLES.map((st) => h('button', {
+        type: 'button', 'aria-pressed': String(st.id === now.id), title: st.hint,
+        onclick: () => app.updateSettings((x) => { x.lineStyle = st.id; }),
+      }, h('span', { class: 'swatch', style: `--a: ${css(st.figure ?? [0.62, 0.71, 1])}; --b: ${css(st.orbit ?? [0.62, 0.71, 1])}` }), st.name))));
+  };
+
   const culture = () => {
     const s = app.store.data.settings;
     const current = app.universe.culture;
@@ -108,7 +121,7 @@ export function viewBar(app: App, opts: { onToggle: (open: boolean) => void }): 
       current.items === 'looks' ? looks()
         : current.items === 'culture' ? culture()
         : h('div', { class: 'vb-grid' }, current.items.map(([k, label, glyph, hint]) => tile(glyph, label, layers[k], () => app.setLayer(k, !app.layers[k]), hint))),
-      current.extra === 'bortle' ? bortle() : null);
+      current.extra === 'bortle' ? bortle() : current.extra === 'lines' ? lines() : null);
     // Rebuilding must not lose the keyboard's place.
     if (focused) ([...body.querySelectorAll('.vb-tile')] as HTMLElement[]).find((c) => c.textContent === focused)?.focus();
   };

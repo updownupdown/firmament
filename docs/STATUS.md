@@ -129,6 +129,14 @@ the build stands against that plan and what to do next, in order.
   focused body (not the Sun, and only within 0.05 AU) at the true circular-orbit
   rate for the clock's speed, never slower than a lap in 3 minutes and never
   faster than one in 40 s; stopped time holds still. `SpaceCamera.cruise`.
+- **Line colours** (2026-11-19, `render/linestyle.ts`, setting `lineStyle`): Neutral
+  (one periwinkle), Bold figures (bright blue, wider; golden orbits) and Quiet
+  figures (faint grey; golden orbits). Chosen under View → Sky (and Space view).
+- **Edge arrow** (`Shell.edgeArrow`, `App.offscreen`): when the selected object
+  is out of view, a pill at the screen edge points to it; a tap centres it.
+- **Night vision** is two layers on `document.body` (they were inside `#ui`,
+  whose stacking context made the red multiply only with the controls, so the
+  screen went bright red): a backdrop-filter to dim grey, then a red multiply.
 - Labels: a body whose centre is behind a nearer body's true disc has no name
   (`behindDisc`; the sky view does the same for the Moon and the Sun), and the
   Planet names switch now works in Space view too.

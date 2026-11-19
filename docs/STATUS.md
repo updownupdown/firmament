@@ -137,6 +137,13 @@ the build stands against that plan and what to do next, in order.
 - **Line colours** (2026-11-19, `render/linestyle.ts`, setting `lineStyle`): Neutral
   (one periwinkle), Bold figures (bright blue, wider; golden orbits) and Quiet
   figures (faint grey; golden orbits). Chosen under View → Sky (and Space view).
+- **Switching views** (2026-11-19 fixes): a move asked for while another is
+  flying or fading (`App.later`) runs when it is over, the latest ask winning;
+  Back home during a lift-off turns the climb round, and Fly to during a landing
+  climbs straight back up. The frame loop catches errors, so one bad frame can
+  no longer freeze the app (Jupiter's small moons once did, in `orbitTrail`).
+  A scene with a site brings you home from the Moon, Mars or the stars; a
+  concept's "Back to my sky" restores the place, view and time you left.
 - **Edge arrow** (`Shell.edgeArrow`, `App.offscreen`): when the selected object
   is out of view, a pill at the screen edge points to it; a tap centres it.
 - **Night vision** is two layers on `document.body` (they were inside `#ui`,

@@ -19,7 +19,9 @@ export function verbsFor(app: App, ref: string): Verb[] {
   // Looking at a belt or cloud from the ground shows nothing: it is seen from outside.
   const underfoot = app.mode === 'sky' && ref === app.universe.world;
   if (!region && obj && !underfoot) out.push({ id: 'look', label: 'Look at it', glyph: 'eye', run: () => app.lookAt(ref) });
-  if (app.canFlyTo(ref)) out.push({ id: 'fly', label: 'Fly to it', glyph: 'rocket', run: () => app.flyToObject(ref) });
+  // Already circling it: nothing to fly to.
+  const circling = app.mode === 'space' && app.space.camera.focus === ref;
+  if (app.canFlyTo(ref) && !circling) out.push({ id: 'fly', label: 'Fly to it', glyph: 'rocket', run: () => app.flyToObject(ref) });
   if (app.canStandOn(ref)) out.push({ id: 'stand', label: 'Stand on it', glyph: 'globe', run: () => app.standOn(ref) });
   return out;
 }

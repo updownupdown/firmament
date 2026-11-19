@@ -12,6 +12,7 @@ import { J2000 } from '../astro/time.ts';
 import { AU_KM, DEG, type Mat3, type Vec3, add, apply, clamp, cross, fromSpherical, mul, normalize, scale, sub } from '../astro/math.ts';
 import type { LayerFlags } from '../sim/scene.ts';
 import type { Universe } from '../sim/universe.ts';
+import type { Ephemeris } from '../astro/ephemeris.ts';
 import { type Controllable, ZoomPast } from './camera.ts';
 import { Mesh, Program } from './gl.ts';
 import { type SurfaceMaps, bindSurfaceMaps } from './maps.ts';
@@ -361,7 +362,38 @@ const SPACE_KIND: Record<string, number> = { sun: 1, moon: 2, jupiter: 3, saturn
 
 const JUPITER_RADIUS_AU = BODIES.jupiter.radiusEq / AU_KM;
 
-function buildBodies(): SpaceBody[] {
+/** One revolution of a body's orbit, ending where it is at `jd`: heliocentric, or about its planet for a moon. */
+export function orbitTrail(eph: Ephemeris, b: Pick<SpaceBody, 'id' | 'period' | 'parent' | 'comet'>, jd: number): Float64Array {
+  let points: Float64Array;
+  if (b.comet) {
+    const { e, tp } = b.comet, n = 360;
+    const turn = Math.floor((jd - tp) / b.period + 0.5);
+    points = new Float64Array((n + 1) * 3);
+    for (let k = 0; k <= n; k++) {
+      // Crowd the samples toward perihelion, where a comet's path bends hardest.
+      const u = (2 * k) / n - 1;
+      const E = Math.PI * u * u * u;
+      const p = eph.helio(b.id, tp + turn * b.period + (b.period * (E - e * Math.sin(E))) / (2 * Math.PI));
+      points.set(p, k * 3);
+    }
+  } else if (b.parent === 'jupiter' && GALILEAN.some((m) => m.id === b.id)) {
+    // Jupiter's other moons (Amalthea, Himalia…) have elements of their own, like Saturn's.
+    const k = GALILEAN.findIndex((m) => m.id === b.id);
+    // The moons' orbits are circles about Jupiter; hold Jupiter still while sampling.
+    const jupiter = eph.helio('jupiter', jd), earth = eph.earth(jd);
+    points = sampleOrbit((t) => sub(galileanAround(t, jupiter, earth)[k], jupiter), jd, b.period, 96);
+  } else if (b.parent && b.parent !== 'earth') {
+    const m = moonInfo(b.id)!;
+    points = sampleOrbit((t) => scale(moonOffset(m, t), 1 / AU_KM), jd, b.period, 96);
+  } else if (b.parent) {
+    points = sampleOrbit((t) => eph.moonGeo(t), jd, b.period, 96);
+  } else {
+    points = sampleOrbit((t) => (b.id === 'earth' ? eph.earth(t) : eph.helio(b.id, t)), jd, b.period, 240);
+  }
+  return points;
+}
+
+export function buildBodies(): SpaceBody[] {
   const list: SpaceBody[] = [];
   const planet = (id: keyof typeof BODIES, minPx: number) => {
     const b = BODIES[id];
@@ -590,31 +622,7 @@ export class SpaceRenderer {
     // An orbit's shape changes slowly; the trail only has to end at the body, which the draw step sees to.
     const stale = b.parent ? 20 : b.comet ? b.period : 36525;
     if (cached && Math.abs(cached.jd - jd) < stale) return cached.points;
-    let points: Float64Array;
-    if (b.comet) {
-      const { e, tp } = b.comet, n = 360;
-      const turn = Math.floor((jd - tp) / b.period + 0.5);
-      points = new Float64Array((n + 1) * 3);
-      for (let k = 0; k <= n; k++) {
-        // Crowd the samples toward perihelion, where a comet's path bends hardest.
-        const u = (2 * k) / n - 1;
-        const E = Math.PI * u * u * u;
-        const p = eph.helio(b.id, tp + turn * b.period + (b.period * (E - e * Math.sin(E))) / (2 * Math.PI));
-        points.set(p, k * 3);
-      }
-    } else if (b.parent === 'jupiter') {
-      const k = GALILEAN.findIndex((m) => m.id === b.id);
-      // The moons' orbits are circles about Jupiter; hold Jupiter still while sampling.
-      const jupiter = eph.helio('jupiter', jd), earth = eph.earth(jd);
-      points = sampleOrbit((t) => sub(galileanAround(t, jupiter, earth)[k], jupiter), jd, b.period, 96);
-    } else if (b.parent && b.parent !== 'earth') {
-      const m = moonInfo(b.id)!;
-      points = sampleOrbit((t) => scale(moonOffset(m, t), 1 / AU_KM), jd, b.period, 96);
-    } else if (b.parent) {
-      points = sampleOrbit((t) => eph.moonGeo(t), jd, b.period, 96);
-    } else {
-      points = sampleOrbit((t) => (b.id === 'earth' ? eph.earth(t) : eph.helio(b.id, t)), jd, b.period, 240);
-    }
+    const points = orbitTrail(eph, b, jd);
     this.orbits.set(b.id, { jd, points });
     return points;
   }

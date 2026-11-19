@@ -22,7 +22,7 @@ import { PLACES } from './sim/places.ts';
 import { WORLD_NAMES, WORLD_SITES } from './sim/worlds.ts';
 import { type LayerFlags, type Scene, type SceneCamera, encodeScene, sceneJd } from './sim/scene.ts';
 import { type Store, browserStorage } from './sim/store.ts';
-import { type Site, type SkyObject, Universe } from './sim/universe.ts';
+import { type Away, type Site, type SkyObject, Universe } from './sim/universe.ts';
 
 export type Section = 'sky' | 'tonight' | 'atlas';
 export type ViewMode = 'sky' | 'space';
@@ -505,6 +505,18 @@ export class App {
     return this.transit !== null || this.descending || this.travel !== null;
   }
 
+  /** A fade through black is under way. */
+  private cutting = false;
+  /** The last move asked for while another was under way: it runs once that one is over. */
+  private queued: (() => void) | null = null;
+
+  /** Busy flying or fading: keep `run` for when it is done (the latest ask wins). */
+  private later(run: () => void): boolean {
+    if (!this.flying && !this.cutting) return false;
+    this.queued = run;
+    return true;
+  }
+
   /**
    * Switch between the sky from the ground and the solar system from outside.
    * With `fly`, the camera rises from the ground into orbit (or comes down
@@ -520,7 +532,9 @@ export class App {
       this.universe.setAway(null);
       this.mode = 'space';
       this.universe.update(this.clock.jdUT);
-      if (away.world === 'star') this.space.place('sun', 4.2);
+      const to = target && this.space.bodies.some((b) => b.id === target) ? target : null;
+      if (to) this.space.place(to, to === 'sun' ? 4.2 : this.space.framingDistance(to) * 3);
+      else if (away.world === 'star') this.space.place('sun', 4.2);
       else this.space.place(away.world, this.space.framingDistance(away.world) * 3);
       this.emitPlace();
       return;
@@ -588,7 +602,7 @@ export class App {
 
   /** Start interstellar flight from where you are among the stars (or from the Sun), heading for `ref` (Vega by default). */
   startFlight(ref = 'star:91262'): void {
-    if (this.flying) return;
+    if (this.later(() => this.startFlight(ref))) return;
     const begin = () => {
       this.flight = { heading: [1, 0, 0], target: null, ref: null, name: '', speed: 0, note: '', choice: '' };
       this.setFlightHeading(ref);
@@ -775,15 +789,29 @@ export class App {
     const veil = document.querySelector<HTMLElement>('.cut-veil') ?? document.body.appendChild(Object.assign(document.createElement('div'), { className: 'cut-veil' }));
     if (this.reducedMotion) { change(); return; }
     veil.dataset.on = '';
+    this.cutting = true;
     window.setTimeout(() => {
-      change();
-      requestAnimationFrame(() => requestAnimationFrame(() => delete veil.dataset.on));
+      this.cutting = false;
+      try { change(); } finally {
+        requestAnimationFrame(() => requestAnimationFrame(() => delete veil.dataset.on));
+      }
     }, 260);
   }
 
   /** Come down to the ground at home (in one flight when allowed), then run `then`. */
   land(then?: () => void): void {
-    if (this.flying) return;
+    const tr = this.transit;
+    if (tr?.up && !this.cutting) {
+      // Still climbing: turn round and come straight back down from here.
+      tr.up = false;
+      tr.t = 1 - tr.t;
+      tr.target = undefined;
+      this.queued = null;
+      this.afterLanding = then ?? null;
+      this.emit('mode');
+      return;
+    }
+    if (this.later(() => this.land(then))) return;
     if (this.mode === 'sky' && this.universe.away) {
       this.cut(() => { this.universe.setAway(null); this.settleOnGround(); this.emitPlace(); then?.(); });
       return;
@@ -808,7 +836,19 @@ export class App {
 
   /** Fly out to circle an object in Space view. */
   flyToObject(ref: string): void {
-    if (!this.canFlyTo(ref) || this.flying) return;
+    if (!this.canFlyTo(ref)) return;
+    const tr = this.transit;
+    if (tr && !tr.up && !this.cutting && !ref.startsWith('star') && !ref.startsWith('region:')) {
+      // Coming down: climb straight back up from here instead.
+      tr.up = true;
+      tr.t = 1 - tr.t;
+      tr.target = ref;
+      this.queued = null;
+      this.afterLanding = null;
+      this.emit('mode');
+      return;
+    }
+    if (this.later(() => this.flyToObject(ref))) return;
     if (ref.startsWith('star')) { this.flyToStar(ref); return; }
     if (ref.startsWith('region:')) { this.centre(ref); this.select(ref); return; }
     if (this.mode === 'sky') { this.setMode('space', ref, true); return; }
@@ -820,7 +860,8 @@ export class App {
 
   /** Stand on a world's surface: home on the Earth, or a landing site on the Moon or Mars. */
   standOn(ref: string): void {
-    if (this.flying || !this.canStandOn(ref)) return;
+    if (this.later(() => this.standOn(ref))) return;
+    if (!this.canStandOn(ref)) return;
     if (ref === 'earth') { this.land(); return; }
     const world = ref as 'moon' | 'mars';
     this.cut(() => {
@@ -977,8 +1018,12 @@ export class App {
 
   // ---------------------------------------------------------------- scenes
 
-  /** Make the sky look the way a scene describes. Parts it does not mention stay as they are. */
-  apply(scene: Scene): void {
+  /**
+   * Make the sky look the way a scene describes. Parts it does not mention stay as they are.
+   * `away` puts you back on the Moon, Mars or among the stars after the scene's place is set.
+   */
+  apply(scene: Scene, away?: Away): void {
+    if (this.later(() => this.apply(scene, away))) return;
     const jd = sceneJd(scene.time, jdNow());
     if (jd !== undefined) this.clock.setJd(jd);
     if (scene.time === 'now' && scene.rate === undefined) { this.clock.rate = 1; this.clock.paused = false; }
@@ -986,7 +1031,17 @@ export class App {
       this.clock.paused = scene.rate === 0;
       if (scene.rate !== 0) this.clock.rate = scene.rate;
     }
-    if (scene.site) this.setSite(scene.site);
+    if (scene.site) {
+      // A place on the Earth: come home from the Moon, Mars or the stars to see it.
+      if (this.universe.away) { this.universe.setAway(null); this.settleOnGround(); this.emitPlace(); }
+      this.setSite(scene.site);
+    }
+    if (away) {
+      if (this.mode === 'space') this.setMode('sky');
+      this.universe.setAway(away);
+      this.settleOnGround();
+      this.emitPlace();
+    }
     if (scene.layers) {
       this.store.update((d) => { Object.assign(d.settings.layers, scene.layers); });
       if (scene.layers.boundaries) this.ensureBoundaries();
@@ -1050,38 +1105,48 @@ export class App {
 
   start(): void {
     const frame = (now: number) => {
-      const dt = Math.min(0.1, (now - (this.lastFrame || now)) / 1000);
-      this.lastFrame = now;
-      this.clock.tick(dt);
-      const space = this.mode === 'space';
-      // Dragging the sky, or centring on something, takes the view back from the phone.
-      if (this.pointingFollowing && this.camera.track !== this.pointingTrack) {
-        this.pointingFollowing = false;
-        void this.setPointing(false);
-      }
-      if (space) this.space.camera.cruise = this.transit || this.travel || this.descending ? 0 : orbitRate(this.space.camera.focus, this.space.camera.dist, this.clock.paused ? 0 : this.clock.rate, this.reducedMotion);
-      let moved = space ? this.space.camera.tick(dt) : this.camera.tick(dt);
-      if (moved && !space) this.restartTrails();
-      if (this.transit) { this.stepTransit(dt); moved = true; }
-      if (this.travel) { this.stepTravel(dt); moved = true; }
-      if (this.flight && this.stepFlight(dt)) moved = true;
-      this.sinceDraw += dt;
-      // The sky turns 15 arcseconds a second: redraw once it has moved a third of a pixel.
-      const drift = (0.3 * this.renderer.projection.pixelAngle) / (7.3e-5 * Math.max(1, Math.abs(this.clock.rate)));
-      // In space, planets only visibly move when time is running fast.
-      const due = !this.clock.paused && this.sinceDraw >= (space ? (Math.abs(this.clock.rate) > 300 ? 0 : 1) : Math.min(drift, 1));
-      // Resize first: a camera already moving on the first frame must not draw at the canvas's old size.
-      const resized = this.renderer.resize();
-      if (moved || due || resized || this.renderer.dirty) this.draw();
-      // Twinkling stars keep the sky drawing, at a gentle 20 frames a second; the labels stay put.
-      else if (!space && this.renderer.twinkling && this.sinceDraw >= 0.05) this.draw(true);
-      if (now - this.lastSecond >= 1000) {
-        this.lastSecond = now;
-        this.emit('second');
-      }
+      // Whatever goes wrong in one frame, the next still comes: a thrown error must not freeze the view.
       requestAnimationFrame(frame);
+      try { this.frame(now); } catch (e) { console.error(e); }
     };
     requestAnimationFrame(frame);
+  }
+
+  private frame(now: number): void {
+    const dt = Math.min(0.1, (now - (this.lastFrame || now)) / 1000);
+    this.lastFrame = now;
+    this.clock.tick(dt);
+    const space = this.mode === 'space';
+    // Dragging the sky, or centring on something, takes the view back from the phone.
+    if (this.pointingFollowing && this.camera.track !== this.pointingTrack) {
+      this.pointingFollowing = false;
+      void this.setPointing(false);
+    }
+    if (space) this.space.camera.cruise = this.transit || this.travel || this.descending ? 0 : orbitRate(this.space.camera.focus, this.space.camera.dist, this.clock.paused ? 0 : this.clock.rate, this.reducedMotion);
+    let moved = space ? this.space.camera.tick(dt) : this.camera.tick(dt);
+    if (moved && !space) this.restartTrails();
+    if (this.transit) { this.stepTransit(dt); moved = true; }
+    if (this.travel) { this.stepTravel(dt); moved = true; }
+    if (this.flight && this.stepFlight(dt)) moved = true;
+    if (this.queued && !this.flying && !this.cutting) {
+      const run = this.queued;
+      this.queued = null;
+      run();
+    }
+    this.sinceDraw += dt;
+    // The sky turns 15 arcseconds a second: redraw once it has moved a third of a pixel.
+    const drift = (0.3 * this.renderer.projection.pixelAngle) / (7.3e-5 * Math.max(1, Math.abs(this.clock.rate)));
+    // In space, planets only visibly move when time is running fast.
+    const due = !this.clock.paused && this.sinceDraw >= (space ? (Math.abs(this.clock.rate) > 300 ? 0 : 1) : Math.min(drift, 1));
+    // Resize first: a camera already moving on the first frame must not draw at the canvas's old size.
+    const resized = this.renderer.resize();
+    if (moved || due || resized || this.renderer.dirty) this.draw();
+    // Twinkling stars keep the sky drawing, at a gentle 20 frames a second; the labels stay put.
+    else if (!space && this.renderer.twinkling && this.sinceDraw >= 0.05) this.draw(true);
+    if (now - this.lastSecond >= 1000) {
+      this.lastSecond = now;
+      this.emit('second');
+    }
   }
 
   private draw(skyOnly = false): void {

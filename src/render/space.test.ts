@@ -143,3 +143,16 @@ test('a body behind a nearer disc is hidden', () => {
   // A dot drawn bigger than the body (the Moon from far off) hides nothing.
   assert.ok(!behindDisc({ id: 'earth', x: 100.5, y: 100, depth: 5 }, [{ id: 'moon', x: 100, y: 100, depth: 4.99, trueRadiusPx: 0.2 }]));
 });
+
+test('every body in Space view has a finite orbit trail (the small moons of Jupiter once crashed it)', async () => {
+  const { buildBodies, orbitTrail } = await import('./space.ts');
+  const { testEphemeris } = await import('../astro/testdata.ts');
+  const eph = testEphemeris();
+  const jd = 2461000.5;
+  for (const b of buildBodies()) {
+    if (!b.period) continue;
+    const points = orbitTrail(eph, b, jd);
+    assert.ok(points.length >= 6, b.id);
+    assert.ok(points.every(Number.isFinite), `${b.id} has a finite trail`);
+  }
+});

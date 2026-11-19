@@ -1,8 +1,10 @@
 // The View panel, opened from View in the toolbar: it sits just above the
 // toolbar with the sky in view above, so each switch shows what it changes.
-// Tabs group the switches (Looks first, for newcomers); switches are tiles in
-// rows of four, and the tabs that need more than on/off carry their control
-// below (light pollution under Ground, the sky culture in its own tab).
+// Tabs group the switches. Looks come first, for newcomers: presets, drawn as
+// wide cards you pick one of, unlike the switches. Switches are tiles in rows
+// of four, lit when on. Constellations gathers everything about them (figures,
+// names, artwork, borders, whose sky, line colours); tabs that need more than
+// on/off carry their control below (light pollution under Air).
 // Settings holds everything that is not about what the sky shows.
 
 import { picker } from './menu.ts';
@@ -22,7 +24,7 @@ export interface ViewBar {
   close(): void;
 }
 
-type Tab = { id: string; label: string; items: LayerTile[] | 'looks' | 'culture'; extra?: 'bortle' | 'lines' };
+type Tab = { id: string; label: string; items: LayerTile[] | 'looks'; extra?: 'bortle' | 'lines' | 'constellations' };
 
 const LOOK_ICONS: Record<string, string> = { eye: 'eye', stargazer: 'figures', planets: 'planet', chart: 'bounds', navigator: 'compass' };
 
@@ -36,10 +38,10 @@ function tabsFor(mode: string): Tab[] {
   }
   return [
     { id: 'looks', label: 'Looks', items: 'looks' },
-    { id: 'sky', label: 'Sky', items: group('On the sky'), extra: 'lines' },
+    { id: 'constellations', label: 'Constellations', items: group('Constellations'), extra: 'constellations' },
+    { id: 'sky', label: 'Sky', items: group('On the sky') },
     { id: 'guides', label: 'Guides', items: group('Guides') },
     { id: 'ground', label: 'Air', items: group('Air and ground'), extra: 'bortle' },
-    { id: 'culture', label: 'Culture', items: 'culture' },
   ];
 }
 
@@ -62,12 +64,16 @@ export function viewBar(app: App, opts: { onToggle: (open: boolean) => void }): 
     const layers = app.layers;
     const now = currentLook(layers);
     return [
-      h('div', { class: 'vb-grid' }, LOOKS.map((l) => tile(LOOK_ICONS[l.id] ?? 'sky', l.name, now?.id === l.id, () => {
-        for (const [k, on] of Object.entries(lookLayers(l)) as [keyof LayerFlags, boolean][]) {
-          if (app.layers[k] !== on) app.setLayer(k, on);
-        }
-      }, l.hint))),
-      h('p', { class: 'vb-note' }, now ? now.hint : 'Your own mix. Pick a look to start again from one.'),
+      h('div', { class: 'vb-looks', role: 'radiogroup', 'aria-label': 'Looks' }, LOOKS.map((l) => h('button', {
+        class: 'vb-look', type: 'button', role: 'radio', 'aria-checked': String(now?.id === l.id),
+        onclick: () => {
+          for (const [k, on] of Object.entries(lookLayers(l)) as [keyof LayerFlags, boolean][]) {
+            if (app.layers[k] !== on) app.setLayer(k, on);
+          }
+        },
+      }, h('span', { class: 'vb-look-glyph' }, icon(LOOK_ICONS[l.id] ?? 'sky', 22)),
+        h('span', { class: 'vb-look-text' }, h('span', { class: 'vb-look-name' }, l.name), h('span', { class: 'vb-look-hint' }, l.hint))))),
+      h('p', { class: 'vb-note' }, now ? 'A look switches several layers at once. Change any of them in the other tabs.' : 'Your own mix. Pick a look to start again from one.'),
       app.mode === 'sky' && !app.universe.voyage ? h('div', { class: 'vb-control' },
         h('div', { class: 'control-head' }, h('span', null, 'Long exposure'), h('span', { class: 'value' }, 'Hours of sky in seconds')),
         h('div', { class: 'button-row' },
@@ -107,7 +113,7 @@ export function viewBar(app: App, opts: { onToggle: (open: boolean) => void }): 
       onPick: (v) => app.setCulture(v),
     });
     return h('div', { class: 'vb-control' },
-      h('div', { class: 'control-head' }, h('span', null, 'Whose sky: the figures and names drawn')),
+      h('div', { class: 'control-head' }, h('span', null, 'Whose sky'), h('span', { class: 'value' }, 'The figures and names drawn')),
       select.el,
       current && current.id === s.culture && current.intro ? h('p', { class: 'vb-note clamp' }, current.intro) : null);
   };
@@ -124,9 +130,8 @@ export function viewBar(app: App, opts: { onToggle: (open: boolean) => void }): 
     const focused = (document.activeElement as HTMLElement | null)?.closest?.('.vb-tile')?.textContent;
     fill(body,
       current.items === 'looks' ? looks()
-        : current.items === 'culture' ? culture()
         : h('div', { class: 'vb-grid' }, current.items.map(([k, label, glyph, hint]) => tile(glyph, label, layers[k], () => app.setLayer(k, !app.layers[k]), hint))),
-      current.extra === 'bortle' ? bortle() : current.extra === 'lines' ? lines() : null);
+      ...(current.extra === 'bortle' ? [bortle()] : current.extra === 'lines' ? [lines()] : current.extra === 'constellations' ? [culture(), lines()] : []));
     // Rebuilding must not lose the keyboard's place.
     if (focused) ([...body.querySelectorAll('.vb-tile')] as HTMLElement[]).find((c) => c.textContent === focused)?.focus();
   };
@@ -151,6 +156,6 @@ export function viewBar(app: App, opts: { onToggle: (open: boolean) => void }): 
   // A slider being dragged is not rebuilt under the finger.
   app.on('settings', () => { if (isOpen && !(document.activeElement as HTMLElement | null)?.matches?.('.bortle-slider, select')) render(); });
   app.on('mode', () => { if (isOpen) render(); });
-  app.on('data', () => { if (isOpen && tab === 'culture') render(); });
+  app.on('data', () => { if (isOpen && tab === 'constellations') render(); });
   return bar;
 }

@@ -129,6 +129,11 @@ the build stands against that plan and what to do next, in order.
   focused body (not the Sun, and only within 0.05 AU) at the true circular-orbit
   rate for the clock's speed, never slower than a lap in 3 minutes and never
   faster than one in 40 s; stopped time holds still. `SpaceCamera.cruise`.
+- **View panel regrouped** (2026-11-19): tabs Looks, Constellations (figures,
+  names, artwork, borders, whose sky, line colours), Sky, Guides, Air. Looks are
+  wide radio cards; switches are tiles, filled when on and dashed when off (no
+  corner dot). Night vision has a Red brightness slider in Settings
+  (`settings.nightLevel`, 0.25–1, default 0.7, CSS `--night-vision-level`).
 - **Line colours** (2026-11-19, `render/linestyle.ts`, setting `lineStyle`): Neutral
   (one periwinkle), Bold figures (bright blue, wider; golden orbits) and Quiet
   figures (faint grey; golden orbits). Chosen under View → Sky (and Space view).

@@ -32,7 +32,7 @@
   --color-good: #8fd6b0;
   --color-warn: #f0c27a;
   --color-night-vision: #ff1500;
-  --night-vision-level: 0.5;
+  --night-vision-level: 0.7;
   --color-scrim: rgba(3, 5, 10, 0.55);
 
   /* Sky annotations (also read by the renderer for line and marker colours). */

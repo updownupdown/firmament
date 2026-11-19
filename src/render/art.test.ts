@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { DEG, angleBetween, fromSpherical } from '../astro/math.ts';
+import { DEG, add, angleBetween, fromSpherical, normalize } from '../astro/math.ts';
 import { artMapping, type ArtInfo } from './art.ts';
 
 test('constellation art: each anchor pixel lands on its star', () => {
@@ -27,6 +27,17 @@ test('deep-sky photos: every one has a credit, a licence and four corners close 
   for (const p of list) {
     assert.ok(p.credit && p.license);
     const c = p.corners.map(([ra, dec]) => fromSpherical(ra * DEG, dec * DEG));
-    assert.ok(angleBetween(c[0], c[2]) < 12 * DEG);
+    assert.ok(angleBetween(c[0], c[2]) < 15 * DEG); // the Large Magellanic Cloud is the widest, about 12°
   }
+  // The showpieces are placed from their AVM metadata; each is centred on its object (SIMBAD positions)
+  // with north up and east to the left, as in the sky.
+  const at = (file: string) => list.find((p) => (p as unknown as { file: string }).file === file)!.corners.map(([ra, dec]) => fromSpherical(ra * DEG, dec * DEG));
+  for (const [file, ra, dec, tol] of [['m42.jpg', 83.822, -5.391, 0.1], ['m31.jpg', 10.685, 41.269, 0.3], ['m51.jpg', 202.47, 47.195, 0.1], ['n5139.jpg', 201.697, -47.479, 0.1]] as const) {
+    const c = at(file);
+    const mid = normalize(add(add(c[0], c[1]), add(c[2], c[3])));
+    assert.ok(angleBetween(mid, fromSpherical(ra * DEG, dec * DEG)) < tol * DEG, file);
+  }
+  const m42 = at('m42.jpg');
+  assert.ok(m42[3][2] > m42[0][2], 'top is north');
+  assert.ok(Math.atan2(m42[0][1], m42[0][0]) > Math.atan2(m42[1][1], m42[1][0]), 'left is east');
 });

@@ -479,15 +479,23 @@ unresolved stars, not catalog stars, so they cannot be picked.
   Enceladus–Dione, Titan–Hyperion), fitted to PyEphem's BDL/TASS theories over
   2000–2038 (`scripts/fit_moons.py`). The Universe observes them (light-time
   from the planet), Space view draws them with orbits, search, Atlas and the
-  Solar System list include them.
+  Solar System list include them. Follow-up (same day): Amalthea, Thebe,
+  Himalia, Elara, Janus, Epimetheus, Phoebe, Puck, Proteus, Nereid, Nix and
+  Hydra, fitted to JPL Horizons vectors (`scripts/fit_horizons.py`); Janus and
+  Epimetheus carry a `swap` term (orbit exchange every 1461 days, last
+  2026-01-24), Nix and Hydra orbit the Pluto–Charon barycentre (`bary`), and
+  Hyperion was retuned to Horizons for 2025–26. All are tested against
+  Horizons positions.
 - Night light in the sky shader (`NIGHT_LIGHT`): zodiacal light, its band and
   the gegenschein (Leinert-shaped, from the Sun's ecliptic longitude and
   latitude), and airglow (van Rhijn, gravity-wave ripples). Twinkling in the
   star shader (`uTwinkle`; airmass-scaled, colour split low down). Layers
   `twinkle`, `zodiacal`, `airglow` (View → Air). Twinkling keeps the loop
   drawing at 20 fps without relaying labels (`App.draw(true)`); reduced
-  motion stops it.
-- Star trails (`App.startTrails`, `ui/trails.ts`; View → Looks → Star trails):
+  motion stops it. James found it too strong: since PR 44 it is off by default
+  (store version 3 turns it off for existing users) and ~0.03 mag at the zenith.
+- Star trails (`App.startTrails`, `ui/trails.ts`; **hidden since PR 44**, James
+  found it confusing; may return in a narrower form):
   the sky is drawn off screen and stacked with `MAX` blending (lighten
   stacking) while time runs at 5 min/s; charted lines and labels are left out,
   moving the view or the time starts a new exposure, and Save picture
@@ -497,6 +505,9 @@ unresolved stars, not catalog stars, so they cannot be picked.
   SDSS (`public/data/dso-photos/index.json` keeps each credit, source and
   licence). They fade in from about 24 px across. The famous showpieces (M31,
   M42…) in Stellarium's set are by amateurs or DSS, so they are not included.
+  Instead 29 showpieces (`showpiece: true` in the index) come from ESO,
+  NOIRLab and ESA/Hubble (CC BY 4.0), fetched on James's PC and placed from
+  their AVM metadata (TAN projection, reference pixel/scale/rotation).
 - Constellation art (`render/art.ts`, layer `art`, off by default; Western
   culture only): Stellarium's modern illustrations by Johan Meuris (Free Art
   License), each pinned by three anchor stars through an affine map on the

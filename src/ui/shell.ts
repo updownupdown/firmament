@@ -132,6 +132,7 @@ export class Shell {
     const syncSettings = () => {
       const s = app.store.data.settings;
       document.documentElement.dataset.nightVision = String(s.nightVision);
+      document.documentElement.style.setProperty('--night-vision-level', String(s.nightLevel));
       document.documentElement.dataset.reducedMotion = String(app.reducedMotion);
     };
     app.on('settings', syncSettings);

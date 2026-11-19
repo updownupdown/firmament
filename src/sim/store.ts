@@ -14,6 +14,8 @@ export interface Settings {
   bortle: number;
   hour12: boolean;
   nightVision: boolean;
+  /** Night vision brightness, 0.25 (dimmest) to 1. */
+  nightLevel: number;
   /** How figures and orbits are coloured: 'neutral', 'vivid' or 'subtle' (render/linestyle.ts). */
   lineStyle: string;
   reducedMotion: boolean;
@@ -36,7 +38,7 @@ export function defaultData(): StoreData {
     version: STORE_VERSION,
     settings: {
       layers: { ...DEFAULT_LAYERS }, culture: 'western', bortle: 2, hour12: false,
-      nightVision: false, reducedMotion: false, theme: 'default', lineStyle: 'neutral',
+      nightVision: false, nightLevel: 0.7, reducedMotion: false, theme: 'default', lineStyle: 'neutral',
     },
     site: null, recentSites: [], seen: [],
   };
@@ -65,6 +67,7 @@ export function migrate(raw: unknown): StoreData {
     settings: {
       ...base.settings, ...withoutGuide(settings),
       layers: { ...base.settings.layers, ...(settings.layers ?? {}) },
+      nightLevel: Math.min(1, Math.max(0.25, Number(settings.nightLevel ?? base.settings.nightLevel) || base.settings.nightLevel)),
       bortle: Math.min(9, Math.max(1, Math.round(Number(settings.bortle ?? base.settings.bortle)) || base.settings.bortle)),
     },
     site: validSite(r.site) ? r.site : null,

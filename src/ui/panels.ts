@@ -20,17 +20,19 @@ import type { Panel, Shell } from './shell.ts';
 export type LayerTile = [keyof LayerFlags, string, string, string];
 
 export const LAYER_GROUPS: { title: string; note?: string; items: LayerTile[] }[] = [
-  { title: 'On the sky', items: [
+  { title: 'Constellations', items: [
     ['lines', 'Figures', 'figures', 'Constellation figures'],
+    ['constellationLabels', 'Names', 'names', 'Constellation names'],
     ['art', 'Artwork', 'pencil', 'Pictures of the constellations behind their figures (Western sky only)'],
-    ['constellationLabels', 'Constellations', 'names', 'Constellation names'],
+    ['boundaries', 'Borders', 'bounds', 'The official borders between constellations'],
+  ] },
+  { title: 'On the sky', items: [
     ['starLabels', 'Star names', 'starname', 'Names of bright stars'],
     ['planetLabels', 'Planet names', 'planet', 'Names of the planets and the Moon'],
     ['dsos', 'Deep sky', 'galaxy', 'Galaxies, clusters and nebulae'],
     ['dsoPhotos', 'Photos', 'nebula', 'Telescope photos of galaxies and nebulae, as you zoom in'],
     ['milkyWay', 'Milky Way', 'milkyway', 'The glow of our galaxy'],
     ['skyOrbits', 'Orbits', 'skyorbit', 'The planets\' and the Moon\'s orbits, as seen from where you stand'],
-    ['boundaries', 'Borders', 'bounds', 'The official borders between constellations'],
   ] },
   { title: 'Guides', items: [
     ['gridAltAz', 'Altitude', 'dome', 'Altitude and direction grid'],
@@ -86,6 +88,7 @@ export function settingsPanel(shell: Shell): Panel {
       section('Comfort',
         h('div', { class: 'control-card' },
           toggle('Night vision', s.nightVision, (on) => app.updateSettings((x) => { x.nightVision = on; }), 'A dim red screen that keeps your eyes dark-adapted'),
+          s.nightVision ? nightLevel(app) : null,
           toggle('12-hour clock', s.hour12, (on) => app.updateSettings((x) => { x.hour12 = on; })),
           toggle('Reduce motion', s.reducedMotion, (on) => app.updateSettings((x) => { x.reducedMotion = on; }), 'Jump between views instead of gliding'))),
       section('More',
@@ -97,6 +100,21 @@ export function settingsPanel(shell: Shell): Panel {
         credits));
   };
   return { title: 'Settings', el, refresh };
+}
+
+/** How bright the red of night vision is: dragged live, saved on release. */
+function nightLevel(app: App): HTMLElement {
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  const level = app.store.data.settings.nightLevel;
+  const text = h('span', { class: 'value' }, pct(level));
+  const slider = h('input', {
+    type: 'range', min: '0.25', max: '1', step: '0.05', value: String(level), class: 'slider', 'aria-label': 'Night vision brightness',
+    oninput: () => { document.documentElement.style.setProperty('--night-vision-level', slider.value); text.textContent = pct(Number(slider.value)); },
+    onchange: () => app.updateSettings((x) => { x.nightLevel = Number(slider.value); }),
+  });
+  return h('div', { class: 'vb-control night-level' },
+    h('div', { class: 'control-head' }, h('span', null, 'Red brightness'), text),
+    h('div', { class: 'slider-row' }, h('span', { class: 'hint' }, 'Dimmer'), slider, h('span', { class: 'hint' }, 'Brighter')));
 }
 
 // Installing as an app: Chrome and Edge offer a prompt we can trigger; Safari

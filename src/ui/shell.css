@@ -257,17 +257,10 @@ input[type='range']::-moz-range-thumb { width: 20px; height: 20px; border-radius
 .vb-tile span { font-size: 0.7rem; letter-spacing: -0.01em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vb-tile:hover { background: var(--color-surface-hover); }
 .vb-tile svg { color: var(--color-text-faint); }
-.vb-tile { position: relative; }
-/* On or off at a glance: a lit dot in the corner and a lit tile when on; a hollow ring, a dashed edge and a dimmed icon when off. */
-.vb-tile::after {
-  content: ''; position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border-radius: 50%;
-  border: 1.5px solid var(--color-text-faint); box-sizing: border-box;
-  transition: background var(--duration) var(--ease), border-color var(--duration) var(--ease);
-}
+/* On or off at a glance: a lit, filled tile when on; a dashed outline and a dimmed icon when off. */
 .vb-tile[aria-pressed='false'] { border-style: dashed; background: transparent; }
 .vb-tile[aria-pressed='false'] svg { opacity: 0.55; }
 .vb-tile[aria-pressed='true'] { background: var(--color-accent-wash); border-color: var(--color-accent-edge); color: var(--color-text); }
-.vb-tile[aria-pressed='true']::after { background: var(--color-accent); border-color: var(--color-accent); box-shadow: 0 0 6px var(--color-accent); }
 .vb-tile[aria-pressed='true'] svg { color: var(--color-accent); }
 .vb-note { margin: 0; padding: 0 var(--space-1); color: var(--color-text-muted); font-size: var(--text-sm); line-height: 1.4; }
 .vb-note.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
@@ -1023,3 +1016,23 @@ button.sys-item:hover { background: var(--color-surface-raised); }
 .mcal-mark.blue { color: var(--color-accent); }
 .mcal-story { font-size: var(--text-sm); line-height: 1.45; color: var(--color-text-muted); }
 .mcal-cell.quarter .mcal-phase { font-size: 0.625rem; }
+
+/* Looks are presets, not switches: wide cards with a line on what each shows, one of them chosen. */
+.vb-looks { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--space-2); }
+.vb-look {
+  display: flex; align-items: center; gap: var(--space-3); min-height: 56px; padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md); background: var(--color-surface-raised); border: 1px solid var(--color-border);
+  color: var(--color-text); text-align: left;
+  transition: background var(--duration) var(--ease), border-color var(--duration) var(--ease);
+}
+.vb-look:hover { background: var(--color-surface-hover); }
+.vb-look-glyph {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px;
+  border-radius: 50%; background: var(--color-surface-hover); color: var(--color-text-muted);
+}
+.vb-look-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.vb-look-name { font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.vb-look-hint { font-size: var(--text-xs); color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vb-look[aria-checked='true'] { border-color: var(--color-accent); box-shadow: inset 0 0 0 1px var(--color-accent); }
+.vb-look[aria-checked='true'] .vb-look-glyph { background: var(--color-accent); color: var(--color-on-accent); }
+.night-level { padding: var(--space-2) var(--space-3); }

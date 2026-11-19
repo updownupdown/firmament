@@ -74,11 +74,7 @@ export function viewBar(app: App, opts: { onToggle: (open: boolean) => void }): 
       }, h('span', { class: 'vb-look-glyph' }, icon(LOOK_ICONS[l.id] ?? 'sky', 22)),
         h('span', { class: 'vb-look-text' }, h('span', { class: 'vb-look-name' }, l.name), h('span', { class: 'vb-look-hint' }, l.hint))))),
       h('p', { class: 'vb-note' }, now ? 'A look switches several layers at once. Change any of them in the other tabs.' : 'Your own mix. Pick a look to start again from one.'),
-      app.mode === 'sky' && !app.universe.voyage ? h('div', { class: 'vb-control' },
-        h('div', { class: 'control-head' }, h('span', null, 'Long exposure'), h('span', { class: 'value' }, 'Hours of sky in seconds')),
-        h('div', { class: 'button-row' },
-          h('button', { type: 'button', class: 'pill-button', 'aria-pressed': String(!!app.trails), onclick: () => { if (app.trails) app.stopTrails(); else { app.startTrails(); bar.close(); } } },
-            app.trails ? 'Stop star trails' : 'Star trails'))) : null,
+      // Star trails (app.startTrails) are hidden for now: confusing to use, may return in a narrower form.
     ];
   };
 

@@ -178,7 +178,8 @@ test('store: saves, reloads and repairs damaged data', () => {
   assert.equal(repaired.site, null);
   // An observing log from older versions is dropped.
   assert.equal('log' in repaired, false);
-  assert.equal(migrate({ version: 99 }).version, 2);
+  assert.equal(migrate({ version: 99 }).version, 3);
+  assert.equal(migrate({ version: 2, settings: { layers: { twinkle: true } as never } }).settings.layers.twinkle, false);
   // The old default light pollution moves to the new dark default; a chosen value stays.
   assert.equal(migrate({ version: 1, settings: { bortle: 4 } }).settings.bortle, 2);
   assert.equal(migrate({ version: 1, settings: { bortle: 7 } }).settings.bortle, 7);

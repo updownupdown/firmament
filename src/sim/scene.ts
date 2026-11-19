@@ -30,19 +30,30 @@ export interface LayerFlags {
   skyOrbits: boolean;
   /** Space view: the asteroid belt, trojans, Kuiper belt, scattered disc and Oort cloud. */
   smallBodies: boolean;
+  /** Sky view: stars twinkle through the air. */
+  twinkle: boolean;
+  /** Sky view: the zodiacal light and gegenschein. */
+  zodiacal: boolean;
+  /** Sky view: the upper air's faint glow. */
+  airglow: boolean;
+  /** Sky view: photographs of galaxies, nebulae and clusters, shown when zoomed in. */
+  dsoPhotos: boolean;
+  /** Sky view: illustrations of the Western constellations behind their figures. */
+  art: boolean;
 }
 
 export const DEFAULT_LAYERS: LayerFlags = {
   lines: true, constellationLabels: true, boundaries: false, starLabels: true, planetLabels: true,
   dsos: true, milkyWay: true, atmosphere: true, ground: true, cardinals: true,
   gridAltAz: false, gridEquatorial: false, ecliptic: false, orbits: true, gridGalactic: false, compressed: false, skyOrbits: false,
-  smallBodies: true,
+  smallBodies: true, twinkle: true, zodiacal: true, airglow: true, dsoPhotos: true, art: false,
 };
 
 // Order is part of the URL format: append new layers at the end, never reorder.
 const LAYER_ORDER: (keyof LayerFlags)[] = [
   'lines', 'constellationLabels', 'boundaries', 'starLabels', 'planetLabels', 'dsos', 'milkyWay',
   'atmosphere', 'ground', 'cardinals', 'gridAltAz', 'gridEquatorial', 'ecliptic', 'orbits', 'gridGalactic', 'compressed', 'skyOrbits', 'smallBodies',
+  'twinkle', 'zodiacal', 'airglow', 'dsoPhotos', 'art',
 ];
 
 /** A direction on the local sky, degrees (azimuth from north through east). */

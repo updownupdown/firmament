@@ -22,10 +22,12 @@ export type LayerTile = [keyof LayerFlags, string, string, string];
 export const LAYER_GROUPS: { title: string; note?: string; items: LayerTile[] }[] = [
   { title: 'On the sky', items: [
     ['lines', 'Figures', 'figures', 'Constellation figures'],
+    ['art', 'Artwork', 'pencil', 'Pictures of the constellations behind their figures (Western sky only)'],
     ['constellationLabels', 'Constellations', 'names', 'Constellation names'],
     ['starLabels', 'Star names', 'starname', 'Names of bright stars'],
     ['planetLabels', 'Planet names', 'planet', 'Names of the planets and the Moon'],
     ['dsos', 'Deep sky', 'galaxy', 'Galaxies, clusters and nebulae'],
+    ['dsoPhotos', 'Photos', 'nebula', 'Telescope photos of galaxies and nebulae, as you zoom in'],
     ['milkyWay', 'Milky Way', 'milkyway', 'The glow of our galaxy'],
     ['skyOrbits', 'Orbits', 'skyorbit', 'The planets\' and the Moon\'s orbits, as seen from where you stand'],
     ['boundaries', 'Borders', 'bounds', 'The official borders between constellations'],
@@ -40,6 +42,9 @@ export const LAYER_GROUPS: { title: string; note?: string; items: LayerTile[] }[
   { title: 'Air and ground', items: [
     ['atmosphere', 'Atmosphere', 'air', 'Daylight, twilight and haze near the horizon'],
     ['ground', 'Ground', 'ground', 'The ground below the horizon'],
+    ['twinkle', 'Twinkling', 'twinkle', 'Stars flicker as their light crosses the air, most near the horizon'],
+    ['zodiacal', 'Zodiacal light', 'zodiacal', 'Sunlight scattered by dust between the planets: a cone after dusk or before dawn, and the faint gegenschein opposite the Sun'],
+    ['airglow', 'Airglow', 'airglow', 'The upper air\'s own faint green glow, low in a truly dark sky'],
   ] },
   { title: 'Space view', items: [
     ['orbits', 'Orbits', 'orbit', 'Orbit lines in Space view'],

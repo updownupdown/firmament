@@ -10,14 +10,14 @@ const HOME = { name: 'Toronto', lat: 43.65, lon: -79.38, height: 76, tz: 'Americ
 const universe = (jd: number) => new Universe({ eph: testEphemeris(), stars: testStars(), site: HOME, jdUT: jd });
 const alt = (u: Universe, ref: string) => u.horizontal(u.resolve(ref)!.dir).alt / DEG;
 
-test('from Tranquility Base the Earth hangs high and almost still, about 66° up', () => {
+test('from Taurus–Littrow the Earth hangs high and almost still, about 54° up', () => {
   const t0 = jdFromCalendar(2026, 11, 1, 0, 0);
   const u = universe(t0);
   u.setAway({ world: 'moon', ...WORLD_SITES.moon });
   const alts: number[] = [];
   for (let d = 0; d < 30; d += 0.5) { u.update(t0 + d); alts.push(alt(u, 'earth')); }
-  // The site is 23.5° east of the point facing the Earth; libration rocks the Earth by up to about 8°.
-  assert.ok(Math.min(...alts) > 55 && Math.max(...alts) < 78, `${Math.min(...alts)}..${Math.max(...alts)}`);
+  // The site is 36° from the point facing the Earth; libration rocks the Earth by up to about 8°.
+  assert.ok(Math.min(...alts) > 44 && Math.max(...alts) < 65, `${Math.min(...alts)}..${Math.max(...alts)}`);
 });
 
 test('the Earth from the Moon is lit as much as the Moon from the Earth is dark', () => {

@@ -6,6 +6,7 @@ import { BODIES } from '../astro/bodies.ts';
 import { ECL_TO_EQ_J2000, EPS_J2000 } from '../astro/frames.ts';
 import { type Population, REGIONS, type Region, allPopulations, regionById } from '../astro/populations.ts';
 import { GALILEAN, galileanMoons } from '../astro/galilean.ts';
+import { ELEMENT_MOONS, MOONS, moonInfo, moonOffset } from '../astro/satellites.ts';
 import { SMALL_BODIES } from '../astro/kepler.ts';
 import { J2000 } from '../astro/time.ts';
 import { AU_KM, DEG, type Mat3, type Vec3, add, apply, clamp, cross, fromSpherical, mul, normalize, scale, sub } from '../astro/math.ts';
@@ -358,8 +359,6 @@ interface OrbitCache {
 /** Surface kinds, matching the sky view's body shader. */
 const SPACE_KIND: Record<string, number> = { sun: 1, moon: 2, jupiter: 3, saturn: 4, mars: 5, earth: 7 };
 
-/** Sidereal periods of Io, Europa, Ganymede and Callisto, days. */
-const GALILEAN_PERIODS = [1.769138, 3.551181, 7.154553, 16.689018];
 const JUPITER_RADIUS_AU = BODIES.jupiter.radiusEq / AU_KM;
 
 function buildBodies(): SpaceBody[] {
@@ -375,13 +374,13 @@ function buildBodies(): SpaceBody[] {
   planet('sun', 6);
   planet('mercury', 3); planet('venus', 3.5); planet('earth', 3.5); planet('moon', 1.8); planet('mars', 3);
   planet('jupiter', 4.5); planet('saturn', 4); planet('uranus', 3.5); planet('neptune', 3.5); planet('pluto', 2);
-  const jupiterPole = fromSpherical(BODIES.jupiter.poleRa, BODIES.jupiter.poleDec);
-  GALILEAN.forEach((m, k) => {
+  for (const m of MOONS) {
+    const host = BODIES[m.parent];
     list.push({
-      id: m.id, name: m.name, radiusAU: m.radiusKm / AU_KM, color: m.color, kind: 0, minPx: 1.5,
-      period: GALILEAN_PERIODS[k], parent: 'jupiter', pole: jupiterPole,
+      id: m.id, name: m.name, radiusAU: m.radiusKm / AU_KM, color: m.color, kind: 0, minPx: m.radiusKm > 1000 ? 1.5 : 1.2,
+      period: m.period, parent: m.parent, pole: fromSpherical(host.poleRa, host.poleDec),
     });
-  });
+  }
   for (const sb of SMALL_BODIES) {
     const { q, e, tp } = sb.elements;
     list.push({
@@ -511,11 +510,12 @@ export class SpaceRenderer {
     const eph = this.universe.eph, jd = this.universe.frame.jdTT;
     const truth = new Map<string, Vec3>();
     for (const b of this.bodies) {
-      if (b.parent === 'jupiter') continue;
+      if (moonInfo(b.id)) continue;
       truth.set(b.id, b.id === 'earth' ? eph.earth(jd) : eph.helio(b.id, jd));
     }
     const jupiter = truth.get('jupiter')!;
     galileanAround(jd, jupiter, truth.get('earth')!).forEach((p, k) => truth.set(GALILEAN[k].id, p));
+    for (const m of ELEMENT_MOONS) truth.set(m.id, add(truth.get(m.parent)!, scale(moonOffset(m, jd), 1 / AU_KM)));
     for (const b of this.bodies) {
       const p = truth.get(b.id)!;
       if (!this.compressed) { this.positions.set(b.id, p); continue; }
@@ -607,6 +607,9 @@ export class SpaceRenderer {
       // The moons' orbits are circles about Jupiter; hold Jupiter still while sampling.
       const jupiter = eph.helio('jupiter', jd), earth = eph.earth(jd);
       points = sampleOrbit((t) => sub(galileanAround(t, jupiter, earth)[k], jupiter), jd, b.period, 96);
+    } else if (b.parent && b.parent !== 'earth') {
+      const m = moonInfo(b.id)!;
+      points = sampleOrbit((t) => scale(moonOffset(m, t), 1 / AU_KM), jd, b.period, 96);
     } else if (b.parent) {
       points = sampleOrbit((t) => eph.moonGeo(t), jd, b.period, 96);
     } else {

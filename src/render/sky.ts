@@ -5,7 +5,7 @@
 import { BODIES } from '../astro/bodies.ts';
 import { EQ_TO_GAL } from '../astro/frames.ts';
 import type { ApparentBody } from '../astro/ephemeris.ts';
-import { GALILEAN } from '../astro/galilean.ts';
+import { moonInfo } from '../astro/satellites.ts';
 import { SMALL_BODIES } from '../astro/kepler.ts';
 import {
   C_AU_PER_DAY, DEG, type Mat3, type Vec3, add, angleBetween, apply, clamp, cross, dot, fromSpherical, identity,
@@ -26,7 +26,10 @@ import { type Projected, SkyProjection, refractVector } from './projection.ts';
 import {
   BODY_FRAG, BODY_VERT, GROUND_FRAG, LINE_ATTRIBUTES, LINE_FRAG, LINE_VERT, MARKER_ATTRIBUTES, MARKER_FRAG,
   MARKER_VERT, MILKY_STAR_FRAG, MILKY_STAR_VERT, SKY_FRAG, SKY_VERT, STAR_ATTRIBUTES, STAR_FRAG, STAR_VERT,
+  ART_FRAG, COPY_FRAG, PHOTO_FRAG, PHOTO_VERT,
 } from './shaders.ts';
+import { ConstellationArt } from './art.ts';
+import { SkyPhotos } from './photos.ts';
 
 export interface SkyOptions {
   layers: LayerFlags;
@@ -41,7 +44,12 @@ export interface SkyOptions {
   selected?: string | null;
   /** Colours and weights of the figures and orbits. */
   lineStyle?: LineStyle;
+  /** Real seconds, for twinkling and airglow; leave out (or reduced motion) to hold them still. */
+  time?: number;
 }
+
+/** The ecliptic's north pole, J2000 (obliquity 23.4393°). */
+const ECLIPTIC_POLE: Vec3 = [0, -Math.sin(23.4393 * DEG), Math.cos(23.4393 * DEG)];
 
 /** Bodies whose orbits can be drawn on the sky. */
 const SKY_ORBITS = ['moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'] as const;
@@ -83,6 +91,97 @@ export class SkyRenderer {
   starData = new Float32Array(0);
 
   private readonly skyProgram: Program;
+  /** Whether the last frame showed twinkling stars, so the loop keeps drawing. */
+  twinkling = false;
+  /**
+   * Star trails: each frame is drawn off screen and stacked onto the ones before by keeping
+   * the brighter of the two, as photographers stack a night of short exposures.
+   */
+  trails = false;
+  private readonly copyProgram: Program;
+  private readonly photoProgram: Program;
+  private readonly artProgram: Program;
+  /** Constellation artwork, for the Western sky culture. */
+  readonly art: ConstellationArt;
+  /** Deep-sky photographs, fetched once the view zooms in on one. */
+  readonly photos: SkyPhotos;
+  private stack: { w: number; h: number; frame: [WebGLFramebuffer, WebGLTexture]; sum: [WebGLFramebuffer, WebGLTexture]; fresh: boolean } | null = null;
+
+  private panoramas = new Map<string, { tex: WebGLTexture; ready: boolean }>();
+  /**
+   * Real panoramas for standing on other worlds (NASA, public domain): Apollo 17 at
+   * Taurus–Littrow and Spirit on Husband Hill. The Earth keeps its generic hills.
+   */
+  private panorama(world: string): { tex: WebGLTexture; ready: boolean } | null {
+    if (world !== 'moon' && world !== 'mars') return null;
+    let p = this.panoramas.get(world);
+    if (!p) {
+      const entry = { tex: null as unknown as WebGLTexture, ready: false };
+      entry.tex = loadTexture(this.gl, `data/landscapes/${world}.webp`, () => { entry.ready = true; this.dirty = true; }, 'rgba');
+      this.panoramas.set(world, entry);
+      p = entry;
+    }
+    return p;
+  }
+
+  /** Start the stack again (the view moved, or a new exposure). */
+  clearTrails(): void {
+    if (this.stack) this.stack.fresh = true;
+  }
+
+  private target(w: number, h: number): [WebGLFramebuffer, WebGLTexture] {
+    const gl = this.gl;
+    const tex = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const fbo = gl.createFramebuffer()!;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return [fbo, tex];
+  }
+
+  private dropStack(): void {
+    if (!this.stack) return;
+    const gl = this.gl;
+    for (const [fbo, tex] of [this.stack.frame, this.stack.sum]) { gl.deleteFramebuffer(fbo); gl.deleteTexture(tex); }
+    this.stack = null;
+  }
+
+  /** Point drawing at the off-screen frame while stacking; false when not stacking. */
+  private beginStack(): boolean {
+    if (!this.trails) { this.dropStack(); return false; }
+    const w = this.canvas.width, h = this.canvas.height;
+    if (!this.stack || this.stack.w !== w || this.stack.h !== h) {
+      this.dropStack();
+      this.stack = { w, h, frame: this.target(w, h), sum: this.target(w, h), fresh: true };
+    }
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.stack.frame[0]);
+    return true;
+  }
+
+  /** Keep the brighter of the frame and the stack, then show the stack. */
+  private endStack(): void {
+    const gl = this.gl, s = this.stack!;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, s.sum[0]);
+    gl.bindTexture(gl.TEXTURE_2D, s.frame[1]);
+    if (s.fresh) gl.blendFunc(gl.ONE, gl.ZERO);
+    else { gl.blendEquation(gl.MAX); gl.blendFunc(gl.ONE, gl.ONE); }
+    this.copyProgram.use().i('uTex', 0);
+    this.quad.drawQuads(1);
+    s.fresh = false;
+    gl.blendEquation(gl.FUNC_ADD);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.blendFunc(gl.ONE, gl.ZERO);
+    gl.bindTexture(gl.TEXTURE_2D, s.sum[1]);
+    this.copyProgram.use().i('uTex', 0);
+    this.quad.drawQuads(1);
+  }
   private readonly groundProgram: Program;
   private readonly starProgram: Program;
   private readonly lineProgram: Program;
@@ -124,6 +223,13 @@ export class SkyRenderer {
     if (!gl) throw new Error('WebGL2 is not available');
     this.gl = gl;
     this.skyProgram = new Program(gl, SKY_VERT, SKY_FRAG, ['aCorner']);
+    this.copyProgram = new Program(gl, SKY_VERT, COPY_FRAG, ['aCorner']);
+    this.photoProgram = new Program(gl, PHOTO_VERT, PHOTO_FRAG, ['aDir', 'aUv']);
+    this.photos = new SkyPhotos(gl, this.photoProgram);
+    this.photos.onLoad = () => { this.dirty = true; };
+    this.artProgram = new Program(gl, PHOTO_VERT, ART_FRAG, ['aDir', 'aUv']);
+    this.art = new ConstellationArt(gl, this.artProgram);
+    this.art.onLoad = () => { this.dirty = true; };
     this.groundProgram = new Program(gl, SKY_VERT, GROUND_FRAG, ['aCorner']);
     this.starProgram = new Program(gl, STAR_VERT, STAR_FRAG, STAR_ATTRIBUTES);
     this.lineProgram = new Program(gl, LINE_VERT, LINE_FRAG, LINE_ATTRIBUTES);
@@ -428,6 +534,11 @@ export class SkyRenderer {
   render(opts: SkyOptions): void {
     const gl = this.gl, u = this.universe, pr = this.projection, f = u.frame;
     this.resize();
+    const stacking = this.beginStack();
+    if (stacking) {
+      // Charted lines and markers would streak too: a trail picture is just the sky.
+      opts = { ...opts, highlightConstellation: null, layers: { ...opts.layers, lines: false, boundaries: false, gridAltAz: false, gridEquatorial: false, gridGalactic: false, ecliptic: false, skyOrbits: false, dsos: false } };
+    }
     pr.refraction = this.air(opts) && this.height === 0 && this.universe.world === 'earth';
     pr.update();
     const c = skyConditions(u, { bortle: opts.bortle, atmosphere: this.air(opts), fov: pr.fov });
@@ -451,8 +562,11 @@ export class SkyRenderer {
     const mwGain = opts.layers.milkyWay ? Math.pow(clamp((c.nakedEyeLimit - 4.4) / 2.4, 0, 1), 1.4) * (1 - smoothstep01((away - 30) / 400)) : 0;
     // With the star field drawn, the smooth glow only fills in what lies between its points.
     const starred = this.milkyStars.count > 0;
+    const naturalSky = !u.voyage && this.height < 0.004;
     this.skyUniforms(this.skyProgram, c, opts)
-      .m3('uHorizonToJ2000', transpose(f.j2000ToHorizon)).i('uMilkyWay', 0).f('uMilkyWayGain', mwGain * (starred ? 0.7 : 1));
+      .m3('uHorizonToJ2000', transpose(f.j2000ToHorizon)).i('uMilkyWay', 0).f('uMilkyWayGain', mwGain * (starred ? 0.7 : 1))
+      .v3('uEclPole', apply(f.j2000ToHorizon, ECLIPTIC_POLE)).f('uTime', (opts.time ?? 0) % 100000)
+      .f('uZodiacal', naturalSky && opts.layers.zodiacal ? 1 : 0).f('uAirglow', naturalSky && opts.layers.airglow ? 1 : 0);
     this.quad.drawQuads(1);
     if (starred && mwGain > 0.01) {
       gl.blendFunc(gl.ONE, gl.ONE);
@@ -462,6 +576,17 @@ export class SkyRenderer {
         .m3('uJ2000ToHorizon', f.j2000ToHorizon).v3('uAberration', aberration)
         .f('uGain', mwGain * 0.2 * zoom).f('uPixelRatio', dpr).f('uAtmosphere', this.air(opts) ? 1 : 0);
       this.milkyStars.drawPoints();
+    }
+
+    // 1b. Constellation artwork, only for the Western figures it was drawn for.
+    if (opts.layers.art && u.cultureId === 'western' && !u.voyage && this.height < 0.02) {
+      gl.blendFunc(gl.ONE, gl.ONE);
+      this.common(this.artProgram).m3('uJ2000ToHorizon', f.j2000ToHorizon).f('uExtinction', c.extinction);
+      const style = opts.lineStyle ?? LINE_STYLES[0];
+      const tint = style.figure ?? opts.lineColor;
+      const starDir = (hip: number) => { const o = u.resolve(`star:${hip}`); return o ? o.dir : null; };
+      const fade = 1 - smoothstep01(this.height / 0.02);
+      this.art.draw(starDir, [0.35 + 0.65 * tint[0], 0.35 + 0.65 * tint[1], 0.35 + 0.65 * tint[2]], 0.3 * (0.1 + 0.9 * night) * fade, opts.highlightConstellation ?? null);
     }
 
     // 2. Lines. Charted lines fade out as the camera leaves the ground: Space view has none.
@@ -517,7 +642,11 @@ export class SkyRenderer {
 
     // 3. Stars, then planets too small to show a disc (same shader, so they match the stars).
     gl.blendFunc(gl.ONE, gl.ONE);
+    // Twinkling needs air between us and the stars, a dark enough sky to see it, and time to run.
+    this.twinkling = opts.layers.twinkle && opts.time !== undefined && pr.refraction && c.sunDir[2] < Math.sin(-4 * DEG);
+    const twinkle = this.twinkling ? 1 : 0;
     const stars = this.common(this.starProgram)
+      .f('uTwinkle', twinkle).f('uTime', (opts.time ?? 0) % 1000)
       .m3('uJ2000ToHorizon', f.j2000ToHorizon).f('uYears', u.years).v3('uAberration', aberration)
       .f('uLimitMag', c.limitMag).f('uExtinction', c.extinction).f('uPixelRatio', dpr).f('uSizeBoost', 1).f('uOrbit', orbit)
       .v3('uObserver', voyage ?? [0, 0, 0]).v3('uBeta', voyage && u.beta ? u.beta : [0, 0, 0]);
@@ -551,8 +680,17 @@ export class SkyRenderer {
       points.push(d.body.dir[0], d.body.dir[1], d.body.dir[2], 0, 0, 0, 0, d.body.mag + 6 * fade, 0.55 + 0.45 * color[0], 0.55 + 0.45 * color[1], 0.55 + 0.45 * color[2]);
     }
     this.bodyPoints.set(new Float32Array(points), gl.DYNAMIC_DRAW);
-    stars.v3('uAberration', [0, 0, 0]).f('uYears', 0).f('uSizeBoost', 1.15);
+    // Planets are small discs, not points, so they hardly twinkle.
+    stars.v3('uAberration', [0, 0, 0]).f('uYears', 0).f('uSizeBoost', 1.15).f('uTwinkle', twinkle * 0.15);
     this.bodyPoints.drawPoints();
+    stars.f('uTwinkle', 0);
+
+    // 3b. Deep-sky photographs, faint glows that need a dark sky, under the markers.
+    if (opts.layers.dsoPhotos && chartFade > 0.99 && !voyage) {
+      gl.blendFunc(gl.ONE, gl.ONE);
+      this.common(this.photoProgram).m3('uJ2000ToHorizon', f.j2000ToHorizon).f('uExtinction', c.extinction);
+      this.photos.draw(pr, (v) => apply(f.j2000ToHorizon, v), clamp((c.limitMag - 4) / 4, 0, 1));
+    }
 
     // 4. Deep-sky markers.
     if (opts.layers.dsos && chartFade > 0.99) {
@@ -578,8 +716,14 @@ export class SkyRenderer {
       this.skyUniforms(this.groundProgram, c, opts).f('uPixelAngle', pr.pixelAngle / dpr)
         .f('uHeight', this.height).v3('uPole', apply(f.j2000ToHorizon, pole)).v3('uPrime', apply(f.j2000ToHorizon, prime))
         .v3('uLand', LAND[u.world]).f('uSunLit', (u.world === 'moon' ? 0.45 : u.world === 'mars' ? 0.3 : 0) * smoothstep01((c.sunAlt / DEG + 1) / 12));
+      const pano = this.panorama(u.world);
+      gl.activeTexture(gl.TEXTURE4);
+      gl.bindTexture(gl.TEXTURE_2D, pano?.ready ? pano.tex : null);
+      gl.activeTexture(gl.TEXTURE0);
+      this.groundProgram.i('uPano', 4).f('uPanoOn', pano?.ready ? 1 : 0);
       this.quad.drawQuads(1);
     }
+    if (stacking) this.endStack();
     this.dirty = false;
   }
 
@@ -618,7 +762,7 @@ export class SkyRenderer {
   bodyColor(id: string): [number, number, number] {
     const b = (BODIES as Record<string, { color: [number, number, number] } | undefined>)[id];
     if (b) return b.color;
-    return GALILEAN.find((m) => m.id === id)?.color ?? [0.8, 0.9, 1];
+    return moonInfo(id)?.color ?? [0.8, 0.9, 1];
   }
 
   private placeBodies(c: SkyConditions): DrawnBody[] {

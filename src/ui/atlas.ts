@@ -195,7 +195,8 @@ export function atlasPanel(shell: Shell): AtlasPanel {
     return h('div', { class: 'button-row' },
       h('button', { class: 'pill-button primary', type: 'button', onclick: () => shell.showObject(obj.ref) },
         icon(obj.region ? 'orbit' : 'sky', 16), obj.region ? 'Show in space' : 'Show in the sky'),
-      seed ? h('button', { class: 'pill-button', type: 'button', onclick: () => shell.openStarLab(seed) }, icon('star', 16), 'Life story') : null);
+      seed ? h('button', { class: 'pill-button', type: 'button', onclick: () => shell.openStarLab(seed) }, icon('star', 16), 'Life story') : null,
+      obj.ref === 'moon' ? h('button', { class: 'pill-button', type: 'button', onclick: () => shell.openMoonCalendar() }, icon('calendar', 16), 'Phase calendar') : null);
   };
 
   const rightNow = (obj: SkyObject) => {

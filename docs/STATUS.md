@@ -185,8 +185,37 @@ chosen by the owner on 2026-11-16)
   `dateForm` (When).
 - `tonight.ts`: daily prompt with "Show me" (big events first, otherwise one of
   the bright planets, the Moon or the best-placed constellation, chosen by day
-  number), dark-sky and Moon tiles, planets, constellations overhead and the
-  next seven weeks of events from the worker.
+  number), then two full-width cards: **Dark sky** (2026-11-19: the night as a
+  band from an hour before sunset to an hour after sunrise in the timeline's
+  `--tl-*` colours, with a Moon-up strip, the dark hours with the Moon down in
+  the accent colour, a now mark, hour ticks and a one-line verdict) and the
+  **Moon** (a real picture from `ui/moonpic.ts` as it looks at its best time,
+  zenith up; phase, age from the last new Moon, rise and set in time order, the
+  next principal phase; Show me and Moon calendar). Then planets,
+  constellations overhead and the next seven weeks of events from the worker.
+- **Moon picture** (`ui/moonpic.ts`): a 2D canvas drawn pixel by pixel from
+  `astro/lunar.ts` `moonFace` (picture frame x right, y up, z toward the
+  observer; up = celestial north, south or the zenith) with the Moon map
+  (`data/textures/moon.jpg`, loaded once as luminance), the sky shader's
+  lighting and a little earthshine. Libration and the pole use the IAU 2009
+  lunar model with its periodic terms (`lunarOrientation`; tested against
+  Meeus 53.a to 0.1°). The sky shader still uses the simpler constant pole.
+- **Moon phase calendar** (`ui/mooncal.ts`, `sim/mooncal.ts`, 2026-11-19): a
+  modal (`.modal-scrim` / `.modal`, z-index 8, on the Back stack as
+  `moon-calendar`) opened by `Shell.openMoonCalendar()` from Tonight's Moon
+  card, the Moon's ⋯ menu and its Atlas page. A month grid (Sunday first) of
+  Moons at 22:00 local, north up (south up south of the equator), each with its
+  principal phase, eclipse and supermoon marks, and a bar for that night's dark
+  hours with the Moon down; then the chosen day (phase, age, rise and set for
+  the night as Tonight counts it, distance and size against the mean, perigee
+  or apogee, eclipses and whether they are seen here, the moonless dark
+  window, libration in words, Show in the sky), then the month at a glance
+  (phases, perigee and apogee, eclipses) and its darkest run of nights.
+  `moonMonth(u, year, month, events)` takes phases and eclipses from the
+  events worker over `moonMonthSpan` and runs in about 0.15 s; nights use
+  `astro/lunar.ts` `nightSky` (two-hourly positions interpolated, the Earth's
+  turn exact; 5-minute samples, within 2 minutes of the full searches).
+  Supermoon = full Moon under 360,000 km. Tests in `sim/mooncal.test.ts`.
 - `facts.ts`: the words and numbers on the object card.
 - Visual checks: build, serve `dist/` and screenshot with Playwright (Chromium
   needs `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`);

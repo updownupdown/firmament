@@ -14,6 +14,7 @@ import { pick } from './render/pick.ts';
 import { Pointing, type PointingResult } from './render/pointing.ts';
 import { SkyRenderer } from './render/sky.ts';
 import { SpaceRenderer, orbitRate } from './render/space.ts';
+import { lineStyle } from './render/linestyle.ts';
 import { Clock } from './sim/clock.ts';
 import { EventService, workerCompute } from './sim/events.ts';
 import { PLACES } from './sim/places.ts';
@@ -867,6 +868,34 @@ export class App {
   }
 
   /** Where a selected object is on screen, for the reticle. */
+  /**
+   * When an object is out of view: which way to turn to see it (a unit vector
+   * on screen, y down) and how far round it is (radians). Null when it is in
+   * view, or has no single point (a constellation, a region).
+   */
+  offscreen(ref: string): { dx: number; dy: number; angle: number } | null {
+    let c: Vec3 | null = null;
+    if (this.mode === 'space') {
+      if (ref === this.space.camera.focus) return null;
+      c = this.space.cameraVector(ref);
+    } else {
+      const obj = this.universe.resolve(ref);
+      if (!obj || obj.kind === 'constellation' || obj.kind === 'region') return null;
+      c = apply(this.renderer.projection.view, apply(this.universe.frame.j2000ToHorizon, obj.dir));
+    }
+    if (!c) return null;
+    const s = this.locate(ref);
+    const p = this.renderer.projection;
+    if (s && s.x >= 0 && s.x <= p.width && s.y >= 0 && s.y <= p.height) return null;
+    const len = Math.hypot(c[0], c[1], c[2]);
+    if (len === 0) return null;
+    let dx = c[0], dy = -c[1];
+    const flat = Math.hypot(dx, dy);
+    // Straight behind: turn round by going down.
+    if (flat < 1e-9) { dx = 0; dy = 1; } else { dx /= flat; dy /= flat; }
+    return { dx, dy, angle: Math.acos(clamp(-c[2] / len, -1, 1)) };
+  }
+
   locate(ref: string): { x: number; y: number; radiusPx: number } | null {
     if (this.mode === 'space') {
       const d = this.space.drawn.find((b) => b.id === ref);
@@ -992,7 +1021,8 @@ export class App {
       const cam = this.space.camera, p = this.renderer.projection;
       cam.width = p.width; cam.height = p.height;
       cam.update();
-      this.space.render({ layers: this.layers, lineColor: this.lineColor, accentColor: this.accentColor, selected: this.selected }, this.renderer.pixelRatio);
+      const style = lineStyle(this.store.data.settings.lineStyle);
+      this.space.render({ layers: this.layers, lineColor: this.lineColor, accentColor: this.accentColor, selected: this.selected, orbitColor: style.orbit, orbitAlpha: style.orbitAlpha }, this.renderer.pixelRatio);
       this.labels.update(layoutLabels(this.still ? [] : this.space.labels(this.selected, this.layers.smallBodies, this.layers.planetLabels), p.width, p.height));
       this.renderer.dirty = false;
       this.emit('frame');
@@ -1005,6 +1035,7 @@ export class App {
       layers: this.layers, bortle: this.store.data.settings.bortle,
       highlightConstellation: con ? con.split(':')[2] : null,
       lineColor: this.lineColor, accentColor: this.accentColor, selected: this.selected,
+      lineStyle: lineStyle(this.store.data.settings.lineStyle),
     });
     this.loadTycho();
     const p = this.renderer.projection;

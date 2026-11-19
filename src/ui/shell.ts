@@ -28,6 +28,7 @@ import { type WhereBar, whereBar, whereChip } from './where.ts';
 import { flightHud } from './flight.ts';
 import { TRIP_TARGETS } from '../learn/trip.ts';
 import { tonightPanel } from './tonight.ts';
+import { type MoonCalendar, moonCalendar } from './mooncal.ts';
 import { type StarLabPanel, starLabPanel } from './starlab.ts';
 import { type StarSeed, starSeed } from '../sim/starlink.ts';
 import { type TimeBar, timeChip } from './timebar.ts';
@@ -72,6 +73,7 @@ export class Shell {
   /** History entries for what is open, so Back closes it. */
   readonly back = new BackStack();
   private search!: SearchOverlay;
+  private readonly moonCal: MoonCalendar;
   private readonly sheetBody: HTMLElement;
   private readonly toastEl: HTMLElement;
   private toastTimer = 0;
@@ -112,7 +114,10 @@ export class Shell {
       if (open) { this.closeBars(); this.back.push('search', () => this.search.close()); } else this.back.dropLast('search');
       this.syncTools();
     });
-    root.append(measure.layer, this.topBar(), measure.banner, this.reticle(), this.edgeArrow(), this.focusCard(), this.toolbar(), ...flightHud(app, () => app.land()), this.timeBar.el, this.whereBar.el, this.viewBar.el, this.sheetEl, this.search.el, this.toastEl, this.stillHint());
+    this.moonCal = moonCalendar(this, (open) => {
+      if (open) { this.closeBars(); this.search.close(); this.back.push('moon-calendar', () => this.moonCal.close()); } else this.back.dropLast('moon-calendar');
+    });
+    root.append(measure.layer, this.topBar(), measure.banner, this.reticle(), this.edgeArrow(), this.focusCard(), this.toolbar(), ...flightHud(app, () => app.land()), this.timeBar.el, this.whereBar.el, this.viewBar.el, this.sheetEl, this.search.el, this.moonCal.el, this.toastEl, this.stillHint());
     // On the page itself, not in #ui: inside #ui's stacking context the red would only blend with the controls.
     document.body.append(...nightVision);
     this.watchPointing();
@@ -139,6 +144,7 @@ export class Shell {
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         if (app.still) app.setStill(false);
+        else if (this.moonCal.open) this.moonCal.close();
         else if (this.search.open) this.search.close();
         else if (this.sheet) this.closeSheet();
         else if (this.timeBar.open) this.timeBar.close();
@@ -254,6 +260,11 @@ export class Shell {
   /** Open the Atlas at an entry, a category, a concept or its front page. */
   openAtlas(target: Parameters<AtlasPanel['show']>[0]): void {
     this.atlas.show(target);
+  }
+
+  /** The Moon phase calendar, at the month of `jd` (the clock's by default). */
+  openMoonCalendar(jd?: number): void {
+    this.moonCal.show(jd);
   }
 
   /** The search overlay, with the keyboard up. */
@@ -536,6 +547,7 @@ export class Shell {
       if (obj.kind === 'sun' || (obj.starIndex !== undefined && (app.universe.stars.dist[obj.starIndex] > 0 || !!app.universe.stars.meta.get(obj.starIndex)?.n))) {
         items.push(item('star', 'Its life story', 'In the Star lab', () => { const seed = starSeed(app.universe, obj); if (seed) this.openStarLab(seed); }));
       }
+      if (obj.ref === 'moon') items.push(item('calendar', 'Moon phase calendar', 'Phases, rise and set, and dark nights by month', () => this.openMoonCalendar()));
       if (obj.ref in TRIP_TARGETS) items.push(item('slingshot', `Plan a trip to ${obj.name}`, 'Launch windows and what they cost', () => this.openTrip(obj.ref as keyof typeof TRIP_TARGETS)));
       items.push(item('share', 'Share this view', 'Copy a link to exactly this sky', () => share(this)));
       fill(menu, items);

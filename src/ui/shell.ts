@@ -320,6 +320,8 @@ export class Shell {
       const bars = { time: this.timeBar, view: this.viewBar, where: this.whereBar };
       for (const [k, b] of Object.entries(bars)) if (k !== kind) b.close();
       root.dataset.bar = kind;
+      // The Where panel opens where messages show: a message would cover its first row.
+      if (kind === 'where') this.hideToast();
       this.back.push('bar', () => bars[kind].close());
     } else if (root.dataset.bar === kind) {
       delete root.dataset.bar;

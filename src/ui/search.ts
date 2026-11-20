@@ -52,6 +52,8 @@ export function searchOverlay(shell: Shell, onToggle: (open: boolean) => void): 
     const o = u.resolve(ref);
     if (!o || o.constellation) return null;
     if (o.region) return h('span', { class: 'tag' }, 'Space view');
+    // Up or down only means something standing on the ground.
+    if (app.mode === 'space') return null;
     const up = u.horizontal(o.dir).altApparent > 0;
     return h('span', { class: `tag${up ? ' up' : ''}` }, up ? 'Up now' : 'Below horizon');
   };
@@ -68,7 +70,10 @@ export function searchOverlay(shell: Shell, onToggle: (open: boolean) => void): 
     const concepts = lq.length < 3 ? [] : CONCEPTS.filter((c) => c.title.toLowerCase().includes(lq) || c.summary.toLowerCase().includes(lq))
       .map((c) => ({ ref: `concept:${c.id}`, name: c.title, subtitle: `Concept · ${c.group}` }));
     const hits = u.search(q, 24).map((x) => ({ ref: x.ref, name: x.name, subtitle: x.subtitle }));
-    return [...searchExtras(u, q), ...concepts, ...hits];
+    const all = [...searchExtras(u, q), ...concepts, ...hits];
+    // A thing called exactly what was typed comes first: "Mars" is the planet before the pages about it.
+    const exact = (x: Hit) => (x.name.toLowerCase() === lq ? 0 : 1);
+    return all.map((x, i) => ({ x, i })).sort((a, b) => exact(a.x) - exact(b.x) || a.i - b.i).map(({ x }) => x);
   };
 
   const render = () => {

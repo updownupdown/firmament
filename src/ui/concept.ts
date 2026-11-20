@@ -7,6 +7,8 @@
 import type { Concept, ConceptBlock } from '../atlas/concepts.ts';
 import { type Verdict, checkTask } from '../learn/tasks.ts';
 import type { Scene } from '../sim/scene.ts';
+import type { Away } from '../sim/universe.ts';
+import { jdNow } from '../astro/time.ts';
 import { type Child, h, icon } from './dom.ts';
 import { plotView } from './plot.ts';
 import type { Shell } from './shell.ts';
@@ -29,6 +31,8 @@ export function conceptPages(shell: Shell, redraw: () => void): ConceptPages {
   const at = (key: string) => { let s = state.get(key); if (!s) state.set(key, (s = {})); return s; };
   /** The reader's own place and view, from before the first Try it. */
   let home: Scene | null = null;
+  /** Where the reader stood if not on the Earth (the Moon, Mars, out among the stars). */
+  let homeAway: Away | null = null;
   /** A Try it on the sky: the focus card shows it until the reader goes home. */
   const setReading = (c: Concept | null, b?: { label: string; note: string }) => {
     shell.setTrying(c && b ? {
@@ -40,10 +44,16 @@ export function conceptPages(shell: Shell, redraw: () => void): ConceptPages {
 
   const remember = () => {
     if (home) return;
+    const now = app.currentScene();
+    // Time running on as normal comes back to now; a moment the reader had chosen comes back as it was.
+    const live = !app.clock.paused && app.clock.rate === 1 && Math.abs(app.clock.jdUT - jdNow()) < 2 / 1440;
     home = {
-      time: 'now', site: app.site, culture: app.universe.cultureId, layers: { ...app.layers },
-      bortle: app.store.data.settings.bortle, camera: { mode: 'sky' },
+      time: live ? 'now' : now.time, rate: now.rate, site: app.site, culture: app.universe.cultureId, layers: { ...app.layers },
+      bortle: app.store.data.settings.bortle, camera: now.camera ?? { mode: 'sky' },
     };
+    const away = app.universe.away;
+    // Interstellar flight stops where it is; the Moon and Mars are just places to stand.
+    homeAway = away ? { ...away } : null;
   };
   /** Set up the sky for a block. `look` closes the sheet on a phone so the sky can be seen. */
   const stage = (scene: Scene, look: boolean) => {
@@ -147,9 +157,9 @@ export function conceptPages(shell: Shell, redraw: () => void): ConceptPages {
     goHome() {
       if (!home) return;
       app.select(null);
-      if (app.mode === 'space') app.setMode('sky');
-      app.apply({ ...home, highlight: [] });
+      app.apply({ ...home, highlight: [] }, homeAway ?? undefined);
       home = null;
+      homeAway = null;
       setReading(null);
     },
     page(c) {
